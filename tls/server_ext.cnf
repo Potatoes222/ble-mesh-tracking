@@ -1,0 +1,2 @@
+subjectAltName = DNS:bmt-tb.local
+extendedKeyUsage = serverAuth
