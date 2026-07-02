@@ -19,16 +19,29 @@ services:
       - postgres
     ports:
       - "8080:9090"   # Web UI:  http://localhost:8080
-      - "1883:1883"   # MQTT broker (ESP32 connect here)
+      - "1883:1883"   # MQTT broker plaintext (fallback / test)
+      - "8883:8883"   # MQTT broker TLS (MQTTS) - ESP32 connect here
       - "7070:7070"   # Edge RPC (optional)
     environment:
       TB_QUEUE_TYPE: in-memory
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thingsboard
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      # ---- MQTT SSL (MQTTS) config ----
+      MQTT_SSL_ENABLED: "true"
+      MQTT_SSL_BIND_ADDRESS: "0.0.0.0"
+      MQTT_SSL_BIND_PORT: "8883"
+      MQTT_SSL_CREDENTIALS_TYPE: PEM
+      MQTT_SSL_PEM_CERT: /config/mqttserver.pem
+      MQTT_SSL_PEM_KEY: /config/mqttserver_key.pem
+      # server.key khong co passphrase nen de trong
+      MQTT_SSL_PEM_KEY_PASSWORD: ""
     volumes:
       - tb-data:/data
       - tb-logs:/var/log/thingsboard
+      # Mount cert vao container (path tuong doi tu thu muc chua docker-compose.yml)
+      - ./tls/server.pem:/config/mqttserver.pem:ro
+      - ./tls/server.key:/config/mqttserver_key.pem:ro
     restart: unless-stopped
 
 volumes:
