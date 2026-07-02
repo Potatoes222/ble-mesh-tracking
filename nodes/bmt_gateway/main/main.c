@@ -1,22 +1,26 @@
 /* ============================================================================
- * BMT (BLE Mesh Tracking) — GATEWAY firmware  [v3 — MQTT Queue Worker]
+ * BMT (BLE Mesh Tracking) — GATEWAY firmware  [v4 — TB-side zone detection]
  * ----------------------------------------------------------------------------
- * Role  : Provisioner + BLE Mesh ↔ ThingsBoard MQTT bridge + Zone Detection
- * Board : ESP32 DevKitC WROOM-32
+ * Role  : Provisioner + BLE Mesh -> ThingsBoard MQTT bridge
+ *         (Zone detection moved to ThingsBoard Rule Engine)
+ * Board : ESP32 DevKitC WROOM-32  (ESP32-S3 N16R8 for new GW)
  * IDF   : v6.0
  *
- * What's new in v3 (vs v2):
- *   - Tách MQTT publish ra task riêng (queue-based worker)
- *   - Mesh VND callback chỉ enqueue, không block
- *   - Fix bug: khi MQTT disconnect/slow, mesh task không bị nghẽn nữa
- *     → Gateway không drop PDU từ scan_2/scan_3 khi đang xử lý scan_1
+ * What's new in v4 (vs v3):
+ *   - Zone detection logic da chuyen sang TB Rule Engine
+ *   - Payload MQTT chi gui raw {scanner_id: "scan_XX", rssi: ...}
+ *   - bmt_tb_connect_device() them tham so device_type cho profile routing
+ *   - Tag devices auto-bind voi profile "ble_tag" -> rule chain ble_tag_zone_detection
+ *   - Scan/Relay nodes auto-bind voi profile "ble_mesh_node" -> Root chain
+ *   - Local zone tracking giu lai cho UART debug command (phim 2)
+ *   - Out-of-range publish bo di (TB rule chain xu ly)
  *
  * Architecture:
- *   mesh VND cb ──► xQueueSend(g_bmt_mqtt_queue, report)  (non-blocking)
- *                            │
- *                            ▼
- *                   bmt_mqtt_worker_task ──► esp_mqtt_client_publish
- *                            (chuyên xử lý MQTT, có thể block thoải mái)
+ *   mesh VND cb -> xQueueSend(g_bmt_mqtt_queue, report)  (non-blocking)
+ *                            |
+ *                            v
+ *                   bmt_mqtt_worker_task -> esp_mqtt_client_publish
+ *                            (worker, can block on MQTT slow)
  * ============================================================================ */
 
 #include <stdio.h>
@@ -66,18 +70,29 @@
 #define BMT_WIFI_PASS                   "91324566"
 
 #define BMT_TB_HOST                     "mqtt://192.168.1.113:1883"
-#define BMT_TB_GATEWAY_TOKEN            "Sxj62zRhBtUj3tZIRdhd"
+/* TOKEN: regenerate tren TB UI -> ble_mesh_gateway -> Credentials -> Generate.
+ * KHONG commit token that vao git. */
+#define BMT_TB_GATEWAY_TOKEN            "eo3zw4be9kl6xv8rxsj5"
 
 /* Device naming */
-#define BMT_DEV_NAME_GATEWAY            "bmt_gateway"
+#define BMT_DEV_NAME_GATEWAY            "gateway"
 #define BMT_DEV_NAME_NODE_FMT           "bmt_node_0x%04x"
-#define BMT_DEV_NAME_TAG_FMT            "bmt_tag_0x%04x"
+#define BMT_DEV_NAME_SCAN_FMT           "scan_0x%04x"
+#define BMT_DEV_NAME_RELAY_FMT          "relay_0x%04x"
+#define BMT_DEV_NAME_TAG_FMT            "tag_0x%04x"
 
 /* Role attribute values */
 #define BMT_ROLE_GATEWAY                "gateway"
 #define BMT_ROLE_RELAY                  "relay"
 #define BMT_ROLE_SCAN                   "scan"
 #define BMT_ROLE_TAG                    "tag"
+
+/* TB Device profile names — must match profiles created on ThingsBoard.
+ * - ble_tag: trigger rule chain ble_tag_zone_detection (zone logic)
+ * - ble_mesh_node: scan/relay nodes, default rule chain (just for display)
+ * - default: gateway itself */
+#define BMT_PROFILE_TAG                 "ble_tag"
+#define BMT_PROFILE_NODE                "ble_mesh_node"
 
 /* ============================================================================
  * ZONE DETECTION CONFIG
@@ -789,13 +804,23 @@ static void bmt_mqtt_init(void)
 /* ============================================================================
  * THINGSBOARD GATEWAY API
  * ============================================================================ */
-static void bmt_tb_connect_device(const char *device_name)
+/* Connect sub-device to TB. device_type quyet dinh profile ben TB.
+ * - "ble_tag"      -> rule chain ble_tag_zone_detection (zone detection)
+ * - "ble_mesh_node" -> mesh nodes, hien thi trong System Health widget
+ * - NULL/""        -> default profile */
+static void bmt_tb_connect_device(const char *device_name, const char *device_type)
 {
     if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    char json[64];
-    snprintf(json, sizeof(json), "{\"device\":\"%s\"}", device_name);
+    char json[128];
+    if (device_type && device_type[0]) {
+        snprintf(json, sizeof(json),
+                 "{\"device\":\"%s\",\"type\":\"%s\"}", device_name, device_type);
+    } else {
+        snprintf(json, sizeof(json), "{\"device\":\"%s\"}", device_name);
+    }
     esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/connect", json, 0, 1, 0);
-    ESP_LOGI(TAG, "TB CONNECT: %s", device_name);
+    ESP_LOGI(TAG, "TB CONNECT: %s (type=%s)",
+             device_name, device_type ? device_type : "default");
 }
 
 static void bmt_tb_disconnect_device(const char *device_name)
@@ -833,10 +858,22 @@ static void bmt_mqtt_pub_node_status(uint16_t addr, const char *role, bool onlin
 {
     if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
     char dev[32], json[192];
-    snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, addr);
+    /* Device name theo role de de doc tren TB:
+     *   scan_0x0002 / relay_0x0003 thay vi bmt_node_0x0002 */
+    if (role && strcmp(role, BMT_ROLE_SCAN) == 0) {
+        snprintf(dev, sizeof(dev), BMT_DEV_NAME_SCAN_FMT, addr);
+    } else if (role && strcmp(role, BMT_ROLE_RELAY) == 0) {
+        snprintf(dev, sizeof(dev), BMT_DEV_NAME_RELAY_FMT, addr);
+    } else {
+        snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, addr);
+    }
     if (online) {
-        bmt_tb_connect_device(dev);
-        bmt_tb_set_role(dev, role);
+        bmt_tb_connect_device(dev, BMT_PROFILE_NODE);
+        /* Retry set_role 3 lan (giong tag) de attribute chac chan duoc luu */
+        for (int retry = 0; retry < 3; retry++) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            bmt_tb_set_role(dev, role);
+        }
     }
     snprintf(json, sizeof(json),
              "{\"%s\":[{\"status\":\"%s\",\"addr\":\"0x%04x\"}]}",
@@ -847,15 +884,16 @@ static void bmt_mqtt_pub_node_status(uint16_t addr, const char *role, bool onlin
 }
 
 /*
- * Tag publish + zone detection — gọi từ worker task, KHÔNG gọi từ mesh callback
- *
- * Update tracking state + evaluate zone + publish MQTT.
+ * Tag publish — chi gui raw {scanner_id, rssi} cho TB.
+ * Zone detection da chuyen sang TB Rule Engine (theo yeu cau GVHD).
+ * Local tracking van giu cho UART debug command (phim 2).
  */
 static void bmt_mqtt_pub_tag(bmt_tag_report_t *r)
 {
     if (!r) return;
 
-    /* ZONE DETECTION: update tracking ngay cả khi MQTT chưa connect — phím 2 vẫn show */
+    /* LOCAL TRACKING: van update de phim 2 (UART) hien thi.
+     * Zone evaluation khong dung de publish — chi de debug local. */
     bmt_gateway_tag_track_t *t = bmt_tag_track_get_or_add(r->tag_id, r->tag_type);
     if (!t) {
         ESP_LOGW(TAG, "Tag track table full, can't track 0x%04x", r->tag_id);
@@ -872,9 +910,10 @@ static void bmt_mqtt_pub_tag(bmt_tag_report_t *r)
     t->valid_by_scanner[sidx] = true;
     t->last_any_report_ms     = now;
 
+    /* Local zone eval — chi cho UART debug, KHONG publish */
     uint8_t new_zone = bmt_zone_evaluate(t);
     if (new_zone != t->current_zone_id) {
-        ESP_LOGI(TAG, "Tag 0x%04x ZONE CHANGE: %s -> %s",
+        ESP_LOGI(TAG, "[LOCAL] Tag 0x%04x ZONE CHANGE: %s -> %s",
                  r->tag_id,
                  bmt_zone_name(t->current_zone_id),
                  bmt_zone_name(new_zone));
@@ -882,13 +921,17 @@ static void bmt_mqtt_pub_tag(bmt_tag_report_t *r)
         t->last_zone_change_ms = now;
     }
 
-    /* PUBLISH MQTT — chỉ khi connected */
+    /* PUBLISH MQTT — chi khi connected */
     if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
 
-    char dev[32], json[384];
-    float distance_m = r->distance_dm / 10.0f;
+    char dev[32], json[192], scanner_str[16];
     snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, r->tag_id);
+    /* Format scanner_id thanh string "scan_01"/"scan_02"/... de match rule chain */
+    snprintf(scanner_str, sizeof(scanner_str), "scan_%02u",
+             (unsigned)r->scanner_id);
 
+    /* First-time seen: connect device voi profile "ble_tag"
+     * de TB route msg sang rule chain ble_tag_zone_detection */
     static uint16_t s_seen_tags[BMT_MAX_SEEN_TAGS] = {0};
     static int      s_seen_count = 0;
     bool first_seen = true;
@@ -897,26 +940,24 @@ static void bmt_mqtt_pub_tag(bmt_tag_report_t *r)
     }
     if (first_seen && s_seen_count < BMT_MAX_SEEN_TAGS) {
         s_seen_tags[s_seen_count++] = r->tag_id;
-        bmt_tb_connect_device(dev);
-        bmt_tb_set_role(dev, BMT_ROLE_TAG);
+        bmt_tb_connect_device(dev, BMT_PROFILE_TAG);
+        /* Retry set_role 3 lan de chac chan attribute duoc luu.
+         * TB co the drop attr neu device chua tao xong khi attr toi. */
+        for (int retry = 0; retry < 3; retry++) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            bmt_tb_set_role(dev, BMT_ROLE_TAG);
+        }
     }
 
+    /* Payload RAW: chi scanner_id + rssi. TB se tinh zone qua rule chain.
+     * KHONG dua zone, distance, loss vao day — TB khong dung va se conflict
+     * voi field cung ten do rule chain sinh ra. */
     snprintf(json, sizeof(json),
              "{\"%s\":[{"
-             "\"scanner\":\"0x%02x\","
-             "\"type\":\"%s\","
-             "\"rssi\":%d,"
-             "\"distance\":%.2f,"
-             "\"loss\":%u,"
-             "\"zone\":\"%s\","
-             "\"zone_id\":\"0x%02x\""
+             "\"scanner_id\":\"%s\","
+             "\"rssi\":%d"
              "}]}",
-             dev,
-             r->scanner_id,
-             r->tag_type == 0x01 ? "PERSON" : "ASSET",
-             r->rssi, distance_m, r->loss_pct,
-             bmt_zone_name(t->current_zone_id),
-             t->current_zone_id);
+             dev, scanner_str, r->rssi);
 
     int msg_id = esp_mqtt_client_publish(g_bmt_mqtt_client,
                                          "v1/gateway/telemetry",
@@ -925,9 +966,8 @@ static void bmt_mqtt_pub_tag(bmt_tag_report_t *r)
         ESP_LOGW(TAG, "MQTT publish failed for %s", dev);
     } else {
         g_bmt_mqtt_published++;
-        ESP_LOGI(TAG, "TB [%s] zone=%s: scanner=0x%02x rssi=%d dist=%.2fm",
-                 dev, bmt_zone_name(t->current_zone_id),
-                 r->scanner_id, r->rssi, distance_m);
+        ESP_LOGI(TAG, "TB [%s] scanner=%s rssi=%d dBm",
+                 dev, scanner_str, r->rssi);
     }
 }
 
@@ -952,7 +992,10 @@ static void bmt_mqtt_worker_task(void *arg)
     }
 }
 
-/* Out-of-range timeout task */
+/* Out-of-range timeout task — chi reset local state.
+ * Out-of-range detection chuyen sang TB rule chain (xem README).
+ * Firmware KHONG publish zone="out_of_range" nua, vi se conflict voi
+ * field zone do rule chain sinh ra. */
 static void bmt_zone_timeout_task(void *arg)
 {
     (void)arg;
@@ -966,23 +1009,15 @@ static void bmt_zone_timeout_task(void *arg)
             if ((now - t->last_any_report_ms) <= BMT_TAG_OUT_OF_RANGE_MS) continue;
             if (t->current_zone_id == BMT_ZONE_UNKNOWN) continue;
 
-            ESP_LOGW(TAG, "Tag 0x%04x OUT OF RANGE (no report for %us)",
+            ESP_LOGW(TAG, "[LOCAL] Tag 0x%04x OUT OF RANGE (no report for %us)",
                      t->tag_id,
                      (unsigned int)(BMT_TAG_OUT_OF_RANGE_MS / 1000));
             t->current_zone_id     = BMT_ZONE_UNKNOWN;
             t->last_zone_change_ms = now;
             for (int j = 0; j < BMT_MAX_SCANNERS; j++)
                 t->valid_by_scanner[j] = false;
-
-            if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) continue;
-            char dev[32], json[160];
-            snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, t->tag_id);
-            snprintf(json, sizeof(json),
-                     "{\"%s\":[{\"zone\":\"%s\",\"zone_id\":\"0x%02x\"}]}",
-                     dev, bmt_zone_name(BMT_ZONE_UNKNOWN), BMT_ZONE_UNKNOWN);
-            esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/telemetry",
-                                    json, 0, 0, 0);
-            ESP_LOGI(TAG, "TB TELEMETRY [%s]: %s", dev, json);
+            /* KHONG publish — TB rule chain xu ly out-of-range qua
+             * inactivity timeout cua device profile ble_tag. */
         }
     }
 }
@@ -1303,10 +1338,17 @@ static void bmt_mesh_vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
                  src, health.scanner_id, health.chip_temp_c,
                  health.vdd_mv, health.free_heap_kb, health.uptime_min);
 
-        /* Publish lên TB device `bmt_node_0xXXXX` */
+        /* Publish len TB — dat ten theo role de de doc */
         if (g_bmt_mqtt_connected && g_bmt_mqtt_client) {
             char dev[32], json[256];
-            snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, src);
+            int nidx = bmt_find_node_index(src);
+            if (nidx >= 0 && g_bmt_nodes[nidx].is_scan) {
+                snprintf(dev, sizeof(dev), BMT_DEV_NAME_SCAN_FMT, src);
+            } else if (nidx >= 0 && g_bmt_nodes[nidx].is_relay) {
+                snprintf(dev, sizeof(dev), BMT_DEV_NAME_RELAY_FMT, src);
+            } else {
+                snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, src);
+            }
             snprintf(json, sizeof(json),
                      "{\"%s\":[{"
                      "\"chip_temp\":%d,"
@@ -1357,7 +1399,9 @@ static void bmt_mesh_vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 static void bmt_relay_ping_task(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(15000));
+    /* Startup delay: NimBLE (ESP32-S3) init cham hon Bluedroid (~20-25s).
+     * 30s de chac chan mesh stack ready truoc khi gui CFG_GET ping. */
+    vTaskDelay(pdMS_TO_TICKS(30000));
 
     while (1) {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
