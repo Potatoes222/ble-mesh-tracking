@@ -1,13 +1,11 @@
-set(srcs 
-    "main.c"
-   
-)
-
 idf_component_register(
-    SRCS "${srcs}"
+    SRCS
+        "main.c"
+        "bmt_beacon.c"
+        "bmt_uart.c"
     INCLUDE_DIRS "."
-    REQUIRES 
-        driver 
+    REQUIRES
+        driver
         nvs_flash
         bt
         esp_system
