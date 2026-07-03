@@ -69,7 +69,13 @@
 #define BMT_WIFI_SSID                   "TP-Link_385B"
 #define BMT_WIFI_PASS                   "91324566"
 
-#define BMT_TB_HOST                     "mqtt://192.168.1.113:1883"
+/* MQTTS (TLS): connect bang IP + port 8883.
+ * Doi may khac: chi sua BMT_TB_IP, cert giu nguyen (SAN=hostname). */
+#define BMT_TB_IP                       "192.168.1.113"
+#define BMT_TB_HOST                     "mqtts://" BMT_TB_IP ":8883"
+/* Hostname trong SAN cua server cert. ESP32 verify cert theo ten nay
+ * (thay vi theo IP). Phai khop SAN da tao trong gen_certs.sh. */
+#define BMT_TB_CN                       "bmt-tb.local"
 /* TOKEN: regenerate tren TB UI -> ble_mesh_gateway -> Credentials -> Generate.
  * KHONG commit token that vao git. */
 #define BMT_TB_GATEWAY_TOKEN            "eo3zw4be9kl6xv8rxsj5"
@@ -785,12 +791,25 @@ static void bmt_mqtt_event_handler(void *args, esp_event_base_t base,
     }
 }
 
+/* CA cert nhung qua EMBED_TXTFILES trong CMakeLists (main/ca.pem) */
+extern const uint8_t bmt_ca_pem_start[] asm("_binary_ca_pem_start");
+extern const uint8_t bmt_ca_pem_end[]   asm("_binary_ca_pem_end");
+
 static void bmt_mqtt_init(void)
 {
     esp_mqtt_client_config_t cfg = {
+        /* URI dung IP de connect (khong can DNS/mDNS).
+         * Port 8883 = MQTTS. */
         .broker.address.uri    = BMT_TB_HOST,
+        /* Verify server cert bang CA cua minh */
+        .broker.verification.certificate = (const char *)bmt_ca_pem_start,
+        .broker.verification.certificate_len =
+            (size_t)(bmt_ca_pem_end - bmt_ca_pem_start),
+        /* Connect bang IP nhung verify cert theo hostname "bmt-tb.local"
+         * (khop SAN cua server cert). Neu khong set, esp-tls verify theo
+         * IP trong URI -> fail vi SAN=hostname, khong phai IP. */
+        .broker.verification.common_name = BMT_TB_CN,
         .credentials.username  = BMT_TB_GATEWAY_TOKEN,
-        /* Network timeout: tránh block quá lâu khi network kém */
         .network.timeout_ms    = BMT_MQTT_PUBLISH_TIMEOUT_MS,
         .network.reconnect_timeout_ms = 5000,
     };
@@ -799,6 +818,8 @@ static void bmt_mqtt_init(void)
     esp_mqtt_client_register_event(g_bmt_mqtt_client, ESP_EVENT_ANY_ID,
                                    bmt_mqtt_event_handler, NULL);
     esp_mqtt_client_start(g_bmt_mqtt_client);
+    ESP_LOGI(TAG, "MQTTS client started -> %s (verify CN=%s)",
+             BMT_TB_HOST, BMT_TB_CN);
 }
 
 /* ============================================================================
