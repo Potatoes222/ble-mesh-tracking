@@ -5,6 +5,10 @@ build/
 
 # Bỏ qua các file cấu hình máy cá nhân
 sdkconfig.old
+sdkconfig
+# giữ sdkconfig.defaults + sdkconfig.defaults.* trong git
+!sdkconfig.defaults
+!sdkconfig.defaults.*
 
 # Bỏ qua thư mục ẩn của VS Code (tuỳ chọn)
 .vscode/
