@@ -1,457 +1,60 @@
 #include "bmt_config.h"
-#include "bmt_mac_cache.h"
+#include "bmt_mesh.h"
 #include "bmt_mqtt.h"
 #include "bmt_node_table.h"
-#include "bmt_scan_list.h"
 #include "bmt_thingsboard.h"
-#include "bmt_types.h"
+#include "bmt_uart.h"
 #include "bmt_wifi.h"
 #include "bmt_zone.h"
 
-#include <inttypes.h>
-#include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "esp_bt.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 #include "nvs_flash.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "driver/uart.h"
-#include "esp_task_wdt.h"
-
-#include "esp_ble_mesh_common_api.h"
-#include "esp_ble_mesh_config_model_api.h"
-#include "esp_ble_mesh_defs.h"
-#include "esp_ble_mesh_local_data_operation_api.h"
-#include "esp_ble_mesh_networking_api.h"
-#include "esp_ble_mesh_provisioning_api.h"
-
 #include "ble_mesh_example_init.h"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#endif
 
 static const char *TAG = "BMT_GW";
 
-static uint16_t g_bmt_net_key_idx = 0x0000;
-static uint16_t g_bmt_app_key_idx = 0x0000;
-
-static const uint8_t g_bmt_net_key[16] = {
-    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-};
-static const uint8_t g_bmt_app_key[16] = {
-    0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
-};
-static uint8_t g_bmt_gw_uuid[ESP_BLE_MESH_OCTET16_LEN] = {
-    0x47, 0x41, 0x54, 0x45, 0x57, 0x41, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-};
-
-static esp_ble_mesh_cfg_srv_t bmt_cfg_server = {
-    .net_transmit     = ESP_BLE_MESH_TRANSMIT(7, 10),
-    .relay            = ESP_BLE_MESH_RELAY_ENABLED,
-    .relay_retransmit = ESP_BLE_MESH_TRANSMIT(7, 10),
-    .beacon           = ESP_BLE_MESH_BEACON_ENABLED,
-    .gatt_proxy       = ESP_BLE_MESH_GATT_PROXY_ENABLED,
-    .friend_state     = ESP_BLE_MESH_FRIEND_ENABLED,
-    .default_ttl      = 7,
-};
-
-static esp_ble_mesh_client_t bmt_cfg_client;
-static esp_ble_mesh_client_t bmt_vnd_client;
-
-static esp_ble_mesh_model_op_t bmt_vnd_ops[] = {
-    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_TAG_STATUS, sizeof(bmt_tag_report_t)),
-    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_NODE_HEALTH, sizeof(bmt_node_health_t)),
-    ESP_BLE_MESH_MODEL_OP_END,
-};
-
-static esp_ble_mesh_model_t bmt_vnd_models[] = {
-    ESP_BLE_MESH_VENDOR_MODEL(BMT_CID_ESP, BMT_VND_MODEL_ID, bmt_vnd_ops, NULL, &bmt_vnd_client),
-};
-
-static esp_ble_mesh_model_t bmt_root_models[] = {
-    ESP_BLE_MESH_MODEL_CFG_SRV(&bmt_cfg_server),
-    ESP_BLE_MESH_MODEL_CFG_CLI(&bmt_cfg_client),
-};
-
-static esp_ble_mesh_elem_t bmt_elements[] = {
-    ESP_BLE_MESH_ELEMENT(0, bmt_root_models, bmt_vnd_models),
-};
-
-static esp_ble_mesh_comp_t bmt_composition = {
-    .cid           = BMT_CID_ESP,
-    .element_count = ARRAY_SIZE(bmt_elements),
-    .elements      = bmt_elements,
-};
-
-static esp_ble_mesh_prov_t bmt_provision = {
-    .uuid               = g_bmt_gw_uuid,
-    .prov_unicast_addr  = 0x0001,
-    .prov_start_address = 0x0002,
-};
-
-static void bmt_print_status(void) {
-    printf("\n=========== GATEWAY COMMANDS ===========\n");
-    printf("1 -> LIST PROVISIONED NODES\n");
-    printf("2 -> LIST TRACKED TAGS + ZONES\n");
-    printf("3 -> MQTT QUEUE STATS\n");
-    printf("s -> SCAN BEACONS (%ds)\n", BMT_SCAN_DURATION_MS / 1000);
-    printf("p -> PROVISION SCAN LIST\n");
-    printf("a -> AUTO PROVISION MODE\n");
-    printf("4 -> SHOW STATUS\n");
-    printf("0 -> CLEAR NVS (forget all nodes)\n");
-    printf("Provision mode: %s\n",
-           bmt_scan_list_get_mode() == BMT_PROV_MODE_AUTO ? "AUTO" : "MANUAL");
-    printf("=========================================\n");
+static void nvs_init(void) {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
 }
 
-static void bmt_uart_init(void) {
-    const uart_config_t cfg = {
-        .baud_rate  = BMT_UART_BAUD,
-        .data_bits  = UART_DATA_8_BITS,
-        .parity     = UART_PARITY_DISABLE,
-        .stop_bits  = UART_STOP_BITS_1,
-        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
+static void set_tx_power_max(void) {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P20);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P20);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P20);
+    ESP_LOGI(TAG, "BLE TX power: +20 dBm (ESP32-S3)");
+#else
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
+    ESP_LOGI(TAG, "BLE TX power: +9 dBm (ESP32 classic)");
+#endif
+}
+
+static void wdt_setup(void) {
+    esp_task_wdt_config_t cfg = {
+        .timeout_ms     = BMT_WDT_TIMEOUT_S * 1000,
+        .idle_core_mask = 0,
+        .trigger_panic  = true,
     };
-    ESP_ERROR_CHECK(uart_driver_install(BMT_UART_NUM, BMT_UART_RX_BUF_SIZE, 0, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_param_config(BMT_UART_NUM, &cfg));
+    esp_task_wdt_reconfigure(&cfg);
 }
 
-static void bmt_uart_cmd_task(void *arg) {
-    (void)arg;
-    uint8_t ch;
-    bmt_print_status();
-
-    while (1) {
-        int len = uart_read_bytes(BMT_UART_NUM, &ch, 1, pdMS_TO_TICKS(200));
-        if (len <= 0 || ch == '\r' || ch == '\n') continue;
-
-        switch (ch) {
-        case '1':
-            bmt_node_table_print();
-            break;
-        case '2':
-            bmt_zone_print_all();
-            break;
-        case '3':
-            bmt_mqtt_print_stats();
-            break;
-        case 's':
-            printf("\n[UART] Starting MANUAL SCAN...\n");
-            bmt_scan_list_do_scan();
-            break;
-        case 'p':
-            if (bmt_scan_list_get_mode() != BMT_PROV_MODE_MANUAL)
-                printf("\n[UART] Not in MANUAL mode. Press s first.\n");
-            else
-                bmt_scan_list_provision();
-            break;
-        case 'a':
-            bmt_scan_list_set_mode(BMT_PROV_MODE_AUTO);
-            bmt_scan_list_reset();
-            printf("\n[UART] AUTO provision mode\n");
-            break;
-        case '4':
-            bmt_print_status();
-            break;
-        case '0':
-            printf("\n[UART] Clearing NVS + REBOOT...\n");
-            {
-                const esp_ble_mesh_node_t **entry = esp_ble_mesh_provisioner_get_node_table_entry();
-                if (entry) {
-                    int erased = 0;
-                    for (int i = 0; i < CONFIG_BLE_MESH_MAX_PROV_NODES; i++) {
-                        if (entry[i]) {
-                            esp_ble_mesh_provisioner_delete_node_with_uuid(entry[i]->dev_uuid);
-                            erased++;
-                        }
-                    }
-                    printf("[UART] Erased %d node(s) from mesh stack\n", erased);
-                }
-            }
-            bmt_node_table_clear();
-            vTaskDelay(pdMS_TO_TICKS(500));
-            esp_restart();
-            break;
-        default:
-            printf("\n[UART] Unknown: %c\n", ch);
-            bmt_print_status();
-            break;
-        }
-    }
-}
-
-static void bmt_scan_config_task(void *arg) {
-    uint16_t addr = (uint16_t)(uint32_t)arg;
-    ESP_LOGI(TAG, "[SCN_CFG] Configuring scan node 0x%04x...", addr);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    {
-        esp_ble_mesh_client_common_param_t  c = {0};
-        esp_ble_mesh_cfg_client_set_state_t s = {0};
-        c.opcode                              = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
-        c.model                               = &bmt_root_models[1];
-        c.ctx.net_idx                         = g_bmt_net_key_idx;
-        c.ctx.app_idx                         = 0xFFFF;
-        c.ctx.addr                            = addr;
-        c.ctx.send_ttl                        = 7;
-        c.msg_timeout                         = 8000;
-        s.app_key_add.net_idx                 = g_bmt_net_key_idx;
-        s.app_key_add.app_idx                 = g_bmt_app_key_idx;
-        memcpy(s.app_key_add.app_key, g_bmt_app_key, 16);
-        esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-        ESP_LOGI(TAG, "[SCN_CFG] Step 1: APP_KEY_ADD to 0x%04x: %s", addr,
-                 e == ESP_OK ? "OK" : esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    {
-        esp_ble_mesh_client_common_param_t  c = {0};
-        esp_ble_mesh_cfg_client_set_state_t s = {0};
-        c.opcode                              = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
-        c.model                               = &bmt_root_models[1];
-        c.ctx.net_idx                         = g_bmt_net_key_idx;
-        c.ctx.app_idx                         = 0xFFFF;
-        c.ctx.addr                            = addr;
-        c.ctx.send_ttl                        = 7;
-        c.msg_timeout                         = 5000;
-        s.model_app_bind.element_addr         = addr;
-        s.model_app_bind.model_app_idx        = g_bmt_app_key_idx;
-        s.model_app_bind.model_id             = BMT_VND_MODEL_ID;
-        s.model_app_bind.company_id           = BMT_CID_ESP;
-        esp_err_t e                           = esp_ble_mesh_config_client_set_state(&c, &s);
-        ESP_LOGI(TAG, "[SCN_CFG] Step 2: MODEL_APP_BIND to 0x%04x: %s", addr,
-                 e == ESP_OK ? "OK" : esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    int idx = bmt_node_table_find(addr);
-    if (idx >= 0) {
-        bmt_node_table_get(idx)->config_done = true;
-        bmt_node_table_save();
-    }
-    ESP_LOGI(TAG, "[SCN_CFG] Scan node 0x%04x fully configured!", addr);
-    bmt_node_table_print();
-    vTaskDelete(NULL);
-}
-
-static void bmt_mesh_prov_cb(esp_ble_mesh_prov_cb_event_t  event,
-                             esp_ble_mesh_prov_cb_param_t *param) {
-    switch (event) {
-    case ESP_BLE_MESH_PROV_REGISTER_COMP_EVT:
-        ESP_LOGI(TAG, "Provisioner registered");
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_ENABLE_COMP_EVT:
-        ESP_LOGI(TAG, "Provisioner scan enabled");
-        break;
-
-    case ESP_BLE_MESH_PROVISIONER_RECV_UNPROV_ADV_PKT_EVT: {
-        const uint8_t *uuid      = param->provisioner_recv_unprov_adv_pkt.dev_uuid;
-        const uint8_t *mac       = param->provisioner_recv_unprov_adv_pkt.addr;
-        uint8_t        addr_type = param->provisioner_recv_unprov_adv_pkt.addr_type;
-        uint16_t       oob_info  = param->provisioner_recv_unprov_adv_pkt.oob_info;
-
-        bmt_mac_cache_store(uuid, mac);
-
-        if (bmt_scan_list_get_mode() == BMT_PROV_MODE_MANUAL) {
-            if (!bmt_scan_list_is_scanning()) break;
-            if (bmt_scan_list_add(uuid, mac, addr_type, oob_info)) {
-                printf("[SCAN] %-7s MAC:", bmt_uuid_type_str(uuid));
-                for (int b = 0; b < 6; b++)
-                    printf("%02X%s", mac[b], b < 5 ? ":" : "");
-                printf("\n");
-            }
-            break;
-        }
-
-        if (bmt_node_table_uuid_provisioned(uuid)) break;
-        ESP_LOGI(TAG, "Found unprovisioned [%s]", bmt_uuid_type_str(uuid));
-        esp_ble_mesh_unprov_dev_add_t dev = {0};
-        memcpy(dev.uuid, uuid, 16);
-        memcpy(dev.addr, mac, 6);
-        dev.addr_type = addr_type;
-        dev.oob_info  = oob_info;
-        dev.bearer    = ESP_BLE_MESH_PROV_ADV;
-        esp_ble_mesh_provisioner_add_unprov_dev(&dev, ADD_DEV_FLUSHABLE_DEV_FLAG |
-                                                          ADD_DEV_START_PROV_NOW_FLAG);
-        break;
-    }
-
-    case ESP_BLE_MESH_PROVISIONER_PROV_COMPLETE_EVT: {
-        uint16_t       addr = param->provisioner_prov_complete.unicast_addr;
-        const uint8_t *uuid = param->provisioner_prov_complete.device_uuid;
-        ESP_LOGI(TAG, "Provision complete addr=0x%04x type=%s", addr, bmt_uuid_type_str(uuid));
-
-        uint8_t mac[6] = {0};
-        bmt_mac_cache_get(uuid, mac);
-
-        int idx = bmt_node_table_add(addr, uuid, mac, NULL);
-        if (idx < 0) {
-            ESP_LOGW(TAG, "Node table full");
-            break;
-        }
-        bmt_node_t *n = bmt_node_table_get(idx);
-
-        if (bmt_uuid_is_relay(uuid)) {
-            n->is_relay     = true;
-            n->is_scan      = false;
-            n->online       = false;
-            n->last_seen_ms = 0;
-            n->config_done  = true;
-            snprintf(n->name, sizeof(n->name), "Relay_0x%04x", addr);
-            ESP_LOGI(TAG, "Node 0x%04x = RELAY", addr);
-            bmt_node_table_save();
-            bmt_node_table_print();
-            break;
-        }
-
-        if (bmt_uuid_is_scan(uuid)) {
-            n->is_scan     = true;
-            n->is_relay    = false;
-            n->config_done = false;
-            snprintf(n->name, sizeof(n->name), "Scan_0x%04x", addr);
-            ESP_LOGI(TAG, "Node 0x%04x = SCAN, launching config task...", addr);
-            bmt_node_table_save();
-            bmt_node_table_print();
-            xTaskCreate(bmt_scan_config_task, "scan_cfg", 3072, (void *)(uint32_t)addr, 5, NULL);
-            break;
-        }
-
-        ESP_LOGW(TAG, "Unknown node type");
-        bmt_node_table_save();
-        bmt_node_table_print();
-        break;
-    }
-
-    default:
-        break;
-    }
-}
-
-static void bmt_mesh_cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t  event,
-                                   esp_ble_mesh_cfg_client_cb_param_t *param) {
-    if (!param || !param->params) return;
-    uint16_t    addr = param->params->ctx.addr;
-    int         idx  = bmt_node_table_find(addr);
-    bmt_node_t *n    = bmt_node_table_get(idx);
-
-    if (event == ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT) {
-        uint32_t opcode = param->params->opcode;
-        if (opcode == ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD)
-            ESP_LOGI(TAG, "[CFG] APP_KEY_ADD ACK from 0x%04x", addr);
-        if (opcode == ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND) {
-            ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x", addr);
-            if (n && n->is_scan) {
-                ESP_LOGI(TAG, "=== Scan node 0x%04x READY ===", addr);
-                bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
-            }
-        }
-    }
-
-    if (event == ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT) {
-        uint32_t opcode = param->params->opcode;
-        ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", opcode, addr);
-    }
-
-    if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT) {
-        if (n && n->is_relay) {
-            n->last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            if (!n->online) {
-                n->online = true;
-                ESP_LOGI(TAG, "Relay 0x%04x ONLINE", addr);
-                bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
-            }
-        }
-    }
-}
-
-static void bmt_mesh_cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t  event,
-                                   esp_ble_mesh_cfg_server_cb_param_t *param) {
-    (void)param;
-    ESP_LOGI(TAG, "Config server event: %d", event);
-}
-
-static void bmt_mesh_vnd_client_cb(esp_ble_mesh_model_cb_event_t  event,
-                                   esp_ble_mesh_model_cb_param_t *param) {
-    if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT) return;
-    if (!param) return;
-
-    uint32_t opcode = param->model_operation.opcode;
-    uint16_t src    = param->model_operation.ctx->addr;
-    uint8_t *data   = param->model_operation.msg;
-    uint16_t len    = param->model_operation.length;
-
-    if (opcode == BMT_OP_VND_NODE_HEALTH) {
-        if (len < sizeof(bmt_node_health_t)) {
-            ESP_LOGW(TAG, "[VND-HEALTH] Payload too short: %d < %d", len,
-                     (int)sizeof(bmt_node_health_t));
-            return;
-        }
-        bmt_node_health_t health;
-        memcpy(&health, data, sizeof(health));
-        ESP_LOGI(TAG, "[VND-HEALTH] src=0x%04x scanner=0x%02x temp=%dC vdd=%umV heap=%uKB up=%umin",
-                 src, health.scanner_id, health.chip_temp_c, health.vdd_mv, health.free_heap_kb,
-                 health.uptime_min);
-        bmt_tb_pub_node_health(src, &health);
-        return;
-    }
-
-    if (opcode != BMT_OP_VND_TAG_STATUS) return;
-    if (len < sizeof(bmt_tag_report_t)) {
-        ESP_LOGW(TAG, "[VND] Payload too short: %d < %d", len, (int)sizeof(bmt_tag_report_t));
-        return;
-    }
-
-    bmt_tag_report_t report;
-    memcpy(&report, data, sizeof(report));
-
-    ESP_LOGI(TAG, "[VND] src=0x%04x scanner=0x%02x tag=0x%04x rssi=%ddBm dist=%.2fm loss=%u%%", src,
-             report.scanner_id, report.tag_id, report.rssi, report.distance_dm / 10.0f,
-             report.loss_pct);
-
-    bmt_mqtt_enqueue_tag_report(&report);
-}
-
-static void bmt_relay_ping_task(void *arg) {
-    (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(30000));
-
-    while (1) {
-        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        for (int i = 0; i < BMT_MAX_NODES; i++) {
-            bmt_node_t *n = bmt_node_table_get(i);
-            if (!n->used || !n->is_relay) continue;
-
-            esp_ble_mesh_client_common_param_t  common = {0};
-            esp_ble_mesh_cfg_client_get_state_t get    = {0};
-            common.opcode                              = ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET;
-            common.model                               = &bmt_root_models[1];
-            common.ctx.net_idx                         = g_bmt_net_key_idx;
-            common.ctx.app_idx                         = 0xFFFF;
-            common.ctx.addr                            = n->addr;
-            common.ctx.send_ttl                        = 7;
-            common.msg_timeout                         = 5000;
-            esp_ble_mesh_config_client_get_state(&common, &get);
-
-            if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS &&
-                n->online) {
-                n->online = false;
-                ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-                bmt_tb_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
-            }
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
-        vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
-    }
-}
-
-static void bmt_wdt_feed_task(void *arg) {
+static void wdt_feed_task(void *arg) {
     (void)arg;
     esp_task_wdt_add(NULL);
     while (1) {
@@ -460,89 +63,7 @@ static void bmt_wdt_feed_task(void *arg) {
     }
 }
 
-static esp_err_t bmt_ble_mesh_init_gateway(void) {
-    esp_err_t err;
-
-    esp_ble_mesh_register_prov_callback(bmt_mesh_prov_cb);
-    esp_ble_mesh_register_config_client_callback(bmt_mesh_cfg_client_cb);
-    esp_ble_mesh_register_config_server_callback(bmt_mesh_cfg_server_cb);
-    esp_ble_mesh_register_custom_model_callback(bmt_mesh_vnd_client_cb);
-
-    err = esp_ble_mesh_init(&bmt_provision, &bmt_composition);
-    if (err != ESP_OK) return err;
-
-    err = esp_ble_mesh_provisioner_set_dev_uuid_match(NULL, 0, 0, false);
-    if (err != ESP_OK) return err;
-
-    err = esp_ble_mesh_provisioner_prov_enable(ESP_BLE_MESH_PROV_ADV | ESP_BLE_MESH_PROV_GATT);
-    if (err != ESP_OK) return err;
-
-    const uint8_t *exist_net = esp_ble_mesh_provisioner_get_local_net_key(g_bmt_net_key_idx);
-    if (!exist_net) {
-        err = esp_ble_mesh_provisioner_add_local_net_key(g_bmt_net_key, g_bmt_net_key_idx);
-        if (err != ESP_OK) return err;
-        ESP_LOGI(TAG, "NetKey added");
-    }
-
-    const uint8_t *exist_app =
-        esp_ble_mesh_provisioner_get_local_app_key(g_bmt_net_key_idx, g_bmt_app_key_idx);
-    if (!exist_app) {
-        err = esp_ble_mesh_provisioner_add_local_app_key(g_bmt_app_key, g_bmt_net_key_idx,
-                                                         g_bmt_app_key_idx);
-        if (err != ESP_OK) return err;
-        ESP_LOGI(TAG, "AppKey added");
-    }
-
-    bmt_vnd_models[0].keys[0] = g_bmt_app_key_idx;
-    ESP_LOGI(TAG, "Gateway vendor model AppKey bound: keys[0]=0x%04x", g_bmt_app_key_idx);
-    ESP_LOGI(TAG, "BLE Mesh Gateway init OK");
-    return ESP_OK;
-}
-
-void app_main(void) {
-    esp_err_t err;
-    ESP_LOGI(TAG, "=== BMT Gateway Starting ===");
-
-    err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
-
-    bmt_node_table_load();
-    ESP_ERROR_CHECK(bmt_mqtt_queue_create());
-
-    bmt_wifi_init();
-    bmt_mqtt_init();
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    err = bluetooth_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "BT init failed");
-        return;
-    }
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P20);
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P20);
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P20);
-    ESP_LOGI(TAG, "BLE TX power: +20 dBm (ESP32-S3 long-range)");
-#else
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
-    ESP_LOGI(TAG, "BLE TX power: +9 dBm (ESP32 classic max)");
-#endif
-
-    err = bmt_ble_mesh_init_gateway();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Mesh init failed");
-        return;
-    }
-
-    bmt_uart_init();
-
+static void print_banner(void) {
     printf("\n================ BMT GATEWAY ================\n");
     bmt_print_hex_key("NetKey: ", g_bmt_net_key, 16);
     bmt_print_hex_key("AppKey: ", g_bmt_app_key, 16);
@@ -559,23 +80,36 @@ void app_main(void) {
     printf("\nMQTT QUEUE:\n");
     printf("  Size           : %d slots\n", BMT_MQTT_QUEUE_SIZE);
     printf("=============================================\n");
+}
 
-    bmt_print_status();
+void app_main(void) {
+    ESP_LOGI(TAG, "=== BMT Gateway Starting ===");
+
+    nvs_init();
+    bmt_node_table_load();
+    ESP_ERROR_CHECK(bmt_mqtt_queue_create());
+
+    bmt_wifi_init();
+    bmt_mqtt_init();
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    ESP_ERROR_CHECK(bluetooth_init());
+    set_tx_power_max();
+
+    ESP_ERROR_CHECK(bmt_mesh_init());
+    ESP_ERROR_CHECK(bmt_uart_init());
+
+    print_banner();
+    bmt_uart_print_status();
     bmt_node_table_print();
     bmt_tb_pub_gateway_online();
 
-    esp_task_wdt_config_t wdt_cfg = {
-        .timeout_ms     = BMT_WDT_TIMEOUT_S * 1000,
-        .idle_core_mask = 0,
-        .trigger_panic  = true,
-    };
-    esp_task_wdt_reconfigure(&wdt_cfg);
+    wdt_setup();
 
     bmt_mqtt_start_worker();
-    xTaskCreate(bmt_uart_cmd_task, "bmt_uart", 4096, NULL, 4, NULL);
-    xTaskCreate(bmt_relay_ping_task, "bmt_relay_png", 4096, NULL, 3, NULL);
-    xTaskCreate(bmt_wdt_feed_task, "bmt_wdt_feed", 2048, NULL, 2, NULL);
+    bmt_mesh_start_relay_ping();
     bmt_zone_start_timeout_task();
+    xTaskCreate(wdt_feed_task, "bmt_wdt_feed", 2048, NULL, 2, NULL);
 
     ESP_LOGI(TAG, "=== BMT Gateway READY ===");
 }
