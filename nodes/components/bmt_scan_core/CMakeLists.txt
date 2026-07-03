@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS
+        "src/bmt_scan_core.c"
+        "src/bmt_crc.c"
+        "src/bmt_tag_table.c"
+        "src/bmt_scan.c"
+        "src/bmt_mesh.c"
+        "src/bmt_health.c"
+        "src/bmt_uart.c"
+    INCLUDE_DIRS "include"
+    REQUIRES
+        driver
+        esp_system
+        nvs_flash
+        bt
+        esp_driver_uart
+        esp_adc
+        esp_driver_tsens
+)
