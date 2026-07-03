@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "bmt_zone.c" "bmt_scan_list.c" "bmt_node_table.c" "bmt_mac_cache.c" "main.c"
+    SRCS "bmt_thingsboard.c" "bmt_mqtt.c" "bmt_wifi.c" "bmt_zone.c" "bmt_scan_list.c" "bmt_node_table.c" "bmt_mac_cache.c" "main.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash

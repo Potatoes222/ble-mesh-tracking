@@ -1,12 +1,14 @@
 #include "bmt_config.h"
 #include "bmt_mac_cache.h"
+#include "bmt_mqtt.h"
 #include "bmt_node_table.h"
 #include "bmt_scan_list.h"
+#include "bmt_thingsboard.h"
 #include "bmt_types.h"
+#include "bmt_wifi.h"
 #include "bmt_zone.h"
 
 #include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,18 +16,10 @@
 #include "esp_bt.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "nvs.h"
 #include "nvs_flash.h"
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-#include "freertos/queue.h"
 #include "freertos/task.h"
-
-#include "esp_event.h"
-#include "esp_netif.h"
-#include "esp_wifi.h"
-#include "mqtt_client.h"
 
 #include "driver/uart.h"
 #include "esp_task_wdt.h"
@@ -57,16 +51,6 @@ static const uint8_t g_bmt_app_key[16] = {
 static uint8_t g_bmt_gw_uuid[ESP_BLE_MESH_OCTET16_LEN] = {
     0x47, 0x41, 0x54, 0x45, 0x57, 0x41, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 };
-
-static EventGroupHandle_t       g_bmt_wifi_evgrp;
-static const int                BMT_WIFI_CONNECTED_BIT = BIT0;
-static esp_mqtt_client_handle_t g_bmt_mqtt_client      = NULL;
-static bool                     g_bmt_mqtt_connected   = false;
-
-static QueueHandle_t g_bmt_mqtt_queue     = NULL;
-static uint32_t      g_bmt_mqtt_enqueued  = 0;
-static uint32_t      g_bmt_mqtt_dropped   = 0;
-static uint32_t      g_bmt_mqtt_published = 0;
 
 static esp_ble_mesh_cfg_srv_t bmt_cfg_server = {
     .net_transmit     = ESP_BLE_MESH_TRANSMIT(7, 10),
@@ -127,206 +111,6 @@ static void bmt_print_status(void) {
     printf("=========================================\n");
 }
 
-static void bmt_log_mqtt_stats(void) {
-    UBaseType_t in_queue = g_bmt_mqtt_queue ? uxQueueMessagesWaiting(g_bmt_mqtt_queue) : 0;
-    printf("\n========== MQTT QUEUE STATS ==========\n");
-    printf("Connected       : %s\n", g_bmt_mqtt_connected ? "YES" : "NO");
-    printf("Queue size      : %u / %d\n", (unsigned)in_queue, BMT_MQTT_QUEUE_SIZE);
-    printf("Total enqueued  : %" PRIu32 "\n", g_bmt_mqtt_enqueued);
-    printf("Total published : %" PRIu32 "\n", g_bmt_mqtt_published);
-    printf("Total dropped   : %" PRIu32 " (queue full)\n", g_bmt_mqtt_dropped);
-    if (g_bmt_mqtt_enqueued > 0) {
-        float drop_rate = (float)g_bmt_mqtt_dropped * 100.0f / g_bmt_mqtt_enqueued;
-        printf("Drop rate       : %.2f%%\n", drop_rate);
-    }
-    printf("======================================\n");
-}
-
-static void bmt_wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data) {
-    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGW(TAG, "WiFi disconnected, reconnecting...");
-        esp_wifi_connect();
-        xEventGroupClearBits(g_bmt_wifi_evgrp, BMT_WIFI_CONNECTED_BIT);
-    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
-        ESP_LOGI(TAG, "WiFi connected! IP: " IPSTR, IP2STR(&ev->ip_info.ip));
-        xEventGroupSetBits(g_bmt_wifi_evgrp, BMT_WIFI_CONNECTED_BIT);
-    }
-}
-
-static void bmt_wifi_init(void) {
-    g_bmt_wifi_evgrp = xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    esp_event_handler_instance_t any_id, got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                                        &bmt_wifi_event_handler, NULL, &any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                                        &bmt_wifi_event_handler, NULL, &got_ip));
-    wifi_config_t wifi_cfg = {.sta = {.threshold.authmode = WIFI_AUTH_WPA2_PSK}};
-    strncpy((char *)wifi_cfg.sta.ssid, BMT_WIFI_SSID, sizeof(wifi_cfg.sta.ssid));
-    strncpy((char *)wifi_cfg.sta.password, BMT_WIFI_PASS, sizeof(wifi_cfg.sta.password));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    xEventGroupWaitBits(g_bmt_wifi_evgrp, BMT_WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
-}
-
-static void bmt_mqtt_event_handler(void *args, esp_event_base_t base, int32_t id, void *data) {
-    switch ((esp_mqtt_event_id_t)id) {
-    case MQTT_EVENT_CONNECTED:
-        g_bmt_mqtt_connected = true;
-        ESP_LOGI(TAG, "MQTT connected to ThingsBoard");
-        break;
-    case MQTT_EVENT_DISCONNECTED:
-        g_bmt_mqtt_connected = false;
-        ESP_LOGW(TAG, "MQTT disconnected");
-        break;
-    default:
-        break;
-    }
-}
-
-extern const uint8_t bmt_ca_pem_start[] asm("_binary_ca_pem_start");
-extern const uint8_t bmt_ca_pem_end[] asm("_binary_ca_pem_end");
-
-static void bmt_mqtt_init(void) {
-    esp_mqtt_client_config_t cfg = {
-        .broker.address.uri                  = BMT_TB_HOST,
-        .broker.verification.certificate     = (const char *)bmt_ca_pem_start,
-        .broker.verification.certificate_len = (size_t)(bmt_ca_pem_end - bmt_ca_pem_start),
-        .broker.verification.common_name     = BMT_TB_CN,
-        .credentials.username                = BMT_TB_GATEWAY_TOKEN,
-        .network.timeout_ms                  = BMT_MQTT_PUBLISH_TIMEOUT_MS,
-        .network.reconnect_timeout_ms        = 5000,
-    };
-    g_bmt_mqtt_client = esp_mqtt_client_init(&cfg);
-    if (!g_bmt_mqtt_client) {
-        ESP_LOGE(TAG, "MQTT init failed");
-        return;
-    }
-    esp_mqtt_client_register_event(g_bmt_mqtt_client, ESP_EVENT_ANY_ID, bmt_mqtt_event_handler,
-                                   NULL);
-    esp_mqtt_client_start(g_bmt_mqtt_client);
-    ESP_LOGI(TAG, "MQTTS client started -> %s (verify CN=%s)", BMT_TB_HOST, BMT_TB_CN);
-}
-
-static void bmt_tb_connect_device(const char *device_name, const char *device_type) {
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    char json[128];
-    if (device_type && device_type[0])
-        snprintf(json, sizeof(json), "{\"device\":\"%s\",\"type\":\"%s\"}", device_name,
-                 device_type);
-    else
-        snprintf(json, sizeof(json), "{\"device\":\"%s\"}", device_name);
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/connect", json, 0, 1, 0);
-    ESP_LOGI(TAG, "TB CONNECT: %s (type=%s)", device_name, device_type ? device_type : "default");
-}
-
-static void bmt_tb_disconnect_device(const char *device_name) {
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    char json[64];
-    snprintf(json, sizeof(json), "{\"device\":\"%s\"}", device_name);
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/disconnect", json, 0, 1, 0);
-    ESP_LOGI(TAG, "TB DISCONNECT: %s", device_name);
-}
-
-static void bmt_tb_set_role(const char *device_name, const char *role) {
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    char json[128];
-    snprintf(json, sizeof(json), "{\"%s\":{\"role\":\"%s\"}}", device_name, role);
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/attributes", json, 0, 1, 0);
-    ESP_LOGI(TAG, "TB ATTR [%s]: role=%s", device_name, role);
-}
-
-static void bmt_mqtt_pub_gateway_online(void) {
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/devices/me/telemetry", "{\"status\":\"ONLINE\"}",
-                            0, 1, 0);
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/devices/me/attributes",
-                            "{\"role\":\"" BMT_ROLE_GATEWAY "\"}", 0, 1, 0);
-    ESP_LOGI(TAG, "TB Gateway ONLINE (role=" BMT_ROLE_GATEWAY ")");
-}
-
-static void bmt_mqtt_pub_node_status(uint16_t addr, const char *role, bool online) {
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-    char dev[32], json[192];
-    if (role && strcmp(role, BMT_ROLE_SCAN) == 0)
-        snprintf(dev, sizeof(dev), BMT_DEV_NAME_SCAN_FMT, addr);
-    else if (role && strcmp(role, BMT_ROLE_RELAY) == 0)
-        snprintf(dev, sizeof(dev), BMT_DEV_NAME_RELAY_FMT, addr);
-    else
-        snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, addr);
-
-    if (online) {
-        bmt_tb_connect_device(dev, BMT_PROFILE_NODE);
-        for (int retry = 0; retry < 3; retry++) {
-            vTaskDelay(pdMS_TO_TICKS(200));
-            bmt_tb_set_role(dev, role);
-        }
-    }
-    snprintf(json, sizeof(json), "{\"%s\":[{\"status\":\"%s\",\"addr\":\"0x%04x\"}]}", dev,
-             online ? "ONLINE" : "OFFLINE", addr);
-    esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/telemetry", json, 0, 1, 0);
-    ESP_LOGI(TAG, "TB TELEMETRY [%s]: %s", dev, json);
-    if (!online) bmt_tb_disconnect_device(dev);
-}
-
-static void bmt_mqtt_pub_tag(bmt_tag_report_t *r) {
-    if (!r) return;
-
-    bmt_zone_ingest_report(r->scanner_id, r->tag_id, r->tag_type, r->rssi);
-
-    if (!g_bmt_mqtt_connected || !g_bmt_mqtt_client) return;
-
-    char dev[32], json[192], scanner_str[16];
-    snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, r->tag_id);
-    snprintf(scanner_str, sizeof(scanner_str), "scan_%02u", (unsigned)r->scanner_id);
-
-    static uint16_t s_seen_tags[BMT_MAX_SEEN_TAGS] = {0};
-    static int      s_seen_count                   = 0;
-    bool            first_seen                     = true;
-    for (int i = 0; i < s_seen_count; i++)
-        if (s_seen_tags[i] == r->tag_id) {
-            first_seen = false;
-            break;
-        }
-    if (first_seen && s_seen_count < BMT_MAX_SEEN_TAGS) {
-        s_seen_tags[s_seen_count++] = r->tag_id;
-        bmt_tb_connect_device(dev, BMT_PROFILE_TAG);
-        for (int retry = 0; retry < 3; retry++) {
-            vTaskDelay(pdMS_TO_TICKS(200));
-            bmt_tb_set_role(dev, BMT_ROLE_TAG);
-        }
-    }
-
-    snprintf(json, sizeof(json), "{\"%s\":[{\"scanner_id\":\"%s\",\"rssi\":%d}]}", dev, scanner_str,
-             r->rssi);
-
-    int msg_id = esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/telemetry", json, 0, 0, 0);
-    if (msg_id < 0) {
-        ESP_LOGW(TAG, "MQTT publish failed for %s", dev);
-    } else {
-        g_bmt_mqtt_published++;
-        ESP_LOGI(TAG, "TB [%s] scanner=%s rssi=%d dBm", dev, scanner_str, r->rssi);
-    }
-}
-
-static void bmt_mqtt_worker_task(void *arg) {
-    (void)arg;
-    bmt_tag_report_t report;
-    ESP_LOGI(TAG, "MQTT worker task started (queue size=%d)", BMT_MQTT_QUEUE_SIZE);
-    while (1) {
-        if (xQueueReceive(g_bmt_mqtt_queue, &report, portMAX_DELAY) == pdTRUE)
-            bmt_mqtt_pub_tag(&report);
-    }
-}
-
 static void bmt_uart_init(void) {
     const uart_config_t cfg = {
         .baud_rate  = BMT_UART_BAUD,
@@ -357,7 +141,7 @@ static void bmt_uart_cmd_task(void *arg) {
             bmt_zone_print_all();
             break;
         case '3':
-            bmt_log_mqtt_stats();
+            bmt_mqtt_print_stats();
             break;
         case 's':
             printf("\n[UART] Starting MANUAL SCAN...\n");
@@ -565,7 +349,7 @@ static void bmt_mesh_cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t  event,
             ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x", addr);
             if (n && n->is_scan) {
                 ESP_LOGI(TAG, "=== Scan node 0x%04x READY ===", addr);
-                bmt_mqtt_pub_node_status(addr, BMT_ROLE_SCAN, true);
+                bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
             }
         }
     }
@@ -581,7 +365,7 @@ static void bmt_mesh_cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t  event,
             if (!n->online) {
                 n->online = true;
                 ESP_LOGI(TAG, "Relay 0x%04x ONLINE", addr);
-                bmt_mqtt_pub_node_status(addr, BMT_ROLE_RELAY, true);
+                bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
             }
         }
     }
@@ -614,26 +398,7 @@ static void bmt_mesh_vnd_client_cb(esp_ble_mesh_model_cb_event_t  event,
         ESP_LOGI(TAG, "[VND-HEALTH] src=0x%04x scanner=0x%02x temp=%dC vdd=%umV heap=%uKB up=%umin",
                  src, health.scanner_id, health.chip_temp_c, health.vdd_mv, health.free_heap_kb,
                  health.uptime_min);
-
-        if (g_bmt_mqtt_connected && g_bmt_mqtt_client) {
-            char        dev[32], json[256];
-            int         nidx = bmt_node_table_find(src);
-            bmt_node_t *nn   = bmt_node_table_get(nidx);
-            if (nn && nn->is_scan)
-                snprintf(dev, sizeof(dev), BMT_DEV_NAME_SCAN_FMT, src);
-            else if (nn && nn->is_relay)
-                snprintf(dev, sizeof(dev), BMT_DEV_NAME_RELAY_FMT, src);
-            else
-                snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, src);
-            snprintf(json, sizeof(json),
-                     "{\"%s\":[{\"chip_temp\":%d,\"vdd_mv\":%u,"
-                     "\"free_heap_kb\":%u,\"uptime_min\":%u}]}",
-                     dev, health.chip_temp_c, health.vdd_mv, health.free_heap_kb,
-                     health.uptime_min);
-            esp_mqtt_client_publish(g_bmt_mqtt_client, "v1/gateway/telemetry", json, 0, 0, 0);
-            ESP_LOGI(TAG, "TB HEALTH [%s] temp=%dC vdd=%umV", dev, health.chip_temp_c,
-                     health.vdd_mv);
-        }
+        bmt_tb_pub_node_health(src, &health);
         return;
     }
 
@@ -650,14 +415,7 @@ static void bmt_mesh_vnd_client_cb(esp_ble_mesh_model_cb_event_t  event,
              report.scanner_id, report.tag_id, report.rssi, report.distance_dm / 10.0f,
              report.loss_pct);
 
-    if (g_bmt_mqtt_queue) {
-        if (xQueueSend(g_bmt_mqtt_queue, &report, 0) == pdTRUE) {
-            g_bmt_mqtt_enqueued++;
-        } else {
-            g_bmt_mqtt_dropped++;
-            ESP_LOGW(TAG, "MQTT queue FULL — dropped (total: %" PRIu32 ")", g_bmt_mqtt_dropped);
-        }
-    }
+    bmt_mqtt_enqueue_tag_report(&report);
 }
 
 static void bmt_relay_ping_task(void *arg) {
@@ -685,7 +443,7 @@ static void bmt_relay_ping_task(void *arg) {
                 n->online) {
                 n->online = false;
                 ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-                bmt_mqtt_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
+                bmt_tb_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
             }
             vTaskDelay(pdMS_TO_TICKS(500));
         }
@@ -753,13 +511,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(err);
 
     bmt_node_table_load();
-
-    g_bmt_mqtt_queue = xQueueCreate(BMT_MQTT_QUEUE_SIZE, sizeof(bmt_tag_report_t));
-    if (!g_bmt_mqtt_queue) {
-        ESP_LOGE(TAG, "Failed to create MQTT queue!");
-        return;
-    }
-    ESP_LOGI(TAG, "MQTT queue created (size=%d)", BMT_MQTT_QUEUE_SIZE);
+    ESP_ERROR_CHECK(bmt_mqtt_queue_create());
 
     bmt_wifi_init();
     bmt_mqtt_init();
@@ -810,7 +562,7 @@ void app_main(void) {
 
     bmt_print_status();
     bmt_node_table_print();
-    bmt_mqtt_pub_gateway_online();
+    bmt_tb_pub_gateway_online();
 
     esp_task_wdt_config_t wdt_cfg = {
         .timeout_ms     = BMT_WDT_TIMEOUT_S * 1000,
@@ -819,7 +571,7 @@ void app_main(void) {
     };
     esp_task_wdt_reconfigure(&wdt_cfg);
 
-    xTaskCreate(bmt_mqtt_worker_task, "bmt_mqtt_wkr", 4096, NULL, 5, NULL);
+    bmt_mqtt_start_worker();
     xTaskCreate(bmt_uart_cmd_task, "bmt_uart", 4096, NULL, 4, NULL);
     xTaskCreate(bmt_relay_ping_task, "bmt_relay_png", 4096, NULL, 3, NULL);
     xTaskCreate(bmt_wdt_feed_task, "bmt_wdt_feed", 2048, NULL, 2, NULL);
