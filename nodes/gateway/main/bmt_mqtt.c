@@ -1,18 +1,5 @@
 #include "bmt_mqtt.h"
-#include "bmt_config.h"
 #include "bmt_thingsboard.h"
-
-#include <inttypes.h>
-#include <stdio.h>
-
-#include "esp_err.h"
-#include "esp_log.h"
-#include "esp_event.h"
-#include "mqtt_client.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
 
 static const char *TAG = "BMT_MQTT";
 

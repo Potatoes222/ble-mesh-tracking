@@ -1,33 +1,6 @@
 #include "bmt_beacon.h"
-#include "bmt_config.h"
-
-#include <string.h>
-
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_err.h"
-#include "esp_gap_ble_api.h"
-#include "esp_log.h"
-#include "esp_random.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/timers.h"
 
 static const char *TAG = "BMT_BEACON";
-
-#pragma pack(1)
-typedef struct {
-    uint8_t  uuid[16];
-    uint16_t major;
-    uint16_t minor;
-    int8_t   tx_power;
-    uint8_t  sequence;
-    uint16_t crc16;
-} bmt_adv_payload_t;
-#pragma pack()
-
-#define BMT_ADV_RAW_LEN     31
-#define BMT_ADV_PAYLOAD_OFF 7
 
 static uint8_t s_adv_raw[BMT_ADV_RAW_LEN] = {
     0x02, 0x01, 0x06, 0x1B, 0xFF, 0xE5, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

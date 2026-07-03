@@ -1,15 +1,4 @@
 #include "bmt_node_table.h"
-#include "bmt_config.h"
-
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_err.h"
-#include "esp_log.h"
-#include "nvs.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static const char *TAG = "BMT_NODES";
 

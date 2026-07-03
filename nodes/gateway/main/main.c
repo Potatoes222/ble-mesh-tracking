@@ -1,12 +1,3 @@
-#include "bmt_config.h"
-#include "bmt_mesh.h"
-#include "bmt_mqtt.h"
-#include "bmt_node_table.h"
-#include "bmt_thingsboard.h"
-#include "bmt_uart.h"
-#include "bmt_wifi.h"
-#include "bmt_zone.h"
-
 #include <stdio.h>
 
 #include "esp_bt.h"
@@ -19,6 +10,15 @@
 #include "freertos/task.h"
 
 #include "ble_mesh_example_init.h"
+
+#include "bmt_config.h"
+#include "bmt_mesh.h"
+#include "bmt_mqtt.h"
+#include "bmt_node_table.h"
+#include "bmt_thingsboard.h"
+#include "bmt_uart.h"
+#include "bmt_wifi.h"
+#include "bmt_zone.h"
 
 static const char *TAG = "BMT_GW";
 

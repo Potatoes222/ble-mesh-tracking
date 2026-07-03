@@ -1,52 +1,10 @@
 #include "bmt_scan.h"
-#include "bmt_scan_core.h"
-#include "bmt_types.h"
-#include "bmt_tag_table.h"
-#include "bmt_mesh.h"
-#include "bmt_crc.h"
-
-#include <string.h>
-
-#include "esp_bt.h"
-#include "esp_err.h"
-#include "esp_gap_ble_api.h"
-#include "esp_log.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#define BMT_GAP_SCAN_DURATION_MS     1200
-#define BMT_MESH_PUBLISH_DURATION_MS 300
-#define BMT_SCAN_INTERVAL_UNITS      0x0010
-#define BMT_SCAN_WINDOW_UNITS        0x0010
-#define BMT_CID_APPLE                0x004C
-#define BMT_TAG_MAJOR_PERSON         0x0001
-#define BMT_TAG_MAJOR_ASSET          0x0002
-#define BMT_PHONE_TX_POWER_1M        (-59)
 
 static const char *TAG = "BMT_SCAN";
 
 static const uint8_t s_uuid_prefix[4] = {0xAB, 0x00, 0x00, 0x00};
 
 static volatile bmt_radio_phase_t s_phase = BMT_PHASE_GAP_SCAN;
-
-#pragma pack(1)
-typedef struct {
-    uint8_t  uuid[16];
-    uint16_t major;
-    uint16_t minor;
-    int8_t   tx_power;
-    uint8_t  sequence;
-    uint16_t crc16;
-} adv_esp_t;
-#pragma pack()
-
-typedef struct {
-    uint8_t  tag_type;
-    uint16_t tag_id;
-    int8_t   tx_power;
-    uint8_t  sequence;
-} parsed_t;
 
 static esp_ble_scan_params_t s_scan_params = {
     .scan_type          = BLE_SCAN_TYPE_PASSIVE,
@@ -57,7 +15,7 @@ static esp_ble_scan_params_t s_scan_params = {
     .scan_duplicate     = BLE_SCAN_DUPLICATE_DISABLE,
 };
 
-static bool parse_adv(uint8_t *adv_data, uint8_t adv_len, parsed_t *out) {
+static bool parse_adv(uint8_t *adv_data, uint8_t adv_len, bmt_parsed_t *out) {
     if (!adv_data || adv_len < 4 || !out) return false;
     int pos = 0;
 
@@ -74,7 +32,7 @@ static bool parse_adv(uint8_t *adv_data, uint8_t adv_len, parsed_t *out) {
         uint16_t cid = (uint16_t)adv_data[pos + 2] | ((uint16_t)adv_data[pos + 3] << 8);
 
         if (cid == BMT_CID_ESP && field_len >= (1 + 2 + 24)) {
-            adv_esp_t *p = (adv_esp_t *)(adv_data + pos + 4);
+            bmt_adv_esp_t *p = (bmt_adv_esp_t *)(adv_data + pos + 4);
             if (memcmp(p->uuid, s_uuid_prefix, 4) != 0) goto next_field;
             uint16_t expected = bmt_crc16_ccitt((uint8_t *)p, sizeof(*p) - sizeof(p->crc16));
             if (expected != p->crc16) {
@@ -122,7 +80,7 @@ static void gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) 
         if (s_phase != BMT_PHASE_GAP_SCAN) break;
         if (!bmt_mesh_is_provisioned()) break;
 
-        parsed_t p;
+        bmt_parsed_t p;
         if (!parse_adv(param->scan_rst.ble_adv, param->scan_rst.adv_data_len, &p)) break;
 
         bmt_tag_hit_t hit = {

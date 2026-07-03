@@ -1,30 +1,4 @@
 #include "bmt_mesh.h"
-#include "bmt_config.h"
-
-#include <inttypes.h>
-#include <stdio.h>
-
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_err.h"
-#include "esp_log.h"
-
-#include "esp_ble_mesh_common_api.h"
-#include "esp_ble_mesh_config_model_api.h"
-#include "esp_ble_mesh_defs.h"
-#include "esp_ble_mesh_health_model_api.h"
-#include "esp_ble_mesh_networking_api.h"
-#include "esp_ble_mesh_provisioning_api.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-#include "freertos/task.h"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#endif
-
-#define BMT_PROV_COMPLETE_BIT BIT0
 
 static const char *TAG = "BMT_MESH";
 
@@ -177,7 +151,6 @@ void bmt_mesh_print_status(const char *title) {
 
 static void monitor_task(void *arg) {
     (void)arg;
-
     xEventGroupWaitBits(s_evgrp, BMT_PROV_COMPLETE_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
     vTaskDelay(pdMS_TO_TICKS(5000));
 

@@ -1,30 +1,8 @@
 #include "bmt_zone.h"
-#include "bmt_config.h"
-
-#include <inttypes.h>
-#include <limits.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static const char *TAG = "BMT_ZONE";
 
-typedef struct {
-    bool     active;
-    uint16_t tag_id;
-    uint8_t  tag_type;
-    int8_t   rssi_by_scanner[BMT_MAX_SCANNERS];
-    uint32_t ts_by_scanner[BMT_MAX_SCANNERS];
-    bool     valid_by_scanner[BMT_MAX_SCANNERS];
-    uint8_t  current_zone_id;
-    uint32_t last_zone_change_ms;
-    uint32_t last_any_report_ms;
-} track_t;
-
-static track_t s_tracks[BMT_MAX_TRACKED_TAGS];
+static bmt_zone_track_t s_tracks[BMT_MAX_TRACKED_TAGS];
 
 const char *bmt_zone_name(uint8_t scanner_id) {
     switch (scanner_id) {
@@ -41,14 +19,14 @@ const char *bmt_zone_name(uint8_t scanner_id) {
     }
 }
 
-static track_t *find_track(uint16_t tag_id) {
+static bmt_zone_track_t *find_track(uint16_t tag_id) {
     for (int i = 0; i < BMT_MAX_TRACKED_TAGS; i++)
         if (s_tracks[i].active && s_tracks[i].tag_id == tag_id) return &s_tracks[i];
     return NULL;
 }
 
-static track_t *get_or_add(uint16_t tag_id, uint8_t tag_type) {
-    track_t *t = find_track(tag_id);
+static bmt_zone_track_t *get_or_add(uint16_t tag_id, uint8_t tag_type) {
+    bmt_zone_track_t *t = find_track(tag_id);
     if (t) return t;
     for (int i = 0; i < BMT_MAX_TRACKED_TAGS; i++) {
         if (s_tracks[i].active) continue;
@@ -63,7 +41,7 @@ static track_t *get_or_add(uint16_t tag_id, uint8_t tag_type) {
     return NULL;
 }
 
-static uint8_t evaluate(track_t *t) {
+static uint8_t evaluate(bmt_zone_track_t *t) {
     uint32_t now           = xTaskGetTickCount() * portTICK_PERIOD_MS;
     int      best_rssi     = INT_MIN;
     uint8_t  best_scanner  = BMT_ZONE_UNKNOWN;
@@ -99,7 +77,7 @@ void bmt_zone_ingest_report(uint8_t scanner_id, uint16_t tag_id, uint8_t tag_typ
         return;
     }
 
-    track_t *t = get_or_add(tag_id, tag_type);
+    bmt_zone_track_t *t = get_or_add(tag_id, tag_type);
     if (!t) {
         ESP_LOGW(TAG, "Track table full for tag 0x%04x", tag_id);
         return;
@@ -126,7 +104,7 @@ void bmt_zone_print_all(void) {
     printf("\n========== TRACKED TAGS ==========\n");
     bool any = false;
     for (int i = 0; i < BMT_MAX_TRACKED_TAGS; i++) {
-        track_t *t = &s_tracks[i];
+        bmt_zone_track_t *t = &s_tracks[i];
         if (!t->active) continue;
         any = true;
         printf("Tag 0x%04x (type=%s)\n", t->tag_id, t->tag_type == 0x01 ? "PERSON" : "ASSET");
@@ -160,7 +138,7 @@ static void timeout_task(void *arg) {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
         for (int i = 0; i < BMT_MAX_TRACKED_TAGS; i++) {
-            track_t *t = &s_tracks[i];
+            bmt_zone_track_t *t = &s_tracks[i];
             if (!t->active) continue;
             if ((now - t->last_any_report_ms) <= BMT_TAG_OUT_OF_RANGE_MS) continue;
             if (t->current_zone_id == BMT_ZONE_UNKNOWN) continue;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include "esp_ble_mesh_defs.h"
 
 #define BMT_CID_ESP            0x02E5

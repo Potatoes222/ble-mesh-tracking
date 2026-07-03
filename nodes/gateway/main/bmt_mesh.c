@@ -1,32 +1,9 @@
 #include "bmt_mesh.h"
-#include "bmt_config.h"
 #include "bmt_mac_cache.h"
 #include "bmt_mqtt.h"
 #include "bmt_node_table.h"
 #include "bmt_scan_list.h"
 #include "bmt_thingsboard.h"
-#include "bmt_types.h"
-
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_err.h"
-#include "esp_log.h"
-
-#include "esp_ble_mesh_common_api.h"
-#include "esp_ble_mesh_config_model_api.h"
-#include "esp_ble_mesh_defs.h"
-#include "esp_ble_mesh_local_data_operation_api.h"
-#include "esp_ble_mesh_networking_api.h"
-#include "esp_ble_mesh_provisioning_api.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#endif
 
 static const char *TAG = "BMT_MESH";
 

@@ -1,45 +1,12 @@
 #include "bmt_tag_table.h"
 
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#define BMT_PATH_LOSS_N            2.5f
-#define BMT_LOG_RSSI_THRESHOLD_DBM 3
-#define BMT_LOG_MIN_INTERVAL_MS    2000
-
 static const char *TAG = "BMT_TAGS";
 
-typedef struct {
-    float q, r, x, p, k;
-} kalman_t;
+static bmt_tag_entry_t s_tags[BMT_MAX_TAGS];
+static bmt_kalman_t    s_kalman[BMT_MAX_TAGS];
+static volatile bool   s_new_data = false;
 
-typedef struct {
-    bool     active;
-    uint8_t  tag_type;
-    uint16_t tag_id;
-    int8_t   tx_power;
-    int8_t   rssi_raw;
-    float    rssi_filtered;
-    float    distance;
-    uint8_t  last_sequence;
-    uint32_t total_received;
-    uint32_t total_missed;
-    uint32_t last_seen_ms;
-    uint8_t  mac[6];
-    int8_t   last_logged_rssi;
-    uint32_t last_log_ms;
-} entry_t;
-
-static entry_t       s_tags[BMT_MAX_TAGS];
-static kalman_t      s_kalman[BMT_MAX_TAGS];
-static volatile bool s_new_data = false;
-
-static void kalman_init(kalman_t *kf, float initial_rssi) {
+static void kalman_init(bmt_kalman_t *kf, float initial_rssi) {
     kf->q = 0.1f;
     kf->r = 2.0f;
     kf->x = initial_rssi;
@@ -47,7 +14,7 @@ static void kalman_init(kalman_t *kf, float initial_rssi) {
     kf->k = 0.0f;
 }
 
-static float kalman_update(kalman_t *kf, float rssi) {
+static float kalman_update(bmt_kalman_t *kf, float rssi) {
     kf->p = kf->p + kf->q;
     kf->k = kf->p / (kf->p + kf->r);
     kf->x = kf->x + kf->k * (rssi - kf->x);
@@ -70,7 +37,7 @@ static int find_by_id(uint16_t tag_id) {
 static int add_new(const bmt_tag_hit_t *hit) {
     for (int i = 0; i < BMT_MAX_TAGS; i++) {
         if (s_tags[i].active) continue;
-        memset(&s_tags[i], 0, sizeof(entry_t));
+        memset(&s_tags[i], 0, sizeof(bmt_tag_entry_t));
         s_tags[i].active           = true;
         s_tags[i].tag_type         = hit->tag_type;
         s_tags[i].tag_id           = hit->tag_id;
@@ -94,7 +61,7 @@ static int add_new(const bmt_tag_hit_t *hit) {
     return -1;
 }
 
-static void maybe_log_update(entry_t *t, uint8_t sequence, uint32_t now) {
+static void maybe_log_update(bmt_tag_entry_t *t, uint8_t sequence, uint32_t now) {
     int8_t   rd = (int8_t)abs((int)t->rssi_raw - (int)t->last_logged_rssi);
     uint32_t td = now - t->last_log_ms;
     if (rd >= BMT_LOG_RSSI_THRESHOLD_DBM || td >= BMT_LOG_MIN_INTERVAL_MS) {
@@ -106,8 +73,8 @@ static void maybe_log_update(entry_t *t, uint8_t sequence, uint32_t now) {
 }
 
 static void apply_update(int idx, int8_t rssi, uint8_t sequence) {
-    entry_t *t   = &s_tags[idx];
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    bmt_tag_entry_t *t   = &s_tags[idx];
+    uint32_t         now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
     if (sequence == t->last_sequence) {
         t->rssi_raw      = rssi;
@@ -173,7 +140,7 @@ void bmt_tag_table_check_timeouts(void) {
         if ((now - s_tags[i].last_seen_ms) > BMT_TAG_TIMEOUT_MS) {
             ESP_LOGW(TAG, "Tag 0x%04X OUT OF RANGE", s_tags[i].tag_id);
             s_tags[i].active = false;
-            memset(&s_kalman[i], 0, sizeof(kalman_t));
+            memset(&s_kalman[i], 0, sizeof(bmt_kalman_t));
         }
     }
 }
@@ -184,11 +151,11 @@ void bmt_tag_table_print(uint8_t scanner_id) {
     printf("\n========== TAG TABLE (Scanner 0x%02X) ==========\n", scanner_id);
     for (int i = 0; i < BMT_MAX_TAGS; i++) {
         if (!s_tags[i].active) continue;
-        any          = true;
-        entry_t *t   = &s_tags[i];
-        uint32_t age = (now - t->last_seen_ms) / 1000;
-        uint32_t tot = t->total_received + t->total_missed;
-        float    lr  = tot ? (float)t->total_missed / tot * 100.0f : 0.0f;
+        any                  = true;
+        bmt_tag_entry_t *t   = &s_tags[i];
+        uint32_t         age = (now - t->last_seen_ms) / 1000;
+        uint32_t         tot = t->total_received + t->total_missed;
+        float            lr  = tot ? (float)t->total_missed / tot * 100.0f : 0.0f;
         printf("Tag 0x%04X:\n", t->tag_id);
         printf("  Type      : %s\n", t->tag_type == BMT_TAG_TYPE_PERSON ? "PERSON" : "ASSET");
         printf("  MAC       : %02X:%02X:%02X:%02X:%02X:%02X\n", t->mac[0], t->mac[1], t->mac[2],
@@ -216,7 +183,7 @@ void bmt_tag_table_clear_new_data(void) {
 
 bool bmt_tag_table_get_snapshot(int index, bmt_tag_snapshot_t *out) {
     if (index < 0 || index >= BMT_MAX_TAGS || !out) return false;
-    entry_t *t = &s_tags[index];
+    bmt_tag_entry_t *t = &s_tags[index];
     if (!t->active) return false;
 
     out->active         = true;

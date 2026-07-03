@@ -1,15 +1,5 @@
 #include "bmt_thingsboard.h"
-#include "bmt_config.h"
 #include "bmt_mqtt.h"
-#include "bmt_node_table.h"
-#include "bmt_zone.h"
-
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static const char *TAG = "BMT_TB";
 

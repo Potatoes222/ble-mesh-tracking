@@ -1,8 +1,21 @@
 #pragma once
 
+#include <inttypes.h>
 #include <stdbool.h>
-#include "bmt_types.h"
+#include <stdint.h>
+#include <stdio.h>
+
 #include "esp_err.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "mqtt_client.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+
+#include "bmt_config.h"
+#include "bmt_types.h"
 
 void bmt_mqtt_init(void);
 bool bmt_mqtt_is_connected(void);

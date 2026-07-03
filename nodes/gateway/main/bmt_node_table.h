@@ -1,7 +1,19 @@
 #pragma once
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "esp_err.h"
+#include "esp_log.h"
+#include "nvs.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "bmt_config.h"
 
 typedef struct {
     bool     used;

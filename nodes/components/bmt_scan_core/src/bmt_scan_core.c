@@ -1,11 +1,10 @@
 #include "bmt_scan_core.h"
+
 #include "bmt_health.h"
 #include "bmt_mesh.h"
 #include "bmt_scan.h"
 #include "bmt_tag_table.h"
 #include "bmt_uart.h"
-
-#include "esp_log.h"
 
 static const char *TAG = "BMT_CORE";
 

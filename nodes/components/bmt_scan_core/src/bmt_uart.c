@@ -1,17 +1,4 @@
 #include "bmt_uart.h"
-#include "bmt_mesh.h"
-#include "bmt_scan.h"
-#include "bmt_scan_core.h"
-
-#include <stdio.h>
-
-#include "driver/uart.h"
-#include "esp_err.h"
-#include "esp_log.h"
-#include "esp_system.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 static const char *TAG = "BMT_UART";
 

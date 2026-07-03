@@ -1,31 +1,9 @@
 #include "bmt_scan_list.h"
-#include "bmt_config.h"
-#include "bmt_node_table.h"
 
-#include <stdio.h>
-#include <string.h>
-
-#include "esp_ble_mesh_networking_api.h"
-#include "esp_ble_mesh_provisioning_api.h"
-#include "esp_err.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-static const char *TAG = "BMT_SCAN_LIST";
-
-typedef struct {
-    bool     used;
-    uint8_t  uuid[16];
-    uint8_t  addr[6];
-    uint8_t  addr_type;
-    uint16_t oob_info;
-} entry_t;
-
-static entry_t         s_entries[BMT_MAX_SCAN_LIST];
-static int             s_count    = 0;
-static bool            s_scanning = false;
-static bmt_prov_mode_t s_mode     = BMT_PROV_MODE_MANUAL;
+static bmt_scan_entry_t s_entries[BMT_MAX_SCAN_LIST];
+static int              s_count    = 0;
+static bool             s_scanning = false;
+static bmt_prov_mode_t  s_mode     = BMT_PROV_MODE_MANUAL;
 
 void bmt_scan_list_reset(void) {
     memset(s_entries, 0, sizeof(s_entries));
@@ -101,7 +79,6 @@ void bmt_scan_list_provision(void) {
         }
     }
     if (count == 0) printf("[PROV] Nothing to provision.\n");
-    (void)TAG;
 }
 
 bmt_prov_mode_t bmt_scan_list_get_mode(void) {

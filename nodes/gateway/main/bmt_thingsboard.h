@@ -2,7 +2,18 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "esp_log.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "bmt_config.h"
+#include "bmt_node_table.h"
 #include "bmt_types.h"
+#include "bmt_zone.h"
 
 void bmt_tb_connect_device(const char *device_name, const char *device_type);
 void bmt_tb_disconnect_device(const char *device_name);
