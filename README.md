@@ -32,7 +32,7 @@ EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF)
 
 BLE Mesh Tracking is a room-level indoor tracking system built on ESP32 and BLE Mesh. A BLE tag (an iPhone iBeacon or an ESP32 running the tag firmware) is picked up by three scan nodes placed around the home. Each scan node filters RSSI, then forwards a small report over BLE Mesh to a gateway. The gateway connects to WiFi and pushes each report to ThingsBoard over MQTT. The output is which room a tag is in, not coordinates.
 
-Core concepts exercised while building BMT:
+Core concepts exercised while building BLE Mesh Tracking:
 
 - **BLE Mesh vendor model:** custom opcodes for tag reports, node health, OTA trigger, and remote reset.
 - **Radio scheduling:** time-division of a single BLE radio between GAP scan and mesh publish.
