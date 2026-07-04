@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -23,6 +24,8 @@
 #include "freertos/task.h"
 
 #include "bmt_config.h"
+#include "bmt_ota.h"
+#include "bmt_types.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))

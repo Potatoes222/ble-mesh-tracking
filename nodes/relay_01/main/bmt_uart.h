@@ -10,5 +10,6 @@
 #include "freertos/task.h"
 
 #include "bmt_mesh.h"
+#include "bmt_ota.h"
 
 esp_err_t bmt_uart_init(void);

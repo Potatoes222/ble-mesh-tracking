@@ -19,6 +19,7 @@ static void uart_task(void *arg) {
     printf("\n===== BMT RELAY COMMANDS =====\n");
     printf("r -> RESET mesh (xoa NVS, ve unprovisioned)\n");
     printf("1 -> STATUS hien tai\n");
+    printf("o -> [OTA] test WiFi OTA now\n");
     printf("==============================\n");
 
     uint8_t ch;
@@ -37,8 +38,14 @@ static void uart_task(void *arg) {
             bmt_mesh_print_status("RELAY STATUS");
             break;
 
+        case 'o':
+        case 'O':
+            printf("\n[UART] Manual OTA trigger\n");
+            bmt_ota_start();
+            break;
+
         default:
-            printf("[UART] Unknown: %c  (r=reset, 1=status)\n", ch);
+            printf("[UART] Unknown: %c  (r=reset, 1=status, o=ota)\n", ch);
             break;
         }
     }
