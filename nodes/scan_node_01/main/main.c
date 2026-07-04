@@ -19,6 +19,14 @@ static void nvs_init(void) {
 void app_main(void) {
     ESP_LOGI(TAG, "=== BMT Scan Node Starting ===");
     nvs_init();
-    ESP_ERROR_CHECK(bmt_scan_core_init(BMT_SCANNER_ID));
+
+    const bmt_scan_core_cfg_t cfg = {
+        .scanner_id = BMT_SCANNER_ID,
+        .wifi_ssid  = BMT_WIFI_SSID,
+        .wifi_pass  = BMT_WIFI_PASS,
+        .ota_url    = BMT_OTA_URL,
+    };
+    ESP_ERROR_CHECK(bmt_scan_core_init(&cfg));
+
     ESP_LOGI(TAG, "=== BMT Scan Node READY (r=reset, 1=status) ===");
 }

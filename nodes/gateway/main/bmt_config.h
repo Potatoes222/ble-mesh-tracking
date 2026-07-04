@@ -8,6 +8,11 @@
 #define BMT_TB_CN            "bmt-tb.local"
 #define BMT_TB_GATEWAY_TOKEN "eo3zw4be9kl6xv8rxsj5"
 
+#define BMT_OTA_SERVER_BASE         "http://192.168.1.113:8080"
+#define BMT_OTA_GATEWAY_URL         BMT_OTA_SERVER_BASE "/Gateway.bin"
+#define BMT_OTA_RELAY_URL           BMT_OTA_SERVER_BASE "/Relay.bin"
+#define BMT_OTA_INTER_NODE_DELAY_MS 60000
+
 #define BMT_DEV_NAME_GATEWAY   "gateway"
 #define BMT_DEV_NAME_NODE_FMT  "bmt_node_0x%04x"
 #define BMT_DEV_NAME_SCAN_FMT  "scan_0x%04x"
