@@ -12,7 +12,7 @@ dependencies:
   example_init:
     dependencies: []
     source:
-      path: ..\..\..\..\esp\v6.0\esp-idf\examples\bluetooth\esp_ble_mesh\common_components\example_init
+      path: ../../../../../.espressif/v6.0/esp-idf/examples/bluetooth/esp_ble_mesh/common_components/example_init
       type: local
     version: '*'
   idf:
@@ -23,6 +23,6 @@ direct_dependencies:
 - espressif/mqtt
 - example_init
 - idf
-manifest_hash: 644dd050f1b904b7c9689369f08c70d26e80fb021ffbd3e659e11d7f67e7a841
+manifest_hash: ab9dbfb30c12c829a7340a9f5a64eca08b560a51a2df3dfce668ea5ea21771e3
 target: esp32s3
 version: 3.0.0

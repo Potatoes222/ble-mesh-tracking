@@ -1,14 +1,12 @@
 #pragma once
 
-#include "sdkconfig.h"
+#define BMT_WIFI_SSID "TP-Link_385B"
+#define BMT_WIFI_PASS "91324566"
 
-#define BMT_WIFI_SSID CONFIG_BMT_WIFI_SSID
-#define BMT_WIFI_PASS CONFIG_BMT_WIFI_PASS
-
-#define BMT_TB_IP            CONFIG_BMT_TB_IP
+#define BMT_TB_IP            "192.168.1.113"
 #define BMT_TB_HOST          "mqtts://" BMT_TB_IP ":8883"
-#define BMT_TB_CN            CONFIG_BMT_TB_CN
-#define BMT_TB_GATEWAY_TOKEN CONFIG_BMT_TB_GATEWAY_TOKEN
+#define BMT_TB_CN            "bmt-tb.local"
+#define BMT_TB_GATEWAY_TOKEN "eo3zw4be9kl6xv8rxsj5"
 
 #define BMT_DEV_NAME_GATEWAY   "gateway"
 #define BMT_DEV_NAME_NODE_FMT  "bmt_node_0x%04x"
