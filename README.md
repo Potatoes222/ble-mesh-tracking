@@ -4,7 +4,7 @@
 
 </div>
 
-# BLE Mesh Tracking (BMT) - Indoor Zone Tracking on ESP32
+# BLE Mesh Tracking - Indoor Zone Tracking on ESP32
 
 <!--
 EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF)
@@ -30,7 +30,7 @@ EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF)
 
 ## Introduction
 
-BMT is a room-level indoor tracking system built on ESP32 and BLE Mesh. A BLE tag (an iPhone iBeacon or an ESP32 running the tag firmware) is picked up by three scan nodes placed around the home. Each scan node filters RSSI, then forwards a small report over BLE Mesh to a gateway. The gateway connects to WiFi and pushes each report to ThingsBoard over MQTT. The output is which room a tag is in, not coordinates.
+BLE Mesh Tracking is a room-level indoor tracking system built on ESP32 and BLE Mesh. A BLE tag (an iPhone iBeacon or an ESP32 running the tag firmware) is picked up by three scan nodes placed around the home. Each scan node filters RSSI, then forwards a small report over BLE Mesh to a gateway. The gateway connects to WiFi and pushes each report to ThingsBoard over MQTT. The output is which room a tag is in, not coordinates.
 
 Core concepts exercised while building BMT:
 
