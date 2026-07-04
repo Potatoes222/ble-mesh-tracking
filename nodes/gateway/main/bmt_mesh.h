@@ -29,5 +29,8 @@
 esp_err_t bmt_mesh_init(void);
 void      bmt_mesh_start_relay_ping(void);
 
+esp_err_t bmt_mesh_publish_ota_trigger(uint16_t addr, uint8_t node_type);
+esp_err_t bmt_mesh_publish_reset(uint16_t addr);
+
 extern const uint8_t g_bmt_net_key[16];
 extern const uint8_t g_bmt_app_key[16];

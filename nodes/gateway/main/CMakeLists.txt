@@ -1,5 +1,16 @@
 idf_component_register(
-    SRCS "bmt_uart.c" "bmt_mesh.c" "bmt_thingsboard.c" "bmt_mqtt.c" "bmt_wifi.c" "bmt_zone.c" "bmt_scan_list.c" "bmt_node_table.c" "bmt_mac_cache.c" "main.c"
+    SRCS
+        "bmt_uart.c"
+        "bmt_mesh.c"
+        "bmt_ota.c"
+        "bmt_thingsboard.c"
+        "bmt_mqtt.c"
+        "bmt_wifi.c"
+        "bmt_zone.c"
+        "bmt_scan_list.c"
+        "bmt_node_table.c"
+        "bmt_mac_cache.c"
+        "main.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash
@@ -10,6 +21,9 @@ idf_component_register(
         mqtt
         esp_driver_uart
         example_init
+        esp_https_ota
+        esp_http_client
+        esp-tls
     EMBED_TXTFILES
         "ca.pem"
 )

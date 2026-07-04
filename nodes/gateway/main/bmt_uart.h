@@ -14,6 +14,7 @@
 #include "bmt_config.h"
 #include "bmt_mqtt.h"
 #include "bmt_node_table.h"
+#include "bmt_ota.h"
 #include "bmt_scan_list.h"
 #include "bmt_zone.h"
 

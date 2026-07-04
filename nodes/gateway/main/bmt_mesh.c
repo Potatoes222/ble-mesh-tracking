@@ -39,8 +39,10 @@ static esp_ble_mesh_model_op_t s_vnd_ops[] = {
     ESP_BLE_MESH_MODEL_OP_END,
 };
 
+ESP_BLE_MESH_MODEL_PUB_DEFINE(s_vnd_pub, sizeof(bmt_ota_trigger_t) + 4, ROLE_PROVISIONER);
+
 static esp_ble_mesh_model_t s_vnd_models[] = {
-    ESP_BLE_MESH_VENDOR_MODEL(BMT_CID_ESP, BMT_VND_MODEL_ID, s_vnd_ops, NULL, &s_vnd_client),
+    ESP_BLE_MESH_VENDOR_MODEL(BMT_CID_ESP, BMT_VND_MODEL_ID, s_vnd_ops, &s_vnd_pub, &s_vnd_client),
 };
 
 static esp_ble_mesh_model_t s_root_models[] = {
@@ -359,4 +361,26 @@ esp_err_t bmt_mesh_init(void) {
 
 void bmt_mesh_start_relay_ping(void) {
     xTaskCreate(relay_ping_task, "bmt_relay_png", 4096, NULL, 3, NULL);
+}
+
+static esp_err_t vnd_publish(uint16_t dst, uint32_t opcode, const void *data, uint16_t len) {
+    s_vnd_models[0].pub->publish_addr = dst;
+    s_vnd_models[0].pub->app_idx      = s_app_key_idx;
+    s_vnd_models[0].pub->ttl          = 7;
+    esp_err_t err = esp_ble_mesh_model_publish(&s_vnd_models[0], opcode, len, (uint8_t *)data,
+                                               ROLE_PROVISIONER);
+    if (err != ESP_OK)
+        ESP_LOGW(TAG, "publish 0x%08" PRIx32 " -> 0x%04x failed: %s", opcode, dst,
+                 esp_err_to_name(err));
+    return err;
+}
+
+esp_err_t bmt_mesh_publish_ota_trigger(uint16_t addr, uint8_t node_type) {
+    bmt_ota_trigger_t t = {.node_type = node_type};
+    return vnd_publish(addr, BMT_OP_VND_OTA_TRIGGER, &t, sizeof(t));
+}
+
+esp_err_t bmt_mesh_publish_reset(uint16_t addr) {
+    uint8_t dummy = 0;
+    return vnd_publish(addr, BMT_OP_VND_RESET_CMD, &dummy, sizeof(dummy));
 }

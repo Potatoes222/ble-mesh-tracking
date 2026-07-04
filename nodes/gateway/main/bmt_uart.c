@@ -11,6 +11,8 @@ void bmt_uart_print_status(void) {
     printf("p -> PROVISION SCAN LIST\n");
     printf("a -> AUTO PROVISION MODE\n");
     printf("4 -> SHOW STATUS\n");
+    printf("u -> [OTA] update SCANNER (s) or RELAY (r)\n");
+    printf("g -> [OTA] update GATEWAY firmware\n");
     printf("0 -> CLEAR NVS (forget all nodes)\n");
     printf("Provision mode: %s\n",
            bmt_scan_list_get_mode() == BMT_PROV_MODE_AUTO ? "AUTO" : "MANUAL");
@@ -66,6 +68,35 @@ static void uart_task(void *arg) {
             break;
         case '4':
             bmt_uart_print_status();
+            break;
+        case 'u':
+        case 'U':
+            printf("\n[OTA] Choose target: s=SCANNER, r=RELAY, ESC=cancel\n");
+            uint8_t sub;
+            while (1) {
+                int n = uart_read_bytes(BMT_UART_NUM, &sub, 1, pdMS_TO_TICKS(10000));
+                if (n <= 0) {
+                    printf("[OTA] timeout, cancelled\n");
+                    break;
+                }
+                if (sub == 's' || sub == 'S') {
+                    bmt_ota_trigger_all_scanners();
+                    break;
+                }
+                if (sub == 'r' || sub == 'R') {
+                    bmt_ota_trigger_all_relays();
+                    break;
+                }
+                if (sub == 27) {
+                    printf("[OTA] cancelled\n");
+                    break;
+                }
+            }
+            break;
+        case 'g':
+        case 'G':
+            printf("\n[OTA] Gateway self-update\n");
+            bmt_ota_gateway_self_update();
             break;
         case '0':
             printf("\n[UART] Clearing NVS + REBOOT...\n");
