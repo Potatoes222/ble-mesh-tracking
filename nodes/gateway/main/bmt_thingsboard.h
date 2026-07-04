@@ -23,3 +23,5 @@ void bmt_tb_pub_gateway_online(void);
 void bmt_tb_pub_node_status(uint16_t addr, const char *role, bool online);
 void bmt_tb_pub_tag_report(const bmt_tag_report_t *r);
 void bmt_tb_pub_node_health(uint16_t src, const bmt_node_health_t *h);
+
+void bmt_tb_handle_rpc(const char *topic, int topic_len, const char *data, int data_len);

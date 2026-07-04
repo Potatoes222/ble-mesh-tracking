@@ -1,5 +1,6 @@
 #include "bmt_thingsboard.h"
 #include "bmt_mqtt.h"
+#include "bmt_ota.h"
 
 static const char *TAG = "BMT_TB";
 
@@ -104,6 +105,28 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t *r) {
         ESP_LOGW(TAG, "publish failed for %s", dev);
     else
         ESP_LOGI(TAG, "[%s] scanner=%s rssi=%d dBm", dev, scanner_str, r->rssi);
+}
+
+void bmt_tb_handle_rpc(const char *topic, int topic_len, const char *data, int data_len) {
+    static const char rpc_prefix[] = "v1/devices/me/rpc/request/";
+    if (!topic || !data) return;
+    if (topic_len < (int)(sizeof(rpc_prefix) - 1)) return;
+    if (strncmp(topic, rpc_prefix, sizeof(rpc_prefix) - 1) != 0) return;
+
+    char payload[128] = {0};
+    int  plen         = data_len < (int)sizeof(payload) - 1 ? data_len : (int)sizeof(payload) - 1;
+    memcpy(payload, data, plen);
+    ESP_LOGI(TAG, "[RPC] %s", payload);
+
+    if (strstr(payload, "ota_scanner")) {
+        bmt_ota_trigger_all_scanners();
+    } else if (strstr(payload, "ota_relay")) {
+        bmt_ota_trigger_all_relays();
+    } else if (strstr(payload, "ota_gateway")) {
+        bmt_ota_gateway_self_update();
+    } else {
+        ESP_LOGW(TAG, "[RPC] unknown method");
+    }
 }
 
 void bmt_tb_pub_node_health(uint16_t src, const bmt_node_health_t *h) {

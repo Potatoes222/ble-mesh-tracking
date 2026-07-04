@@ -17,15 +17,21 @@ extern const uint8_t bmt_ca_pem_end[] asm("_binary_ca_pem_end");
 static void event_handler(void *args, esp_event_base_t base, int32_t id, void *data) {
     (void)args;
     (void)base;
-    (void)data;
+    esp_mqtt_event_handle_t ev = (esp_mqtt_event_handle_t)data;
     switch ((esp_mqtt_event_id_t)id) {
     case MQTT_EVENT_CONNECTED:
         s_connected = true;
         ESP_LOGI(TAG, "Connected to ThingsBoard");
+        esp_mqtt_client_subscribe(s_client, "v1/devices/me/rpc/request/+", 1);
+        ESP_LOGI(TAG, "Subscribed v1/devices/me/rpc/request/+");
         break;
     case MQTT_EVENT_DISCONNECTED:
         s_connected = false;
         ESP_LOGW(TAG, "Disconnected");
+        break;
+    case MQTT_EVENT_DATA:
+        if (ev && ev->topic && ev->data)
+            bmt_tb_handle_rpc(ev->topic, ev->topic_len, ev->data, ev->data_len);
         break;
     default:
         break;
