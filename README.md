@@ -1,18 +1,67 @@
-# BLE Mesh Tracking (BMT)
+<div align="center">
 
-Indoor zone-level tracking on ESP32. A BLE tag is picked up by scan nodes, forwarded over BLE Mesh to a gateway, and pushed to ThingsBoard over MQTT. The output is which room a tag is in, not coordinates.
+![Repo Traffic](https://komarev.com/ghpvc/?username=ble-mesh-tracking&label=Repo+Traffic&color=blue&style=flat-square)
 
-<!-- EVIDENCE: overall system photo or floorplan -->
+</div>
 
-## Data flow
+# BLE Mesh Tracking (BMT) - Indoor Zone Tracking on ESP32
 
-```
+<table align="center">
+  <tr>
+    <td align="center"><!-- EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF) --></td>
+  </tr>
+</table>
+<p align="center"><strong><em>Figure 1:</em></strong> System banner</p>
+
+<hr>
+
+## Documentation
+
+| File | Description |
+|---|---|
+| [README.md](README.md) | Project overview, hardware, repo layout, quick start. |
+| [docs/mesh.md](docs/mesh.md) | Node roles, BLE Mesh vendor model, opcodes, provisioning modes. |
+| [docs/ota.md](docs/ota.md) | WiFi OTA flow, partition layout, HTTP server, trigger sources. |
+| [docs/thingsboard-mqtt.md](docs/thingsboard-mqtt.md) | MQTT topics, TLS setup, ThingsBoard device profiles and rule chains. |
+| [docs/algorithms.md](docs/algorithms.md) | CRC16, Kalman RSSI filter, path loss, zone hysteresis, time-division radio. |
+
+## Introduction
+
+BMT is a room-level indoor tracking system built on ESP32 and BLE Mesh. A BLE tag (an iPhone iBeacon or an ESP32 running the tag firmware) is picked up by three scan nodes placed around the home. Each scan node filters RSSI, then forwards a small report over BLE Mesh to a gateway. The gateway connects to WiFi and pushes each report to ThingsBoard over MQTT. The output is which room a tag is in, not coordinates.
+
+Core concepts exercised while building BMT:
+
+- **BLE Mesh vendor model:** custom opcodes for tag reports, node health, OTA trigger, and remote reset.
+- **Radio scheduling:** time-division of a single BLE radio between GAP scan and mesh publish.
+- **Signal processing:** 1-D Kalman filter, log-distance path loss, zone hysteresis.
+- **OTA over WiFi:** mesh-triggered self-update using `esp_https_ota` and a two-slot partition table.
+- **MQTT bridge with TLS:** the gateway acts as a ThingsBoard multi-device gateway.
+
+### I. Hardware
+
+| Node    | Board                     | BLE stack | Note                             |
+|---------|---------------------------|-----------|----------------------------------|
+| Gateway | ESP32-S3 DevKitC N16R8    | NimBLE    | WiFi + provisioner, TX +20 dBm   |
+| Scanner | ESP32 WROOM-32            | Bluedroid | 3 units, one per zone            |
+| Relay   | ESP32 WROOM-32            | Bluedroid | Optional mesh forwarder          |
+| Tag     | ESP32 WROOM-32 or iPhone  | -         | iBeacon or custom UUID `AB00...` |
+
+<table align="center">
+  <tr>
+    <td align="center"><!-- EVIDENCE: photo of the assembled hardware, all four nodes side by side --></td>
+  </tr>
+</table>
+<p align="center"><strong><em>Figure 2:</em></strong> BMT hardware set</p>
+
+### II. System Overview
+
+```text
 Tag (iPhone iBeacon / ESP32)
   |  BLE ADV
   v
-Scan node 0x01 / 0x02 / 0x03  ----BLE Mesh----> Relay (optional forwarder)
-  |                                                   |
-  '------------------ BLE Mesh -----------------------'
+Scan node 0x01 / 0x02 / 0x03 ----BLE Mesh---- Relay (optional forwarder)
+  |                                                |
+  '----------------- BLE Mesh --------------------'
                         |
                         v
                      Gateway (ESP32-S3 + WiFi)
@@ -21,76 +70,115 @@ Scan node 0x01 / 0x02 / 0x03  ----BLE Mesh----> Relay (optional forwarder)
                      ThingsBoard (Docker)
 ```
 
-Only the gateway has WiFi. Scan nodes reach the gateway via mesh; a far node can hop through the relay.
+Only the gateway has WiFi. Scan nodes reach the gateway through the mesh. A far scanner can hop through the relay when the direct link to the gateway is too weak.
 
-## Hardware
+<table align="center">
+  <tr>
+    <td align="center"><!-- EVIDENCE: floor plan showing scanner positions, gateway location, and covered zones --></td>
+  </tr>
+</table>
+<p align="center"><strong><em>Figure 3:</em></strong> Deployment floor plan</p>
 
-| Node    | Board                       | Note                              |
-|---------|-----------------------------|-----------------------------------|
-| Gateway | ESP32-S3 DevKitC N16R8      | NimBLE + WiFi, +20 dBm TX         |
-| Scanner | ESP32 WROOM-32              | Bluedroid, 3 units, one per zone  |
-| Relay   | ESP32 WROOM-32              | Bluedroid, optional               |
-| Tag     | ESP32 WROOM-32 or iPhone    | iBeacon or custom UUID (`AB0000...`) |
+### III. Repo Structure
 
-## Repo layout
-
-```
+```text
 nodes/
   gateway/            provisioner + MQTT bridge + OTA orchestrator
-  scan_node_01..03/   one project per scanner (ID differs)
+  scan_node_01..03/   one project per scanner, IDs 0x01 / 0x02 / 0x03
   relay_01/           BLE Mesh forwarder + WiFi OTA
   tag_01/             ESP32 tag beacon (optional)
   components/
-    bmt_scan_core/    shared component used by all scan nodes
+    bmt_scan_core/    shared component used by all three scan nodes
 docs/
   mesh.md             mesh roles, models, provisioning
   ota.md              OTA flow and configuration
-  thingsboard-mqtt.md MQTT topics, TLS, TB usage
+  thingsboard-mqtt.md MQTT topics, TLS, ThingsBoard usage
   algorithms.md       CRC16, Kalman, path loss, zone hysteresis
 docker-compose.yml    ThingsBoard CE + PostgreSQL
-tls/                  server cert + CA for MQTTS
+tls/                  server cert and CA for MQTTS
 ```
 
-## Quick start
+ESP-IDF version: **v6.0**. Each project under `nodes/` is a standalone build.
 
-Requirements: ESP-IDF v6.0, Docker, one ESP32-S3 board + several ESP32 boards.
+### IV. Quick Start
+
+**1. Start ThingsBoard:**
 
 ```bash
-# 1. Start ThingsBoard
 docker compose up -d
+```
 
-# 2. Configure secrets in nodes/gateway/main/bmt_config.h
-#    (WiFi SSID/pass, TB IP, TB gateway token)
+Open `http://<host_ip>:8080` (default login `tenant@thingsboard.org` / `tenant`).
+Create the gateway device, enable "Is gateway", copy the access token.
 
-# 3. Build and flash gateway
+**2. Configure secrets** in `nodes/gateway/main/bmt_config.h` (WiFi SSID / password, TB IP, gateway token).
+
+**3. Build and flash the gateway:**
+
+```bash
 cd nodes/gateway
 idf.py set-target esp32s3
 idf.py -p /dev/ttyUSB0 flash monitor
+```
 
-# 4. Build and flash each scan node
-cd ../scan_node_01
+**4. Build and flash each scan node** (one at a time, waiting for `=== READY ===` between each):
+
+```bash
+cd nodes/scan_node_01
 idf.py set-target esp32
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-See [docs/mesh.md](docs/mesh.md) for provisioning steps after flashing.
+**5. Provision:** on the gateway UART, press `a` for auto-provision, then wait until all nodes appear under `1` (list nodes).
 
-## Documentation
+<table align="center">
+  <tr>
+    <td align="center"><!-- EVIDENCE: gateway serial log after successful provisioning of all nodes --></td>
+  </tr>
+</table>
+<p align="center"><strong><em>Figure 4:</em></strong> Gateway serial log after provisioning</p>
 
-- [docs/mesh.md](docs/mesh.md) — node roles, BLE Mesh models, provisioning modes
-- [docs/ota.md](docs/ota.md) — WiFi OTA flow, partition layout, HTTP server setup
-- [docs/thingsboard-mqtt.md](docs/thingsboard-mqtt.md) — MQTT topics, TLS setup, TB device profiles and rule chains
-- [docs/algorithms.md](docs/algorithms.md) — CRC16, Kalman filter, path loss, zone hysteresis, time-division radio
+### V. Serial Commands
 
-## Serial commands (summary)
+**Gateway:**
 
-Gateway UART: `1` list nodes, `2` list tracked tags, `3` MQTT queue stats, `s` scan, `p` provision, `u` OTA scanner/relay, `g` OTA gateway, `0` wipe NVS.
-Scanner / relay UART: `1` status, `r` reset mesh, `o` test OTA.
+| Key | Action |
+|-----|--------|
+| `1` | List provisioned nodes |
+| `2` | List tracked tags and zones |
+| `3` | Show MQTT queue statistics |
+| `s` | Scan for unprovisioned beacons (10 s) |
+| `p` | Provision the current scan list |
+| `a` | Switch to auto-provision mode |
+| `u` | OTA a group: `s` = all scanners, `r` = all relays |
+| `g` | OTA the gateway itself |
+| `0` | Wipe NVS and reboot |
 
-## Stack
+**Scanner / Relay:**
 
-ESP-IDF v6.0, BLE Mesh vendor model (CID 0x02E5), NimBLE on gateway, Bluedroid on scan and relay nodes, MQTTS with TLS 1.2, ThingsBoard CE 3.7.0.
+| Key | Action |
+|-----|--------|
+| `1` | Print status |
+| `r` | Reset mesh provisioning and reboot |
+| `o` | Trigger local WiFi OTA (for test) |
 
-## Contact
+### VI. Stack
 
-Cao Trong Phuoc — https://github.com/caotrongphuoc
+ESP-IDF v6.0, BLE Mesh vendor model (CID `0x02E5`), NimBLE on the gateway, Bluedroid on scan and relay nodes, MQTTS with TLS 1.2, ThingsBoard CE 3.7.0.
+
+## Contact & Support
+
+<p style="font-size: 20px;"><strong>Cao Trong Phuoc</strong> - Software Engineer - Embedded Systems</p>
+
+``` Note
+Thank you for visiting this repository.
+If you have any questions, suggestions, or feedback about this project or firmware development, feel free to contact me directly.
+```
+
+<a href="https://github.com/caotrongphuoc">
+  <img src="https://img.shields.io/badge/GitHub-caotrongphuoc-181717?style=for-the-badge&logo=github&logoColor=white"/>
+</a>
+
+<a href="https://www.linkedin.com/in/cao-trong-phuoc/">
+  <img src="https://img.shields.io/badge/LinkedIn-Cao%20Trong%20Phuoc-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white"/>
+</a>
