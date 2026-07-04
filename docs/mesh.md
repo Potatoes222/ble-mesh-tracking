@@ -24,12 +24,15 @@ Not part of the mesh. It only broadcasts a BLE ADV packet (iBeacon layout or a c
 
 Source: [nodes/tag_01/main/bmt_beacon.c](../nodes/tag_01/main/bmt_beacon.c)
 
+<!--
+EVIDENCE: ADV packet capture from nRF Connect showing the custom BMT payload
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: ADV packet capture from nRF Connect showing the custom BMT payload --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 1:</em></strong> Tag ADV packet capture</p>
+-->
 
 #### 2. Scan Node
 
@@ -97,12 +100,15 @@ Opcode definitions:
 | Net transmit               | count 7, interval 10 ms (up to 8 transmissions per PDU)     |
 | Relay retransmit           | count 7, interval 10 ms                                     |
 
+<!--
+EVIDENCE: gateway log showing provision -> APP_KEY_ADD -> MODEL_APP_BIND OK
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: gateway log showing provision -> APP_KEY_ADD -> MODEL_APP_BIND OK --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 2:</em></strong> Full provisioning + configuration log</p>
+-->
 
 ### IV. Provisioning
 
@@ -125,12 +131,15 @@ Both modes end the same way. When a scan node is provisioned, the gateway spawns
 
 Source: [nodes/gateway/main/bmt_mesh.c](../nodes/gateway/main/bmt_mesh.c) - see `scan_config_task`.
 
+<!--
+EVIDENCE: serial log showing SCN_CFG APP_KEY_ADD and MODEL_APP_BIND OK for one scanner
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: serial log showing SCN_CFG APP_KEY_ADD and MODEL_APP_BIND OK for one scanner --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 3:</em></strong> Scan node configuration handshake</p>
+-->
 
 ### V. Node Table Persistence
 

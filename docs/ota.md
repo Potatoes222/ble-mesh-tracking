@@ -71,19 +71,25 @@ Sources:
 - Scanner: [nodes/components/bmt_scan_core/src/bmt_ota.c](../nodes/components/bmt_scan_core/src/bmt_ota.c)
 - Relay: [nodes/relay_01/main/bmt_ota.c](../nodes/relay_01/main/bmt_ota.c)
 
+<!--
+EVIDENCE: full serial log of one OTA cycle on a scanner (trigger, WiFi, download, reboot)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: full serial log of one OTA cycle on a scanner (trigger, WiFi, download, reboot) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 1:</em></strong> Scanner OTA serial log</p>
+-->
 
+<!--
+EVIDENCE: short video showing the "u s" flow on the gateway with one scanner OTA in progress
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: short video showing the "u s" flow on the gateway with one scanner OTA in progress --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 2:</em></strong> End-to-end OTA demo</p>
+-->
 
 ### IV. Partition Table
 
@@ -159,12 +165,15 @@ python3 -m http.server 8080
 
 On Windows, open TCP 8080 in the firewall and set the network to Private. On Linux and macOS this is usually not needed on a home LAN.
 
+<!--
+EVIDENCE: HTTP server access log during OTA (200 OK on Scanner_01.bin)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: HTTP server access log during OTA (200 OK on Scanner_01.bin) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 3:</em></strong> HTTP server access log</p>
+-->
 
 ### VIII. HTTPS
 
@@ -176,12 +185,15 @@ If the new firmware crashes before it calls `esp_ota_mark_app_valid_cancel_rollb
 
 This is fine for a development setup. For production, add the call after the node has confirmed WiFi, mesh, and MQTT are all working.
 
+<!--
+EVIDENCE: forced-crash rollback demo (flash a firmware that panics, observe revert on reboot)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: forced-crash rollback demo (flash a firmware that panics, observe revert on reboot) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 4:</em></strong> Rollback demo</p>
+-->
 
 ### X. Troubleshooting
 

@@ -38,12 +38,15 @@ Sources:
 - Tag side (compute + insert): [nodes/tag_01/main/bmt_beacon.c](../nodes/tag_01/main/bmt_beacon.c) - see `crc16_ccitt` and `build_adv_data`.
 - Scan side (compute + verify): [nodes/components/bmt_scan_core/src/bmt_crc.c](../nodes/components/bmt_scan_core/src/bmt_crc.c) and [nodes/components/bmt_scan_core/src/bmt_scan.c](../nodes/components/bmt_scan_core/src/bmt_scan.c) - see `parse_adv`.
 
+<!--
+EVIDENCE: serial log showing a corrupted packet rejected with "CRC fail"
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: serial log showing a corrupted packet rejected with "CRC fail" --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 1:</em></strong> CRC rejection log</p>
+-->
 
 ### II. Kalman Filter (1-D)
 
@@ -71,12 +74,15 @@ Why Kalman here and not a moving average: the 1-D form has one state and one gai
 
 Source: [nodes/components/bmt_scan_core/src/bmt_tag_table.c](../nodes/components/bmt_scan_core/src/bmt_tag_table.c) - see `kalman_init` and `kalman_update`.
 
+<!--
+EVIDENCE: plot of raw RSSI vs Kalman-filtered RSSI over ~60 seconds while walking through the covered area
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: plot of raw RSSI vs Kalman-filtered RSSI over ~60 seconds while walking through the covered area --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 2:</em></strong> Raw vs filtered RSSI</p>
+-->
 
 ### III. Path Loss Distance Model
 
@@ -94,12 +100,15 @@ The published `distance_dm` field is `int16_t` in decimetres (`= d * 10`) so it 
 
 Source: [nodes/components/bmt_scan_core/src/bmt_tag_table.c](../nodes/components/bmt_scan_core/src/bmt_tag_table.c) - see `calc_distance`.
 
+<!--
+EVIDENCE: table or plot of measured distance vs model distance at 1, 2, 3, 4, 5 metres
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: table or plot of measured distance vs model distance at 1, 2, 3, 4, 5 metres --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 3:</em></strong> Measured vs modelled distance</p>
+-->
 
 ### IV. Sequence Loss Rate
 
@@ -136,12 +145,15 @@ Note: since v4, the gateway does not publish the zone. It publishes only `{scann
 
 Source: [nodes/gateway/main/bmt_zone.c](../nodes/gateway/main/bmt_zone.c) - see `evaluate` and `timeout_task`.
 
+<!--
+EVIDENCE: gateway UART log of a zone change (bedroom_1 -> toilet -> out_of_range)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: gateway UART log of a zone change (bedroom_1 -> toilet -> out_of_range) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 4:</em></strong> Zone transitions log</p>
+-->
 
 ### VI. Time-Division Radio
 
@@ -164,12 +176,15 @@ With three scan nodes at IDs 1 / 2 / 3, their publish windows never overlap. Thi
 
 Source: [nodes/components/bmt_scan_core/src/bmt_scan.c](../nodes/components/bmt_scan_core/src/bmt_scan.c) - see `radio_task`.
 
+<!--
+EVIDENCE: timing diagram of the three scanners' scan / publish phases across ~4 seconds
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: timing diagram of the three scanners' scan / publish phases across ~4 seconds --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 5:</em></strong> Three-scanner time-division schedule</p>
+-->
 
 ### VII. Mesh Retransmit Strategy
 

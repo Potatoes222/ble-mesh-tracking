@@ -24,23 +24,29 @@ ThingsBoard plays three roles.
 
 Live view of which tag is in which room, RSSI per scanner, and node health (temperature, VDD, uptime, free heap). Rendered from the telemetry the gateway pushes.
 
+<!--
+EVIDENCE: dashboard screenshot with the three widgets (map, RSSI chart, health)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: dashboard screenshot with the three widgets (map, RSSI chart, health) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 1:</em></strong> ThingsBoard dashboard</p>
+-->
 
 #### 2. Zone Detection
 
 From version 4 onward, the gateway sends only the raw `{scanner_id, rssi}` per tag. A ThingsBoard Rule Chain picks the strongest scanner and derives the `zone` attribute on the tag device. The gateway still runs a local copy of the same logic, but only for UART debug output (command `2`), not for publishing. This keeps the zone rules editable in the TB UI, without a firmware rebuild.
 
+<!--
+EVIDENCE: TB rule chain screenshot for zone detection
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: TB rule chain screenshot for zone detection --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 2:</em></strong> Zone detection rule chain</p>
+-->
 
 #### 3. OTA Trigger
 
@@ -98,12 +104,15 @@ Two device profiles are used. Both are created once in the TB UI; sub-devices ar
 
 The gateway sets the profile through the `type` field in the `v1/gateway/connect` payload. The first time it publishes for a tag it also retries `set_role` three times with a 200 ms gap; TB can drop attributes if they arrive before the device is fully created.
 
+<!--
+EVIDENCE: TB UI showing the three profiles and one auto-created tag device
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: TB UI showing the three profiles and one auto-created tag device --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 3:</em></strong> ThingsBoard device profiles</p>
+-->
 
 ### V. TLS (MQTTS)
 
@@ -148,12 +157,15 @@ cd tls
 
 It rebuilds `ca.*`, `server.*`, and updates the extension file. After running it, copy the new `ca.pem` into `nodes/gateway/main/ca.pem` and rebuild the gateway firmware.
 
+<!--
+EVIDENCE: TB server config panel with SSL enabled + serial log of successful TLS handshake on the gateway
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: TB server config panel with SSL enabled + serial log of successful TLS handshake on the gateway --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 4:</em></strong> TLS handshake log</p>
+-->
 
 ### VI. Access Token
 

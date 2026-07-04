@@ -6,12 +6,15 @@
 
 # BLE Mesh Tracking (BMT) - Indoor Zone Tracking on ESP32
 
+<!--
+EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF)
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: banner image (system overview or floor plan photo, PNG or GIF) --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 1:</em></strong> System banner</p>
+-->
 
 <hr>
 
@@ -46,12 +49,15 @@ Core concepts exercised while building BMT:
 | Relay   | ESP32 WROOM-32            | Bluedroid | Optional mesh forwarder          |
 | Tag     | ESP32 WROOM-32 or iPhone  | -         | iBeacon or custom UUID `AB00...` |
 
+<!--
+EVIDENCE: photo of the assembled hardware, all four nodes side by side
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: photo of the assembled hardware, all four nodes side by side --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 2:</em></strong> BMT hardware set</p>
+-->
 
 ### II. System Overview
 
@@ -72,12 +78,15 @@ Scan node 0x01 / 0x02 / 0x03 ----BLE Mesh---- Relay (optional forwarder)
 
 Only the gateway has WiFi. Scan nodes reach the gateway through the mesh. A far scanner can hop through the relay when the direct link to the gateway is too weak.
 
+<!--
+EVIDENCE: floor plan showing scanner positions, gateway location, and covered zones
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: floor plan showing scanner positions, gateway location, and covered zones --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 3:</em></strong> Deployment floor plan</p>
+-->
 
 ### III. Repo Structure
 
@@ -131,12 +140,15 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 **5. Provision:** on the gateway UART, press `a` for auto-provision, then wait until all nodes appear under `1` (list nodes).
 
+<!--
+EVIDENCE: gateway serial log after successful provisioning of all nodes
 <table align="center">
   <tr>
-    <td align="center"><!-- EVIDENCE: gateway serial log after successful provisioning of all nodes --></td>
+    <td align="center">IMAGE_HERE</td>
   </tr>
 </table>
 <p align="center"><strong><em>Figure 4:</em></strong> Gateway serial log after provisioning</p>
+-->
 
 ### V. Serial Commands
 
