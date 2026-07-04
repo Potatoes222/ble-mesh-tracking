@@ -6,6 +6,7 @@ idf_component_register(
         "src/bmt_scan.c"
         "src/bmt_mesh.c"
         "src/bmt_health.c"
+        "src/bmt_ota.c"
         "src/bmt_uart.c"
     INCLUDE_DIRS "include"
     REQUIRES
@@ -16,4 +17,10 @@ idf_component_register(
         esp_driver_uart
         esp_adc
         esp_driver_tsens
+        esp_wifi
+        esp_event
+        esp_netif
+        esp_https_ota
+        esp_http_client
+        esp-tls
 )

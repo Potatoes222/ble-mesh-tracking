@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 
 #include "bmt_mesh.h"
+#include "bmt_ota.h"
 #include "bmt_scan.h"
 #include "bmt_scan_core.h"
 

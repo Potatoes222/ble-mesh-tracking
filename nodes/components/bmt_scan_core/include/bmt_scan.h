@@ -14,6 +14,7 @@
 
 #include "bmt_crc.h"
 #include "bmt_mesh.h"
+#include "bmt_ota.h"
 #include "bmt_scan_core.h"
 #include "bmt_tag_table.h"
 #include "bmt_types.h"

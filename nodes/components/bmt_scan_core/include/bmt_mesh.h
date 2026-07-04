@@ -2,11 +2,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_system.h"
 
 #include "esp_ble_mesh_common_api.h"
 #include "esp_ble_mesh_config_model_api.h"
@@ -17,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
+#include "bmt_ota.h"
 #include "bmt_scan_core.h"
 #include "bmt_types.h"
 

@@ -166,6 +166,10 @@ static void radio_task(void *arg) {
     s_phase = BMT_PHASE_MESH_PUB;
 
     while (1) {
+        if (bmt_ota_is_running()) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
         s_phase = BMT_PHASE_GAP_SCAN;
         bmt_tag_table_clear_new_data();
 

@@ -26,8 +26,35 @@ ESP_BLE_MESH_MODEL_PUB_DEFINE(s_vnd_pub, sizeof(bmt_tag_report_t) + 4, ROLE_NODE
 
 static esp_ble_mesh_model_op_t s_vnd_ops[] = {
     ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_TAG_STATUS, sizeof(bmt_tag_report_t)),
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_RESET_CMD, 1),
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_OTA_TRIGGER, sizeof(bmt_ota_trigger_t)),
     ESP_BLE_MESH_MODEL_OP_END,
 };
+
+static void vnd_client_cb(esp_ble_mesh_model_cb_event_t  event,
+                          esp_ble_mesh_model_cb_param_t *param) {
+    if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param) return;
+    uint32_t opcode = param->model_operation.opcode;
+    uint16_t src    = param->model_operation.ctx->addr;
+    uint8_t *data   = param->model_operation.msg;
+    uint16_t len    = param->model_operation.length;
+
+    if (opcode == BMT_OP_VND_OTA_TRIGGER) {
+        if (len < sizeof(bmt_ota_trigger_t)) return;
+        bmt_ota_trigger_t t;
+        memcpy(&t, data, sizeof(t));
+        if (t.node_type != BMT_NODE_TYPE_SCANNER && t.node_type != BMT_NODE_TYPE_ALL) return;
+        ESP_LOGI(TAG, "OTA_TRIGGER from 0x%04x, starting OTA", src);
+        bmt_ota_start();
+        return;
+    }
+
+    if (opcode == BMT_OP_VND_RESET_CMD) {
+        ESP_LOGW(TAG, "RESET_CMD from 0x%04x — rebooting", src);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_restart();
+    }
+}
 
 static esp_ble_mesh_model_t s_vnd_models[] = {
     ESP_BLE_MESH_VENDOR_MODEL(BMT_CID_ESP, BMT_VND_MODEL_ID, s_vnd_ops, &s_vnd_pub, NULL),
@@ -122,6 +149,7 @@ esp_err_t bmt_mesh_init(void) {
 
     esp_ble_mesh_register_prov_callback(prov_cb);
     esp_ble_mesh_register_config_server_callback(cfg_server_cb);
+    esp_ble_mesh_register_custom_model_callback(vnd_client_cb);
 
     ESP_ERROR_CHECK(esp_ble_mesh_init(&s_provision, &s_composition));
 
