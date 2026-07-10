@@ -28,9 +28,15 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${BMT_VER_SRC_FIL
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(Relay)
 
+# Copy .bin ra thu muc firmware/ cua repo de phuc vu OTA server.
+# Override bang: idf.py -DBMT_OTA_DIR=/duong/dan/khac build
+if(NOT DEFINED BMT_OTA_DIR)
+    set(BMT_OTA_DIR "${CMAKE_CURRENT_LIST_DIR}/../../firmware")
+endif()
 add_custom_command(TARGET app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BMT_OTA_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_BINARY_DIR}/Relay.bin"
-        "G:/Thesis/firmware/Relay.bin"
-    COMMENT "Copied Relay.bin → firmware folder"
+        "${BMT_OTA_DIR}/Relay.bin"
+    COMMENT "Copied Relay.bin -> ${BMT_OTA_DIR}"
 )
