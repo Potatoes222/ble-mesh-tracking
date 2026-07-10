@@ -13,114 +13,133 @@
 #include "bmt_ota.h"
 #include "bmt_scan_core.h"
 
-static void uart_cmd_task(void *arg)
+static void uart_cmd_task(void* arg)
 {
-    (void)arg;
-    uart_config_t cfg = {
-        .baud_rate  = 115200, .data_bits = UART_DATA_8_BITS,
-        .parity     = UART_PARITY_DISABLE, .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE, .source_clk = UART_SCLK_DEFAULT,
-    };
-    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
-    uart_param_config(UART_NUM_0, &cfg);
+	(void)arg;
+	uart_config_t cfg = {
+	    .baud_rate = 115200,
+	    .data_bits = UART_DATA_8_BITS,
+	    .parity = UART_PARITY_DISABLE,
+	    .stop_bits = UART_STOP_BITS_1,
+	    .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+	    .source_clk = UART_SCLK_DEFAULT,
+	};
+	uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
+	uart_param_config(UART_NUM_0, &cfg);
 
-    printf("\n===== BMT SCAN NODE (modular) =====\n");
-    printf("Scanner ID : 0x%02X\n", bmt_scan_core_scanner_id());
-    printf("Node type  : 0x%02X (scanner)\n", BMT_NODE_TYPE);
-    /* [v6.6] In MAC ngay luc boot — de biet board nay la con nao khi dien
-     * ZONE_MAP tren ThingsBoard (room_1/2/3 -> MAC nao). */
-    {
-        const uint8_t *uuid = bmt_mesh_uuid();
-        printf("MAC        : ");
-        for (int i = 4; i < 10; i++) printf("%02x", uuid[i]);
-        printf("\n");
-    }
-    printf("UUID       : SCAN + MAC (auto)\n");
-    printf("Commands:\n");
-    printf("  r -> RESET mesh provision\n");
-    printf("  i -> SET scanner ID (1-8)\n");
-    printf("  o -> TEST WiFi OTA\n");
-    printf("  1 -> STATUS\n");
-    printf("====================================\n");
+	printf("\n===== BMT SCAN NODE (modular) =====\n");
+	printf("Scanner ID : 0x%02X\n", bmt_scan_core_scanner_id());
+	printf("Node type  : 0x%02X (scanner)\n", BMT_NODE_TYPE);
+	/* [v6.6] In MAC ngay luc boot — de biet board nay la con nao khi dien
+	 * ZONE_MAP tren ThingsBoard (room_1/2/3 -> MAC nao). */
+	{
+		const uint8_t* uuid = bmt_mesh_uuid();
+		printf("MAC        : ");
+		for (int i = 4; i < 10; i++)
+			printf("%02x", uuid[i]);
+		printf("\n");
+	}
+	printf("UUID       : SCAN + MAC (auto)\n");
+	printf("Commands:\n");
+	printf("  r -> RESET mesh provision\n");
+	printf("  i -> SET scanner ID (1-8)\n");
+	printf("  o -> TEST WiFi OTA\n");
+	printf("  1 -> STATUS\n");
+	printf("====================================\n");
 
-    uint8_t ch;
-    while (1) {
-        int len = uart_read_bytes(UART_NUM_0, &ch, 1, pdMS_TO_TICKS(200));
-        if (len <= 0 || ch == '\r' || ch == '\n') continue;
+	uint8_t ch;
+	while (1)
+	{
+		int len = uart_read_bytes(UART_NUM_0, &ch, 1, pdMS_TO_TICKS(200));
+		if (len <= 0 || ch == '\r' || ch == '\n')
+			continue;
 
-        switch (ch) {
-        case 'r': case 'R':
-            /* [v6.7-fix] bmt_mesh_local_reset() gio tu reboot dung luc reset
-             * mesh THUC SU xong (qua event), khong con doan mo delay co dinh
-             * o day nua — tranh reboot som khi NVS chua ghi xong. */
-            printf("\n[UART] Reset mesh — se tu reboot khi xong...\n");
-            bmt_mesh_local_reset();
-            break;
+		switch (ch)
+		{
+		case 'r':
+		case 'R':
+			/* [v6.7-fix] bmt_mesh_local_reset() gio tu reboot dung luc reset
+			 * mesh THUC SU xong (qua event), khong con doan mo delay co dinh
+			 * o day nua — tranh reboot som khi NVS chua ghi xong. */
+			printf("\n[UART] Reset mesh — se tu reboot khi xong...\n");
+			bmt_mesh_local_reset();
+			break;
 
-        case 'i': case 'I':
-            printf("\n[UART] Enter scanner ID (1-8): ");
-            fflush(stdout);
-            {
-                uint8_t id_char = 0;
-                int r;
-                /* [FIX] byte '\r'/'\n' con sot lai tu phim Enter cua lenh 'i'
-                 * truoc do van con trong RX buffer — phai bo qua no, khong thi
-                 * lan bam dau tien luon bi doc nham thanh ID khong hop le. */
-                do {
-                    r = uart_read_bytes(UART_NUM_0, &id_char, 1, pdMS_TO_TICKS(10000));
-                } while (r > 0 && (id_char == '\r' || id_char == '\n'));
-                uint8_t new_id = id_char - '0';
-                if (r > 0 && new_id >= 1 && new_id <= 8) {
-                    bmt_scan_core_set_scanner_id(new_id);
-                    printf("%d\n[UART] Scanner ID set to 0x%02X\n"
-                           "[UART] Bam 'r' de reset va apply UUID moi\n",
-                           new_id, new_id);
-                } else {
-                    printf("\n[UART] Invalid ID — phai tu 1 den 8\n");
-                }
-            }
-            break;
+		case 'i':
+		case 'I':
+			printf("\n[UART] Enter scanner ID (1-8): ");
+			fflush(stdout);
+			{
+				uint8_t id_char = 0;
+				int r;
+				/* [FIX] byte '\r'/'\n' con sot lai tu phim Enter cua lenh 'i'
+				 * truoc do van con trong RX buffer — phai bo qua no, khong thi
+				 * lan bam dau tien luon bi doc nham thanh ID khong hop le. */
+				do
+				{
+					r = uart_read_bytes(UART_NUM_0, &id_char, 1, pdMS_TO_TICKS(10000));
+				} while (r > 0 && (id_char == '\r' || id_char == '\n'));
+				uint8_t new_id = id_char - '0';
+				if (r > 0 && new_id >= 1 && new_id <= 8)
+				{
+					bmt_scan_core_set_scanner_id(new_id);
+					printf("%d\n[UART] Scanner ID set to 0x%02X\n"
+					       "[UART] Bam 'r' de reset va apply UUID moi\n",
+					       new_id, new_id);
+				}
+				else
+				{
+					printf("\n[UART] Invalid ID — phai tu 1 den 8\n");
+				}
+			}
+			break;
 
-        case '1':
-            printf("\n===== SCANNER STATUS =====\n");
-            printf("Scanner ID : 0x%02X\n", bmt_scan_core_scanner_id());
-            printf("MAC        : ");
-            {
-                const uint8_t *uuid = bmt_mesh_uuid();
-                /* [v6.6] MAC nam san trong UUID (byte 4-9, xem bmt_mesh_init)
-                 * — in rieng ra day cho de doc, dung de dien vao ZONE_MAP tren
-                 * ThingsBoard (biet dung scanner nao dang gan phong nao). */
-                for (int i = 4; i < 10; i++) printf("%02x", uuid[i]);
-                printf("\n");
-            }
-            printf("UUID       : ");
-            {
-                const uint8_t *uuid = bmt_mesh_uuid();
-                for (int i = 0; i < 16; i++)
-                    printf("%02X%s", uuid[i], i < 15 ? ":" : "\n");
-            }
-            printf("Node addr  : 0x%04X\n", bmt_mesh_node_addr());
-            printf("App idx    : 0x%04X\n", bmt_mesh_app_idx());
-            printf("OTA state  : %s\n", bmt_ota_is_triggered() ? "WiFi OTA running" : "IDLE");
-            printf("Heap free  : %lu bytes\n", (unsigned long)esp_get_free_heap_size());
-            printf("==========================\n");
-            break;
+		case '1':
+			printf("\n===== SCANNER STATUS =====\n");
+			printf("Scanner ID : 0x%02X\n", bmt_scan_core_scanner_id());
+			printf("MAC        : ");
+			{
+				const uint8_t* uuid = bmt_mesh_uuid();
+				/* [v6.6] MAC nam san trong UUID (byte 4-9, xem bmt_mesh_init)
+				 * — in rieng ra day cho de doc, dung de dien vao ZONE_MAP tren
+				 * ThingsBoard (biet dung scanner nao dang gan phong nao). */
+				for (int i = 4; i < 10; i++)
+					printf("%02x", uuid[i]);
+				printf("\n");
+			}
+			printf("UUID       : ");
+			{
+				const uint8_t* uuid = bmt_mesh_uuid();
+				for (int i = 0; i < 16; i++)
+					printf("%02X%s", uuid[i], i < 15 ? ":" : "\n");
+			}
+			printf("Node addr  : 0x%04X\n", bmt_mesh_node_addr());
+			printf("App idx    : 0x%04X\n", bmt_mesh_app_idx());
+			printf("OTA state  : %s\n", bmt_ota_is_triggered() ? "WiFi OTA running" : "IDLE");
+			printf("Heap free  : %lu bytes\n", (unsigned long)esp_get_free_heap_size());
+			printf("==========================\n");
+			break;
 
-        case 'o': case 'O':
-            if (bmt_ota_is_triggered()) { printf("\n[OTA] Already running!\n"); break; }
-            printf("\n[UART] Manual OTA trigger — starting WiFi OTA...\n");
-            bmt_ota_trigger();
-            break;
+		case 'o':
+		case 'O':
+			if (bmt_ota_is_triggered())
+			{
+				printf("\n[OTA] Already running!\n");
+				break;
+			}
+			printf("\n[UART] Manual OTA trigger — starting WiFi OTA...\n");
+			bmt_ota_trigger();
+			break;
 
-        default:
-            printf("[UART] Unknown: %c  (r=reset, i=set ID, o=OTA, 1=status)\n", ch);
-            break;
-        }
-    }
+		default:
+			printf("[UART] Unknown: %c  (r=reset, i=set ID, o=OTA, 1=status)\n", ch);
+			break;
+		}
+	}
 }
 
 esp_err_t bmt_uart_init(void)
 {
-    xTaskCreate(uart_cmd_task, "bmt_uart", 2048, NULL, 3, NULL);
-    return ESP_OK;
+	xTaskCreate(uart_cmd_task, "bmt_uart", 2048, NULL, 3, NULL);
+	return ESP_OK;
 }

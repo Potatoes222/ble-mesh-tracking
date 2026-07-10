@@ -6,7 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
-#define BMT_PROV_COMPLETE_BIT   BIT0
+#define BMT_PROV_COMPLETE_BIT BIT0
 
 /* Khởi tạo mesh: đăng ký callback, sinh UUID từ MAC + scanner_id, init composition,
  * khôi phục provision từ NVS hoặc enable provisioning mới */
@@ -21,7 +21,7 @@ uint16_t bmt_mesh_app_idx(void);
 
 /* Con trỏ tới UUID 16 byte hiện tại (SCAN+MAC+...+scanner_id) — chỉ đọc,
  * dùng để in log/status, không sửa trực tiếp */
-const uint8_t *bmt_mesh_uuid(void);
+const uint8_t* bmt_mesh_uuid(void);
 
 /* Duyệt toàn bộ tag đang active trong bmt_tag_table, publish TAG_STATUS lên mesh */
 void bmt_mesh_publish_tags(void);

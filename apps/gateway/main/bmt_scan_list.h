@@ -3,15 +3,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum { BMT_PROV_MODE_AUTO = 0, BMT_PROV_MODE_MANUAL = 1 } bmt_prov_mode_t;
+typedef enum
+{
+	BMT_PROV_MODE_AUTO = 0,
+	BMT_PROV_MODE_MANUAL = 1
+} bmt_prov_mode_t;
 
 bmt_prov_mode_t bmt_scan_list_get_mode(void);
-bool            bmt_scan_list_is_scanning(void);
+bool bmt_scan_list_is_scanning(void);
 
 /* Gọi từ mesh_prov_cb (RECV_UNPROV_ADV_PKT_EVT) khi đang ở MANUAL mode và đang
  * scanning — thêm 1 thiết bị chưa provision vào danh sách quét (idempotent,
  * bỏ qua nếu đã có hoặc danh sách đầy). Trả về true nếu vừa thêm mới. */
-bool bmt_scan_list_add(const uint8_t *uuid, const uint8_t *mac,
+bool bmt_scan_list_add(const uint8_t* uuid, const uint8_t* mac,
                        uint8_t addr_type, uint16_t oob_info);
 
 /* UART 's' — chuyển MANUAL mode, quét BMT_SCAN_DURATION_MS (block caller), in kết quả */

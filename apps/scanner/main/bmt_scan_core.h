@@ -7,7 +7,7 @@
 /* NVS namespace dùng chung cho toàn bộ config/state của Scanner (scanner_id,
  * cờ OTA pending...) — các module khác include header này để lấy namespace
  * thay vì tự định nghĩa lại chuỗi, tránh gõ sai/lệch namespace giữa các file */
-#define BMT_SCAN_NVS_NAMESPACE   "bmt_scan"
+#define BMT_SCAN_NVS_NAMESPACE "bmt_scan"
 
 /* ============================================================================
  * BMT_SCAN_CORE — config + orchestrator

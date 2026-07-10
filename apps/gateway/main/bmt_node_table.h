@@ -3,14 +3,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BMT_MAX_NODES  10
+#define BMT_MAX_NODES 10
 
-typedef struct {
-    bool     used, is_relay, is_scan, config_done, online;
-    uint32_t last_seen_ms;
-    uint16_t addr;
-    uint8_t  uuid[16], mac[6];
-    char     name[32];
+typedef struct
+{
+	bool used, is_relay, is_scan, config_done, online;
+	uint32_t last_seen_ms;
+	uint16_t addr;
+	uint8_t uuid[16], mac[6];
+	char name[32];
 } bmt_node_t;
 
 /* Số ô tối đa trong bảng — dùng để vòng lặp từ module khác qua bmt_node_table_get(i) */
@@ -19,18 +20,18 @@ int bmt_node_table_capacity(void);
 /* Trả về con trỏ trực tiếp vào ô trong bảng (không copy) — cho phép module khác
  * (bmt_mesh.c, bmt_watchdog.c...) sửa trực tiếp is_relay/is_scan/config_done/
  * online/last_seen_ms. NULL nếu idx ngoài phạm vi. */
-bmt_node_t *bmt_node_table_get(int idx);
+bmt_node_t* bmt_node_table_get(int idx);
 
-int  bmt_node_table_find(uint16_t addr);
-bool bmt_node_table_uuid_provisioned(const uint8_t *uuid);
-int  bmt_node_table_add(uint16_t addr, const uint8_t *uuid,
-                        const uint8_t *mac, const char *name);
+int bmt_node_table_find(uint16_t addr);
+bool bmt_node_table_uuid_provisioned(const uint8_t* uuid);
+int bmt_node_table_add(uint16_t addr, const uint8_t* uuid,
+                       const uint8_t* mac, const char* name);
 
 void bmt_node_table_load(void);
 void bmt_node_table_save(void);
-void bmt_node_table_clear(void);   /* xóa NVS + zero toàn bộ bảng trong RAM */
+void bmt_node_table_clear(void); /* xóa NVS + zero toàn bộ bảng trong RAM */
 void bmt_node_table_print(void);
 
-bool        bmt_uuid_is_relay(const uint8_t *uuid);
-bool        bmt_uuid_is_scan(const uint8_t *uuid);
-const char *bmt_uuid_type_str(const uint8_t *uuid);
+bool bmt_uuid_is_relay(const uint8_t* uuid);
+bool bmt_uuid_is_scan(const uint8_t* uuid);
+const char* bmt_uuid_type_str(const uint8_t* uuid);

@@ -17,4 +17,4 @@
 void bmt_auth_init(void);
 
 /* Tính HMAC-16 trên payload — dùng khi build gói ADV mỗi lần sequence++ */
-uint16_t bmt_auth_hmac16(const uint8_t *data, size_t len);
+uint16_t bmt_auth_hmac16(const uint8_t* data, size_t len);

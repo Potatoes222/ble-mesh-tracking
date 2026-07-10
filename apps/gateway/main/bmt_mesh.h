@@ -22,7 +22,7 @@ void bmt_mesh_start_node_ping(void);
 
 /* Publish 1 message vendor tới địa chỉ dst (unicast hoặc 0xFFFF broadcast) —
  * dùng chung cho OTA_TRIGGER (bmt_ota.c) và RESET_CMD (bmt_watchdog.c) */
-esp_err_t bmt_mesh_publish(uint16_t dst, uint32_t opcode, const void *data, uint16_t len);
+esp_err_t bmt_mesh_publish(uint16_t dst, uint32_t opcode, const void* data, uint16_t len);
 
 /* [FIX-1][FIX-watchdog] Counter đếm mesh traffic 2 chiều thật sự nhận được —
  * TAG_STATUS (có Tag) HOẶC ACK ping chủ động tới Scan/Relay (không cần Tag).

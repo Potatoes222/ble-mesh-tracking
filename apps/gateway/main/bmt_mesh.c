@@ -29,16 +29,16 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #endif
 
-static const char *TAG = "BMT_MESH";
+static const char* TAG = "BMT_MESH";
 
-#define BMT_RELAY_PING_INTERVAL_MS    20000
-#define BMT_RELAY_OFFLINE_TIMEOUT_MS  60000
+#define BMT_RELAY_PING_INTERVAL_MS 20000
+#define BMT_RELAY_OFFLINE_TIMEOUT_MS 60000
 
 /* [v6.6] Scanner không có cơ chế ping riêng như Relay — nhưng mỗi lần Gateway
  * nhận TAG_STATUS từ 1 scanner, đó chính là bằng chứng scanner đó còn sống.
  * Tận dụng luôn để "làm mới" trạng thái online của SCANNER trên ThingsBoard,
  * giới hạn tần suất để không spam MQTT (không gọi publish mỗi report). */
-#define BMT_SCAN_STATUS_REFRESH_MS    30000
+#define BMT_SCAN_STATUS_REFRESH_MS 30000
 
 static uint16_t s_net_key_idx = 0x0000;
 static uint16_t s_app_key_idx = 0x0000;
@@ -65,20 +65,19 @@ static volatile uint32_t s_mesh_received = 0;
  * ============================================================================ */
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
-    0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92
-};
+    0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92};
 
 /* ============================================================================
  * MESH MODELS
  * ============================================================================ */
 static esp_ble_mesh_cfg_srv_t s_cfg_server = {
-    .net_transmit     = ESP_BLE_MESH_TRANSMIT(2, 20),
-    .relay            = ESP_BLE_MESH_RELAY_ENABLED,
+    .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .relay = ESP_BLE_MESH_RELAY_ENABLED,
     .relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20),
-    .beacon           = ESP_BLE_MESH_BEACON_ENABLED,
-    .gatt_proxy       = ESP_BLE_MESH_GATT_PROXY_ENABLED,
-    .friend_state     = ESP_BLE_MESH_FRIEND_NOT_SUPPORTED,
-    .default_ttl      = 7,
+    .beacon = ESP_BLE_MESH_BEACON_ENABLED,
+    .gatt_proxy = ESP_BLE_MESH_GATT_PROXY_ENABLED,
+    .friend_state = ESP_BLE_MESH_FRIEND_NOT_SUPPORTED,
+    .default_ttl = 7,
 };
 
 static esp_ble_mesh_client_t s_cfg_client;
@@ -111,11 +110,14 @@ static esp_ble_mesh_elem_t s_elements[] = {
 };
 
 static esp_ble_mesh_comp_t s_composition = {
-    .cid = BMT_CID_ESP, .element_count = ARRAY_SIZE(s_elements), .elements = s_elements,
+    .cid = BMT_CID_ESP,
+    .element_count = ARRAY_SIZE(s_elements),
+    .elements = s_elements,
 };
 
 static esp_ble_mesh_prov_t s_provision = {
-    .prov_unicast_addr = 0x0001, .prov_start_address = 0x0002,
+    .prov_unicast_addr = 0x0001,
+    .prov_start_address = 0x0002,
 };
 
 /* ============================================================================
@@ -123,61 +125,83 @@ static esp_ble_mesh_prov_t s_provision = {
  * ============================================================================ */
 void bmt_mesh_generate_keys_if_needed(void)
 {
-    /* [v6.9] Ham nay chay TRUOC bluetooth_init nen get_local_net_key luon NULL —
-     * key sinh o day chi la "ung vien", CHI duoc add vao stack neu sau khi init
-     * stack chua co key nao (first boot that su). Voi SETTINGS=y, cac boot sau
-     * stack tu khoi phuc key cu tu NVS va key ung vien nay bi bo qua. */
-    const uint8_t *exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
-    if (!exist_net) {
-        esp_fill_random(s_net_key, sizeof(s_net_key));
-        esp_fill_random(s_app_key, sizeof(s_app_key));
-        ESP_LOGI(TAG, "[SECURITY] Sinh key ung vien (chi dung neu stack chua co key sau init)");
-    } else {
-        ESP_LOGI(TAG, "[SECURITY] Mesh keys already exist, skip generate");
-    }
+	/* [v6.9] Ham nay chay TRUOC bluetooth_init nen get_local_net_key luon NULL —
+	 * key sinh o day chi la "ung vien", CHI duoc add vao stack neu sau khi init
+	 * stack chua co key nao (first boot that su). Voi SETTINGS=y, cac boot sau
+	 * stack tu khoi phuc key cu tu NVS va key ung vien nay bi bo qua. */
+	const uint8_t* exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
+	if (!exist_net)
+	{
+		esp_fill_random(s_net_key, sizeof(s_net_key));
+		esp_fill_random(s_app_key, sizeof(s_app_key));
+		ESP_LOGI(TAG, "[SECURITY] Sinh key ung vien (chi dung neu stack chua co key sau init)");
+	}
+	else
+	{
+		ESP_LOGI(TAG, "[SECURITY] Mesh keys already exist, skip generate");
+	}
 }
 
 /* ============================================================================
  * SCAN NODE CONFIG TASK — gửi APP_KEY_ADD + MODEL_APP_BIND cho scanner
  * ============================================================================ */
-static void scan_config_task(void *arg)
+static void scan_config_task(void* arg)
 {
-    uint16_t addr = (uint16_t)(uint32_t)arg;
-    ESP_LOGI(TAG, "[SCN_CFG] Configuring scan node 0x%04x...", addr);
-    vTaskDelay(pdMS_TO_TICKS(2000));
+	uint16_t addr = (uint16_t)(uint32_t)arg;
+	ESP_LOGI(TAG, "[SCN_CFG] Configuring scan node 0x%04x...", addr);
+	vTaskDelay(pdMS_TO_TICKS(2000));
 
-    { esp_ble_mesh_client_common_param_t c={0}; esp_ble_mesh_cfg_client_set_state_t s={0};
-      c.opcode=ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD; c.model=&s_root_models[1];
-      c.ctx.net_idx=s_net_key_idx; c.ctx.app_idx=0xFFFF; c.ctx.addr=addr;
-      c.ctx.send_ttl=7; c.msg_timeout=8000;
-      s.app_key_add.net_idx=s_net_key_idx; s.app_key_add.app_idx=s_app_key_idx;
-      memcpy(s.app_key_add.app_key, s_app_key, 16);
-      esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-      ESP_LOGI(TAG, "[SCN_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e==ESP_OK?"OK":esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    { esp_ble_mesh_client_common_param_t c={0}; esp_ble_mesh_cfg_client_set_state_t s={0};
-      c.opcode=ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND; c.model=&s_root_models[1];
-      c.ctx.net_idx=s_net_key_idx; c.ctx.app_idx=0xFFFF; c.ctx.addr=addr;
-      c.ctx.send_ttl=7; c.msg_timeout=5000;
-      s.model_app_bind.element_addr=addr; s.model_app_bind.model_app_idx=s_app_key_idx;
-      s.model_app_bind.model_id=BMT_VND_MODEL_ID; s.model_app_bind.company_id=BMT_CID_ESP;
-      esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-      ESP_LOGI(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e==ESP_OK?"OK":esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(2000));
+	{
+		esp_ble_mesh_client_common_param_t c = {0};
+		esp_ble_mesh_cfg_client_set_state_t s = {0};
+		c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
+		c.model = &s_root_models[1];
+		c.ctx.net_idx = s_net_key_idx;
+		c.ctx.app_idx = 0xFFFF;
+		c.ctx.addr = addr;
+		c.ctx.send_ttl = 7;
+		c.msg_timeout = 8000;
+		s.app_key_add.net_idx = s_net_key_idx;
+		s.app_key_add.app_idx = s_app_key_idx;
+		memcpy(s.app_key_add.app_key, s_app_key, 16);
+		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
+		ESP_LOGI(TAG, "[SCN_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+	}
+	vTaskDelay(pdMS_TO_TICKS(3000));
+	{
+		esp_ble_mesh_client_common_param_t c = {0};
+		esp_ble_mesh_cfg_client_set_state_t s = {0};
+		c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
+		c.model = &s_root_models[1];
+		c.ctx.net_idx = s_net_key_idx;
+		c.ctx.app_idx = 0xFFFF;
+		c.ctx.addr = addr;
+		c.ctx.send_ttl = 7;
+		c.msg_timeout = 5000;
+		s.model_app_bind.element_addr = addr;
+		s.model_app_bind.model_app_idx = s_app_key_idx;
+		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
+		s.model_app_bind.company_id = BMT_CID_ESP;
+		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
+		ESP_LOGI(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+	}
+	vTaskDelay(pdMS_TO_TICKS(2000));
 
-    int idx = bmt_node_table_find(addr);
-    if (idx >= 0) { bmt_node_table_get(idx)->config_done = true; bmt_node_table_save(); }
-    ESP_LOGI(TAG, "[SCN_CFG] Scan node 0x%04x fully configured!", addr);
+	int idx = bmt_node_table_find(addr);
+	if (idx >= 0)
+	{
+		bmt_node_table_get(idx)->config_done = true;
+		bmt_node_table_save();
+	}
+	ESP_LOGI(TAG, "[SCN_CFG] Scan node 0x%04x fully configured!", addr);
 
-    /* [SECURITY] Push ngay key HMAC beacon hiện hành cho scanner vừa join —
-     * đảm bảo scanner luôn có key mới nhất kể cả khi join sau 1 vài lần
-     * rotate đã xảy ra trước đó (xem bmt_ota_start_key_rotation). */
-    bmt_ota_push_beacon_key_to_node(addr);
+	/* [SECURITY] Push ngay key HMAC beacon hiện hành cho scanner vừa join —
+	 * đảm bảo scanner luôn có key mới nhất kể cả khi join sau 1 vài lần
+	 * rotate đã xảy ra trước đó (xem bmt_ota_start_key_rotation). */
+	bmt_ota_push_beacon_key_to_node(addr);
 
-    bmt_node_table_print();
-    vTaskDelete(NULL);
+	bmt_node_table_print();
+	vTaskDelete(NULL);
 }
 
 /* ============================================================================
@@ -186,275 +210,358 @@ static void scan_config_task(void *arg)
  * (Relay FORWARD ở Network Layer không cần AppKey, nhưng TỰ XỬ LÝ message ở
  * Transport/Access Layer thì cần).
  * ============================================================================ */
-static void relay_config_task(void *arg)
+static void relay_config_task(void* arg)
 {
-    uint16_t addr = (uint16_t)(uint32_t)arg;
-    ESP_LOGI(TAG, "[RLY_CFG] Configuring relay node 0x%04x...", addr);
-    vTaskDelay(pdMS_TO_TICKS(2000));
+	uint16_t addr = (uint16_t)(uint32_t)arg;
+	ESP_LOGI(TAG, "[RLY_CFG] Configuring relay node 0x%04x...", addr);
+	vTaskDelay(pdMS_TO_TICKS(2000));
 
-    { esp_ble_mesh_client_common_param_t c={0}; esp_ble_mesh_cfg_client_set_state_t s={0};
-      c.opcode=ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD; c.model=&s_root_models[1];
-      c.ctx.net_idx=s_net_key_idx; c.ctx.app_idx=0xFFFF; c.ctx.addr=addr;
-      c.ctx.send_ttl=7; c.msg_timeout=8000;
-      s.app_key_add.net_idx=s_net_key_idx; s.app_key_add.app_idx=s_app_key_idx;
-      memcpy(s.app_key_add.app_key, s_app_key, 16);
-      esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-      ESP_LOGI(TAG, "[RLY_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e==ESP_OK?"OK":esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    { esp_ble_mesh_client_common_param_t c={0}; esp_ble_mesh_cfg_client_set_state_t s={0};
-      c.opcode=ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND; c.model=&s_root_models[1];
-      c.ctx.net_idx=s_net_key_idx; c.ctx.app_idx=0xFFFF; c.ctx.addr=addr;
-      c.ctx.send_ttl=7; c.msg_timeout=5000;
-      s.model_app_bind.element_addr=addr; s.model_app_bind.model_app_idx=s_app_key_idx;
-      s.model_app_bind.model_id=BMT_VND_MODEL_ID; s.model_app_bind.company_id=BMT_CID_ESP;
-      esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-      ESP_LOGI(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e==ESP_OK?"OK":esp_err_to_name(e));
-    }
-    vTaskDelay(pdMS_TO_TICKS(2000));
+	{
+		esp_ble_mesh_client_common_param_t c = {0};
+		esp_ble_mesh_cfg_client_set_state_t s = {0};
+		c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
+		c.model = &s_root_models[1];
+		c.ctx.net_idx = s_net_key_idx;
+		c.ctx.app_idx = 0xFFFF;
+		c.ctx.addr = addr;
+		c.ctx.send_ttl = 7;
+		c.msg_timeout = 8000;
+		s.app_key_add.net_idx = s_net_key_idx;
+		s.app_key_add.app_idx = s_app_key_idx;
+		memcpy(s.app_key_add.app_key, s_app_key, 16);
+		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
+		ESP_LOGI(TAG, "[RLY_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+	}
+	vTaskDelay(pdMS_TO_TICKS(3000));
+	{
+		esp_ble_mesh_client_common_param_t c = {0};
+		esp_ble_mesh_cfg_client_set_state_t s = {0};
+		c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
+		c.model = &s_root_models[1];
+		c.ctx.net_idx = s_net_key_idx;
+		c.ctx.app_idx = 0xFFFF;
+		c.ctx.addr = addr;
+		c.ctx.send_ttl = 7;
+		c.msg_timeout = 5000;
+		s.model_app_bind.element_addr = addr;
+		s.model_app_bind.model_app_idx = s_app_key_idx;
+		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
+		s.model_app_bind.company_id = BMT_CID_ESP;
+		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
+		ESP_LOGI(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+	}
+	vTaskDelay(pdMS_TO_TICKS(2000));
 
-    int idx = bmt_node_table_find(addr);
-    if (idx >= 0) { bmt_node_table_get(idx)->config_done = true; bmt_node_table_save(); }
-    ESP_LOGI(TAG, "[RLY_CFG] Relay 0x%04x fully configured — RESET_CMD enabled!", addr);
-    bmt_node_table_print();
-    vTaskDelete(NULL);
+	int idx = bmt_node_table_find(addr);
+	if (idx >= 0)
+	{
+		bmt_node_table_get(idx)->config_done = true;
+		bmt_node_table_save();
+	}
+	ESP_LOGI(TAG, "[RLY_CFG] Relay 0x%04x fully configured — RESET_CMD enabled!", addr);
+	bmt_node_table_print();
+	vTaskDelete(NULL);
 }
 
 /* ============================================================================
  * CALLBACKS
  * ============================================================================ */
-static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t *param)
+static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t* param)
 {
-    switch (event) {
-    case ESP_BLE_MESH_PROV_REGISTER_COMP_EVT:
-        ESP_LOGI(TAG, "Provisioner registered"); break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_ENABLE_COMP_EVT:
-        ESP_LOGI(TAG, "Provisioner scan enabled"); break;
-    case ESP_BLE_MESH_PROVISIONER_SET_STATIC_OOB_VALUE_COMP_EVT:
-        if (param->provisioner_set_static_oob_val_comp.err_code == 0)
-            ESP_LOGI(TAG, "[SECURITY] Static OOB value set OK");
-        else
-            ESP_LOGE(TAG, "[SECURITY] Static OOB value set FAILED: %d",
-                     param->provisioner_set_static_oob_val_comp.err_code);
-        break;
+	switch (event)
+	{
+	case ESP_BLE_MESH_PROV_REGISTER_COMP_EVT:
+		ESP_LOGI(TAG, "Provisioner registered");
+		break;
+	case ESP_BLE_MESH_PROVISIONER_PROV_ENABLE_COMP_EVT:
+		ESP_LOGI(TAG, "Provisioner scan enabled");
+		break;
+	case ESP_BLE_MESH_PROVISIONER_SET_STATIC_OOB_VALUE_COMP_EVT:
+		if (param->provisioner_set_static_oob_val_comp.err_code == 0)
+			ESP_LOGI(TAG, "[SECURITY] Static OOB value set OK");
+		else
+			ESP_LOGE(TAG, "[SECURITY] Static OOB value set FAILED: %d",
+			         param->provisioner_set_static_oob_val_comp.err_code);
+		break;
 
-    case ESP_BLE_MESH_PROVISIONER_RECV_UNPROV_ADV_PKT_EVT: {
-        const uint8_t *uuid=param->provisioner_recv_unprov_adv_pkt.dev_uuid;
-        const uint8_t *mac =param->provisioner_recv_unprov_adv_pkt.addr;
-        uint8_t  addr_type = param->provisioner_recv_unprov_adv_pkt.addr_type;
-        uint16_t oob_info  = param->provisioner_recv_unprov_adv_pkt.oob_info;
-        bmt_mac_cache_store(uuid, mac);
+	case ESP_BLE_MESH_PROVISIONER_RECV_UNPROV_ADV_PKT_EVT:
+	{
+		const uint8_t* uuid = param->provisioner_recv_unprov_adv_pkt.dev_uuid;
+		const uint8_t* mac = param->provisioner_recv_unprov_adv_pkt.addr;
+		uint8_t addr_type = param->provisioner_recv_unprov_adv_pkt.addr_type;
+		uint16_t oob_info = param->provisioner_recv_unprov_adv_pkt.oob_info;
+		bmt_mac_cache_store(uuid, mac);
 
-        if (bmt_scan_list_get_mode() == BMT_PROV_MODE_MANUAL) {
-            if (!bmt_scan_list_is_scanning()) break;
-            if (bmt_scan_list_add(uuid, mac, addr_type, oob_info)) {
-                printf("[SCAN] %-7s MAC:", bmt_uuid_type_str(uuid));
-                for (int b=0; b<6; b++) printf("%02X%s", mac[b], b<5?":":"");
-                printf("\n");
-            }
-            break;
-        }
+		if (bmt_scan_list_get_mode() == BMT_PROV_MODE_MANUAL)
+		{
+			if (!bmt_scan_list_is_scanning())
+				break;
+			if (bmt_scan_list_add(uuid, mac, addr_type, oob_info))
+			{
+				printf("[SCAN] %-7s MAC:", bmt_uuid_type_str(uuid));
+				for (int b = 0; b < 6; b++)
+					printf("%02X%s", mac[b], b < 5 ? ":" : "");
+				printf("\n");
+			}
+			break;
+		}
 
-        /* [v6.9] Node co uuid DA provision ma van beacon unprovisioned = node do
-         * da tu reset (mat nguon/nhan nut — Scanner/Relay khong bat SETTINGS nen
-         * reboot la mat provision). Truoc day chi `break` => tu khi Gateway nho
-         * bang qua reboot (SETTINGS=y), node mat dien se ket ngoai mesh vinh vien.
-         * Gio: xoa entry cu (stack + bang BMT) roi de provision lai binh thuong.
-         * Chi ap dung khi config_done=true de tranh race voi beacon tre con sot
-         * lai ngay sau PROV_COMPLETE (config mat ~7s, beacon dung sau ~1s). */
-        {
-            int stale = -1;
-            for (int i = 0; i < bmt_node_table_capacity(); i++) {
-                bmt_node_t *nn = bmt_node_table_get(i);
-                if (nn && nn->used && memcmp(nn->uuid, uuid, 16) == 0) { stale = i; break; }
-            }
-            if (stale >= 0) {
-                bmt_node_t *nn = bmt_node_table_get(stale);
-                if (!nn->config_done) break;   /* dang config do — bo qua nhu cu */
-                ESP_LOGW(TAG, "Node 0x%04x (%s) beacon unprovisioned tro lai — "
-                         "node da tu reset, xoa entry cu va provision lai", nn->addr, nn->name);
-                esp_ble_mesh_provisioner_delete_node_with_uuid(uuid);
-                memset(nn, 0, sizeof(*nn));
-                bmt_node_table_save();
-            }
-        }
-        ESP_LOGI(TAG, "Found unprovisioned [%s]", bmt_uuid_type_str(uuid));
-        esp_ble_mesh_unprov_dev_add_t dev={0};
-        memcpy(dev.uuid,uuid,16); memcpy(dev.addr,mac,6);
-        dev.addr_type=addr_type; dev.oob_info=oob_info; dev.bearer=ESP_BLE_MESH_PROV_ADV;
-        esp_ble_mesh_provisioner_add_unprov_dev(&dev, ADD_DEV_FLUSHABLE_DEV_FLAG|ADD_DEV_START_PROV_NOW_FLAG);
-        break;
-    }
+		/* [v6.9] Node co uuid DA provision ma van beacon unprovisioned = node do
+		 * da tu reset (mat nguon/nhan nut — Scanner/Relay khong bat SETTINGS nen
+		 * reboot la mat provision). Truoc day chi `break` => tu khi Gateway nho
+		 * bang qua reboot (SETTINGS=y), node mat dien se ket ngoai mesh vinh vien.
+		 * Gio: xoa entry cu (stack + bang BMT) roi de provision lai binh thuong.
+		 * Chi ap dung khi config_done=true de tranh race voi beacon tre con sot
+		 * lai ngay sau PROV_COMPLETE (config mat ~7s, beacon dung sau ~1s). */
+		{
+			int stale = -1;
+			for (int i = 0; i < bmt_node_table_capacity(); i++)
+			{
+				bmt_node_t* nn = bmt_node_table_get(i);
+				if (nn && nn->used && memcmp(nn->uuid, uuid, 16) == 0)
+				{
+					stale = i;
+					break;
+				}
+			}
+			if (stale >= 0)
+			{
+				bmt_node_t* nn = bmt_node_table_get(stale);
+				if (!nn->config_done)
+					break; /* dang config do — bo qua nhu cu */
+				ESP_LOGW(TAG, "Node 0x%04x (%s) beacon unprovisioned tro lai — "
+				              "node da tu reset, xoa entry cu va provision lai",
+				         nn->addr, nn->name);
+				esp_ble_mesh_provisioner_delete_node_with_uuid(uuid);
+				memset(nn, 0, sizeof(*nn));
+				bmt_node_table_save();
+			}
+		}
+		ESP_LOGI(TAG, "Found unprovisioned [%s]", bmt_uuid_type_str(uuid));
+		esp_ble_mesh_unprov_dev_add_t dev = {0};
+		memcpy(dev.uuid, uuid, 16);
+		memcpy(dev.addr, mac, 6);
+		dev.addr_type = addr_type;
+		dev.oob_info = oob_info;
+		dev.bearer = ESP_BLE_MESH_PROV_ADV;
+		esp_ble_mesh_provisioner_add_unprov_dev(&dev, ADD_DEV_FLUSHABLE_DEV_FLAG | ADD_DEV_START_PROV_NOW_FLAG);
+		break;
+	}
 
-    case ESP_BLE_MESH_PROVISIONER_PROV_COMPLETE_EVT: {
-        uint16_t addr=param->provisioner_prov_complete.unicast_addr;
-        const uint8_t *uuid=param->provisioner_prov_complete.device_uuid;
-        ESP_LOGI(TAG, "Provision complete addr=0x%04x type=%s", addr, bmt_uuid_type_str(uuid));
-        uint8_t mac[6]={0}; bmt_mac_cache_get(uuid, mac);
-        int idx = bmt_node_table_add(addr, uuid, mac, NULL);
-        if (idx < 0) { ESP_LOGW(TAG, "Node table full"); break; }
-        bmt_node_t *n = bmt_node_table_get(idx);
+	case ESP_BLE_MESH_PROVISIONER_PROV_COMPLETE_EVT:
+	{
+		uint16_t addr = param->provisioner_prov_complete.unicast_addr;
+		const uint8_t* uuid = param->provisioner_prov_complete.device_uuid;
+		ESP_LOGI(TAG, "Provision complete addr=0x%04x type=%s", addr, bmt_uuid_type_str(uuid));
+		uint8_t mac[6] = {0};
+		bmt_mac_cache_get(uuid, mac);
+		int idx = bmt_node_table_add(addr, uuid, mac, NULL);
+		if (idx < 0)
+		{
+			ESP_LOGW(TAG, "Node table full");
+			break;
+		}
+		bmt_node_t* n = bmt_node_table_get(idx);
 
-        /* [FIX-6] Relay: launch relay_config_task giống scanner — TRƯỚC (v4.5):
-         * config_done=true ngay, không AppKey → relay không nhận được RESET_CMD
-         * từ watchdog vì Transport Layer không decrypt được. */
-        if (bmt_uuid_is_relay(uuid)) {
-            n->is_relay    = true;
-            n->is_scan     = false;
-            n->config_done = false;   /* chờ relay_config_task hoàn tất */
-            snprintf(n->name, sizeof(n->name), "Relay_0x%04x", addr);
-            ESP_LOGI(TAG, "Node 0x%04x = RELAY, launching config task...", addr);
-            bmt_node_table_save(); bmt_node_table_print();
-            xTaskCreate(relay_config_task, "relay_cfg", 3072, (void *)(uint32_t)addr, 5, NULL);
-            break;
-        }
+		/* [FIX-6] Relay: launch relay_config_task giống scanner — TRƯỚC (v4.5):
+		 * config_done=true ngay, không AppKey → relay không nhận được RESET_CMD
+		 * từ watchdog vì Transport Layer không decrypt được. */
+		if (bmt_uuid_is_relay(uuid))
+		{
+			n->is_relay = true;
+			n->is_scan = false;
+			n->config_done = false; /* chờ relay_config_task hoàn tất */
+			snprintf(n->name, sizeof(n->name), "Relay_0x%04x", addr);
+			ESP_LOGI(TAG, "Node 0x%04x = RELAY, launching config task...", addr);
+			bmt_node_table_save();
+			bmt_node_table_print();
+			xTaskCreate(relay_config_task, "relay_cfg", 3072, (void*)(uint32_t)addr, 5, NULL);
+			break;
+		}
 
-        if (bmt_uuid_is_scan(uuid)) {
-            n->is_scan     = true;
-            n->is_relay    = false;
-            n->config_done = false;
-            snprintf(n->name, sizeof(n->name), "Scan_0x%04x", addr);
-            ESP_LOGI(TAG, "Node 0x%04x = SCAN, launching config task...", addr);
-            bmt_node_table_save(); bmt_node_table_print();
-            xTaskCreate(scan_config_task, "scan_cfg", 3072, (void *)(uint32_t)addr, 5, NULL);
-            break;
-        }
+		if (bmt_uuid_is_scan(uuid))
+		{
+			n->is_scan = true;
+			n->is_relay = false;
+			n->config_done = false;
+			snprintf(n->name, sizeof(n->name), "Scan_0x%04x", addr);
+			ESP_LOGI(TAG, "Node 0x%04x = SCAN, launching config task...", addr);
+			bmt_node_table_save();
+			bmt_node_table_print();
+			xTaskCreate(scan_config_task, "scan_cfg", 3072, (void*)(uint32_t)addr, 5, NULL);
+			break;
+		}
 
-        ESP_LOGW(TAG, "Unknown node type"); bmt_node_table_save(); bmt_node_table_print();
-        break;
-    }
-    default: break;
-    }
+		ESP_LOGW(TAG, "Unknown node type");
+		bmt_node_table_save();
+		bmt_node_table_print();
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
-                          esp_ble_mesh_cfg_client_cb_param_t *param)
+                          esp_ble_mesh_cfg_client_cb_param_t* param)
 {
-    if (!param || !param->params) return;
-    uint16_t addr=param->params->ctx.addr; int idx=bmt_node_table_find(addr);
-    bmt_node_t *n = (idx >= 0) ? bmt_node_table_get(idx) : NULL;
+	if (!param || !param->params)
+		return;
+	uint16_t addr = param->params->ctx.addr;
+	int idx = bmt_node_table_find(addr);
+	bmt_node_t* n = (idx >= 0) ? bmt_node_table_get(idx) : NULL;
 
-    if (event == ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT) {
-        uint32_t op=param->params->opcode;
-        if (op == ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD)
-            ESP_LOGI(TAG, "[CFG] APP_KEY_ADD ACK from 0x%04x", addr);
-        if (op == ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND) {
-            ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x", addr);
-            /* [FIX-6] Báo TB ONLINE cho cả scanner lẫn relay khi bind xong */
-            if (n && n->is_scan)  bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN,  true);
-            if (n && n->is_relay) bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
-        }
-    }
-    if (event == ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT)
-        ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
-    if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT) {
-        /* [FIX-watchdog-v3] GET_STATE_EVT no CA KHI GUI THAT BAI (vd "Failed to
-         * find Dst" luc stack chua biet node) — phai check error_code, neu khong
-         * se dem ACK "ma" (Relay ONLINE gia + s_mesh_received++ gia lam watchdog
-         * bao "Mesh OK" trong khi mesh thuc su da chet, mat kha nang tu phuc hoi). */
-        if (param->error_code != 0) {
-            ESP_LOGW(TAG, "[PING] 0x%04x FAILED (err=%d) — khong tinh ACK",
-                     addr, param->error_code);
-            return;
-        }
-        /* [FIX-watchdog-v2] CHI ping Relay. Da thu ping ca Scan node nhung config
-         * client la instance DUNG CHUNG, chi 1 giao dich tai 1 thoi diem — ping 4
-         * node chong len nhau (gap 500ms < timeout 5s) gay tranh chap, ACK bi mat
-         * -> Scan node nhap nhay online/offline. Scan node da tu chung minh con
-         * song qua TAG_STATUS roi, khong can ping chu dong. */
-        if (n && n->is_relay) {
-            n->last_seen_ms = xTaskGetTickCount()*portTICK_PERIOD_MS;
-            /* [FIX-watchdog] ACK ping Relay la bang chung mesh song thuc su
-             * (round-trip qua Network+Transport layer), khong phu thuoc co Tag —
-             * Relay ping moi 20s du de watchdog thay mesh con song ke ca khi khong
-             * co Tag nao o gan Scanner, tranh false-trigger reset toan mesh. */
-            s_mesh_received++;
-            if (!n->online) {
-                n->online = true;
-                ESP_LOGI(TAG, "Relay 0x%04x ONLINE (ping)", addr);
-                bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
-            }
-        }
-    }
+	if (event == ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT)
+	{
+		uint32_t op = param->params->opcode;
+		if (op == ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD)
+			ESP_LOGI(TAG, "[CFG] APP_KEY_ADD ACK from 0x%04x", addr);
+		if (op == ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND)
+		{
+			ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x", addr);
+			/* [FIX-6] Báo TB ONLINE cho cả scanner lẫn relay khi bind xong */
+			if (n && n->is_scan)
+				bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
+			if (n && n->is_relay)
+				bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+		}
+	}
+	if (event == ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT)
+		ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
+	if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT)
+	{
+		/* [FIX-watchdog-v3] GET_STATE_EVT no CA KHI GUI THAT BAI (vd "Failed to
+		 * find Dst" luc stack chua biet node) — phai check error_code, neu khong
+		 * se dem ACK "ma" (Relay ONLINE gia + s_mesh_received++ gia lam watchdog
+		 * bao "Mesh OK" trong khi mesh thuc su da chet, mat kha nang tu phuc hoi). */
+		if (param->error_code != 0)
+		{
+			ESP_LOGW(TAG, "[PING] 0x%04x FAILED (err=%d) — khong tinh ACK",
+			         addr, param->error_code);
+			return;
+		}
+		/* [FIX-watchdog-v2] CHI ping Relay. Da thu ping ca Scan node nhung config
+		 * client la instance DUNG CHUNG, chi 1 giao dich tai 1 thoi diem — ping 4
+		 * node chong len nhau (gap 500ms < timeout 5s) gay tranh chap, ACK bi mat
+		 * -> Scan node nhap nhay online/offline. Scan node da tu chung minh con
+		 * song qua TAG_STATUS roi, khong can ping chu dong. */
+		if (n && n->is_relay)
+		{
+			n->last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+			/* [FIX-watchdog] ACK ping Relay la bang chung mesh song thuc su
+			 * (round-trip qua Network+Transport layer), khong phu thuoc co Tag —
+			 * Relay ping moi 20s du de watchdog thay mesh con song ke ca khi khong
+			 * co Tag nao o gan Scanner, tranh false-trigger reset toan mesh. */
+			s_mesh_received++;
+			if (!n->online)
+			{
+				n->online = true;
+				ESP_LOGI(TAG, "Relay 0x%04x ONLINE (ping)", addr);
+				bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+			}
+		}
+	}
 }
 
 static void cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
-                          esp_ble_mesh_cfg_server_cb_param_t *param)
-{ (void)param; ESP_LOGI(TAG, "Config server event: %d", event); }
+                          esp_ble_mesh_cfg_server_cb_param_t* param)
+{
+	(void)param;
+	ESP_LOGI(TAG, "Config server event: %d", event);
+}
 
 /* [FIX-1] Increment s_mesh_received khi nhận TAG_STATUS từ scanner — counter
  * ở tầng BLE Mesh, watchdog dùng để phân biệt "mesh chết" vs "chỉ MQTT chết" */
 static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
-                          esp_ble_mesh_model_cb_param_t *param)
+                          esp_ble_mesh_model_cb_param_t* param)
 {
-    if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param) return;
-    uint32_t opcode=param->model_operation.opcode;
-    uint16_t src   =param->model_operation.ctx->addr;
-    uint8_t *data  =param->model_operation.msg;
-    uint16_t len   =param->model_operation.length;
+	if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param)
+		return;
+	uint32_t opcode = param->model_operation.opcode;
+	uint16_t src = param->model_operation.ctx->addr;
+	uint8_t* data = param->model_operation.msg;
+	uint16_t len = param->model_operation.length;
 
-    if (opcode == BMT_OP_VND_TAG_STATUS) {
-        if (len < sizeof(bmt_tag_report_t)) { ESP_LOGW(TAG, "[VND] TAG_STATUS too short"); return; }
-        bmt_tag_report_t report; memcpy(&report, data, sizeof(report));
+	if (opcode == BMT_OP_VND_TAG_STATUS)
+	{
+		if (len < sizeof(bmt_tag_report_t))
+		{
+			ESP_LOGW(TAG, "[VND] TAG_STATUS too short");
+			return;
+		}
+		bmt_tag_report_t report;
+		memcpy(&report, data, sizeof(report));
 
-        s_mesh_received++;
+		s_mesh_received++;
 
-        /* [v6.5-relay-only] Gateway KHÔNG dùng report.scanner_id (do Scanner tự
-         * đặt thủ công qua UART) để định danh nữa — thay vào đó tra MAC thật
-         * của scanner theo địa chỉ mesh nguồn (src), đã có sẵn từ lúc provision
-         * (bmt_node_table). MAC này gửi lên ThingsBoard, rule chain bên đó tự
-         * ánh xạ MAC -> zone, Gateway không tính zone/không cần biết vị trí. */
-        const uint8_t *scanner_mac = NULL;
-        int node_idx = bmt_node_table_find(src);
-        bmt_node_t *scan_node = (node_idx >= 0) ? bmt_node_table_get(node_idx) : NULL;
-        if (scan_node) scanner_mac = scan_node->mac;
+		/* [v6.5-relay-only] Gateway KHÔNG dùng report.scanner_id (do Scanner tự
+		 * đặt thủ công qua UART) để định danh nữa — thay vào đó tra MAC thật
+		 * của scanner theo địa chỉ mesh nguồn (src), đã có sẵn từ lúc provision
+		 * (bmt_node_table). MAC này gửi lên ThingsBoard, rule chain bên đó tự
+		 * ánh xạ MAC -> zone, Gateway không tính zone/không cần biết vị trí. */
+		const uint8_t* scanner_mac = NULL;
+		int node_idx = bmt_node_table_find(src);
+		bmt_node_t* scan_node = (node_idx >= 0) ? bmt_node_table_get(node_idx) : NULL;
+		if (scan_node)
+			scanner_mac = scan_node->mac;
 
-        /* [v6.6] Scanner tự chứng minh còn sống qua chính TAG_STATUS này —
-         * làm mới trạng thái online trên TB, giới hạn tối đa 1 lần mỗi
-         * BMT_SCAN_STATUS_REFRESH_MS/scanner để tránh spam MQTT. */
-        if (scan_node && scan_node->is_scan) {
-            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            bool due = (scan_node->last_seen_ms == 0) ||
-                       ((now - scan_node->last_seen_ms) > BMT_SCAN_STATUS_REFRESH_MS);
-            if (due) {
-                scan_node->last_seen_ms = now;
-                scan_node->online = true;
-                bmt_tb_pub_node_status(src, BMT_ROLE_SCAN, true);
-            }
-        }
+		/* [v6.6] Scanner tự chứng minh còn sống qua chính TAG_STATUS này —
+		 * làm mới trạng thái online trên TB, giới hạn tối đa 1 lần mỗi
+		 * BMT_SCAN_STATUS_REFRESH_MS/scanner để tránh spam MQTT. */
+		if (scan_node && scan_node->is_scan)
+		{
+			uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+			bool due = (scan_node->last_seen_ms == 0) ||
+			           ((now - scan_node->last_seen_ms) > BMT_SCAN_STATUS_REFRESH_MS);
+			if (due)
+			{
+				scan_node->last_seen_ms = now;
+				scan_node->online = true;
+				bmt_tb_pub_node_status(src, BMT_ROLE_SCAN, true);
+			}
+		}
 
-        if (scanner_mac) {
-            ESP_LOGI(TAG, "[VND] src=0x%04x MAC=%02x:%02x:%02x:%02x:%02x:%02x tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
-                     src, scanner_mac[0], scanner_mac[1], scanner_mac[2],
-                     scanner_mac[3], scanner_mac[4], scanner_mac[5],
-                     report.tag_id, report.rssi, s_mesh_received);
-        } else {
-            ESP_LOGW(TAG, "[VND] src=0x%04x MAC=? (chua tra ra) tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
-                     src, report.tag_id, report.rssi, s_mesh_received);
-        }
+		if (scanner_mac)
+		{
+			ESP_LOGI(TAG, "[VND] src=0x%04x MAC=%02x:%02x:%02x:%02x:%02x:%02x tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
+			         src, scanner_mac[0], scanner_mac[1], scanner_mac[2],
+			         scanner_mac[3], scanner_mac[4], scanner_mac[5],
+			         report.tag_id, report.rssi, s_mesh_received);
+		}
+		else
+		{
+			ESP_LOGW(TAG, "[VND] src=0x%04x MAC=? (chua tra ra) tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
+			         src, report.tag_id, report.rssi, s_mesh_received);
+		}
 
-        bmt_mqtt_enqueue_tag_report(&report, scanner_mac);
-        return;
-    }
+		bmt_mqtt_enqueue_tag_report(&report, scanner_mac);
+		return;
+	}
 
-    /* [v5.0] Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
-     * trước đây không biết được kết quả thật. */
-    if (opcode == BMT_OP_VND_OTA_RESULT) {
-        if (len < sizeof(bmt_ota_result_t)) return;
-        bmt_ota_result_t r; memcpy(&r, data, sizeof(r));
+	/* [v5.0] Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
+	 * trước đây không biết được kết quả thật. */
+	if (opcode == BMT_OP_VND_OTA_RESULT)
+	{
+		if (len < sizeof(bmt_ota_result_t))
+			return;
+		bmt_ota_result_t r;
+		memcpy(&r, data, sizeof(r));
 
-        int idx = bmt_node_table_find(src);
-        const char *name = (idx >= 0) ? bmt_node_table_get(idx)->name : "unknown";
+		int idx = bmt_node_table_find(src);
+		const char* name = (idx >= 0) ? bmt_node_table_get(idx)->name : "unknown";
 
-        if (r.status == 0) {
-            ESP_LOGI(TAG, "[OTA] ===== Node 0x%04x (%s) OTA THANH CONG =====", src, name);
-        } else {
-            ESP_LOGW(TAG, "[OTA] ===== Node 0x%04x (%s) OTA THAT BAI (status=%u) =====",
-                     src, name, r.status);
-        }
-        bmt_tb_pub_ota_result(src, r.status);
-        return;
-    }
+		if (r.status == 0)
+		{
+			ESP_LOGI(TAG, "[OTA] ===== Node 0x%04x (%s) OTA THANH CONG =====", src, name);
+		}
+		else
+		{
+			ESP_LOGW(TAG, "[OTA] ===== Node 0x%04x (%s) OTA THAT BAI (status=%u) =====",
+			         src, name, r.status);
+		}
+		bmt_tb_pub_ota_result(src, r.status);
+		return;
+	}
 }
 
 /* [FIX-watchdog-v2] CHI ping Relay (khong ping Scan node). Scan node tu chung
@@ -462,32 +569,41 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
  * gay tranh chap giao dich -> ACK mat -> nhap nhay online/offline. ACK ping Relay
  * dong thoi lam tin hieu "mesh song" cho watchdog (xem s_mesh_received++ trong
  * cfg_client_cb GET_STATE_EVT), doc lap voi viec co Tag hay khong. */
-static void node_ping_task(void *arg)
+static void node_ping_task(void* arg)
 {
-    (void)arg; vTaskDelay(pdMS_TO_TICKS(30000));
-    while (1) {
-        uint32_t now = xTaskGetTickCount()*portTICK_PERIOD_MS;
-        for (int i=0; i<bmt_node_table_capacity(); i++) {
-            bmt_node_t *n = bmt_node_table_get(i);
-            if (!n || !n->used || !n->is_relay) continue;
-            esp_ble_mesh_client_common_param_t common={0};
-            esp_ble_mesh_cfg_client_get_state_t get={0};
-            common.opcode=ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET;
-            common.model=&s_root_models[1];
-            common.ctx.net_idx=s_net_key_idx; common.ctx.app_idx=0xFFFF;
-            common.ctx.addr=n->addr; common.ctx.send_ttl=7; common.msg_timeout=5000;
-            esp_ble_mesh_config_client_get_state(&common, &get);
-            if (n->last_seen_ms>0 && (now-n->last_seen_ms)>BMT_RELAY_OFFLINE_TIMEOUT_MS) {
-                if (n->online) {
-                    n->online=false;
-                    ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-                    bmt_tb_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
-                }
-            }
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
-        vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
-    }
+	(void)arg;
+	vTaskDelay(pdMS_TO_TICKS(30000));
+	while (1)
+	{
+		uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+		for (int i = 0; i < bmt_node_table_capacity(); i++)
+		{
+			bmt_node_t* n = bmt_node_table_get(i);
+			if (!n || !n->used || !n->is_relay)
+				continue;
+			esp_ble_mesh_client_common_param_t common = {0};
+			esp_ble_mesh_cfg_client_get_state_t get = {0};
+			common.opcode = ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET;
+			common.model = &s_root_models[1];
+			common.ctx.net_idx = s_net_key_idx;
+			common.ctx.app_idx = 0xFFFF;
+			common.ctx.addr = n->addr;
+			common.ctx.send_ttl = 7;
+			common.msg_timeout = 5000;
+			esp_ble_mesh_config_client_get_state(&common, &get);
+			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS)
+			{
+				if (n->online)
+				{
+					n->online = false;
+					ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
+					bmt_tb_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
+				}
+			}
+			vTaskDelay(pdMS_TO_TICKS(500));
+		}
+		vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
+	}
 }
 
 /* ============================================================================
@@ -495,100 +611,137 @@ static void node_ping_task(void *arg)
  * ============================================================================ */
 esp_err_t bmt_mesh_init(void)
 {
-    esp_err_t err;
-    esp_ble_mesh_register_prov_callback(mesh_prov_cb);
-    esp_ble_mesh_register_config_client_callback(cfg_client_cb);
-    esp_ble_mesh_register_config_server_callback(cfg_server_cb);
-    esp_ble_mesh_register_custom_model_callback(vnd_client_cb);
+	esp_err_t err;
+	esp_ble_mesh_register_prov_callback(mesh_prov_cb);
+	esp_ble_mesh_register_config_client_callback(cfg_client_cb);
+	esp_ble_mesh_register_config_server_callback(cfg_server_cb);
+	esp_ble_mesh_register_custom_model_callback(vnd_client_cb);
 
-    err = esp_ble_mesh_init(&s_provision, &s_composition); if (err!=ESP_OK) return err;
+	err = esp_ble_mesh_init(&s_provision, &s_composition);
+	if (err != ESP_OK)
+		return err;
 
-    /* [SECURITY] PHẢI set trước khi enable provisioner — node nào không biết
-     * đúng giá trị này thì provisioning sẽ fail ở tầng xác thực, bất kể UUID
-     * có giả mạo đúng prefix "SCAN"/"RELAY" hay không. */
-    err = esp_ble_mesh_provisioner_set_static_oob_value(BMT_MESH_STATIC_OOB_VAL, sizeof(BMT_MESH_STATIC_OOB_VAL));
-    if (err!=ESP_OK) return err;
+	/* [SECURITY] PHẢI set trước khi enable provisioner — node nào không biết
+	 * đúng giá trị này thì provisioning sẽ fail ở tầng xác thực, bất kể UUID
+	 * có giả mạo đúng prefix "SCAN"/"RELAY" hay không. */
+	err = esp_ble_mesh_provisioner_set_static_oob_value(BMT_MESH_STATIC_OOB_VAL, sizeof(BMT_MESH_STATIC_OOB_VAL));
+	if (err != ESP_OK)
+		return err;
 
-    err = esp_ble_mesh_provisioner_set_dev_uuid_match(NULL,0,0,false); if (err!=ESP_OK) return err;
-    err = esp_ble_mesh_provisioner_prov_enable(ESP_BLE_MESH_PROV_ADV|ESP_BLE_MESH_PROV_GATT);
-    if (err!=ESP_OK) return err;
+	err = esp_ble_mesh_provisioner_set_dev_uuid_match(NULL, 0, 0, false);
+	if (err != ESP_OK)
+		return err;
+	err = esp_ble_mesh_provisioner_prov_enable(ESP_BLE_MESH_PROV_ADV | ESP_BLE_MESH_PROV_GATT);
+	if (err != ESP_OK)
+		return err;
 
-    /* [v6.9] LUU Y: prov_enable() o tren TU SINH san 1 NetKey primary trong stack
-     * neu chua co — nen exist_net != NULL KHONG dong nghia "khoi phuc tu NVS".
-     * Voi CONFIG_BLE_MESH_SETTINGS=y (moi bat), key nay MOI that su duoc stack
-     * luu/khoi phuc qua reboot. Copy nguoc ve s_net_key/s_app_key de banner in
-     * DUNG key dang dung (truoc day banner in key random cua app — sai). */
-    const uint8_t *exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
-    if (!exist_net) {
-        err = esp_ble_mesh_provisioner_add_local_net_key(s_net_key, s_net_key_idx);
-        if (err!=ESP_OK) return err;
-        ESP_LOGI(TAG, "NetKey added");
-    } else {
-        memcpy(s_net_key, exist_net, sizeof(s_net_key));
-        ESP_LOGI(TAG, "NetKey already exists in stack (SETTINGS restore/auto-create)");
-    }
+	/* [v6.9] LUU Y: prov_enable() o tren TU SINH san 1 NetKey primary trong stack
+	 * neu chua co — nen exist_net != NULL KHONG dong nghia "khoi phuc tu NVS".
+	 * Voi CONFIG_BLE_MESH_SETTINGS=y (moi bat), key nay MOI that su duoc stack
+	 * luu/khoi phuc qua reboot. Copy nguoc ve s_net_key/s_app_key de banner in
+	 * DUNG key dang dung (truoc day banner in key random cua app — sai). */
+	const uint8_t* exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
+	if (!exist_net)
+	{
+		err = esp_ble_mesh_provisioner_add_local_net_key(s_net_key, s_net_key_idx);
+		if (err != ESP_OK)
+			return err;
+		ESP_LOGI(TAG, "NetKey added");
+	}
+	else
+	{
+		memcpy(s_net_key, exist_net, sizeof(s_net_key));
+		ESP_LOGI(TAG, "NetKey already exists in stack (SETTINGS restore/auto-create)");
+	}
 
-    const uint8_t *exist_app = esp_ble_mesh_provisioner_get_local_app_key(s_net_key_idx, s_app_key_idx);
-    if (!exist_app) {
-        err = esp_ble_mesh_provisioner_add_local_app_key(s_app_key, s_net_key_idx, s_app_key_idx);
-        if (err!=ESP_OK) return err;
-        ESP_LOGI(TAG, "AppKey added");
-    } else {
-        memcpy(s_app_key, exist_app, sizeof(s_app_key));
-        ESP_LOGI(TAG, "AppKey already exists in stack (SETTINGS restore)");
-    }
+	const uint8_t* exist_app = esp_ble_mesh_provisioner_get_local_app_key(s_net_key_idx, s_app_key_idx);
+	if (!exist_app)
+	{
+		err = esp_ble_mesh_provisioner_add_local_app_key(s_app_key, s_net_key_idx, s_app_key_idx);
+		if (err != ESP_OK)
+			return err;
+		ESP_LOGI(TAG, "AppKey added");
+	}
+	else
+	{
+		memcpy(s_app_key, exist_app, sizeof(s_app_key));
+		ESP_LOGI(TAG, "AppKey already exists in stack (SETTINGS restore)");
+	}
 
-    err = esp_ble_mesh_provisioner_bind_app_key_to_local_model(
-        0x0001, s_app_key_idx, BMT_VND_MODEL_ID, BMT_CID_ESP);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "AppKey bound to local vendor model: 0x%04x", s_app_key_idx);
-    } else if (err == ESP_ERR_INVALID_STATE) {
-        ESP_LOGI(TAG, "AppKey already bound (restored from NVS) — OK");
-    } else {
-        ESP_LOGE(TAG, "bind_app_key_to_local_model FAILED: %s", esp_err_to_name(err));
-        return err;
-    }
+	err = esp_ble_mesh_provisioner_bind_app_key_to_local_model(
+	    0x0001, s_app_key_idx, BMT_VND_MODEL_ID, BMT_CID_ESP);
+	if (err == ESP_OK)
+	{
+		ESP_LOGI(TAG, "AppKey bound to local vendor model: 0x%04x", s_app_key_idx);
+	}
+	else if (err == ESP_ERR_INVALID_STATE)
+	{
+		ESP_LOGI(TAG, "AppKey already bound (restored from NVS) — OK");
+	}
+	else
+	{
+		ESP_LOGE(TAG, "bind_app_key_to_local_model FAILED: %s", esp_err_to_name(err));
+		return err;
+	}
 
-    ESP_LOGI(TAG, "BLE Mesh Gateway init OK");
-    return ESP_OK;
+	ESP_LOGI(TAG, "BLE Mesh Gateway init OK");
+	return ESP_OK;
 }
 
 void bmt_mesh_start_node_ping(void)
 {
-    xTaskCreate(node_ping_task, "bmt_node_ping", 4096, NULL, 3, NULL);
+	xTaskCreate(node_ping_task, "bmt_node_ping", 4096, NULL, 3, NULL);
 }
 
-esp_err_t bmt_mesh_publish(uint16_t dst, uint32_t opcode, const void *data, uint16_t len)
+esp_err_t bmt_mesh_publish(uint16_t dst, uint32_t opcode, const void* data, uint16_t len)
 {
-    s_vnd_models[0].pub->publish_addr = dst;
-    s_vnd_models[0].pub->app_idx      = s_app_key_idx;
-    s_vnd_models[0].pub->ttl          = 7;
-    esp_err_t err = esp_ble_mesh_model_publish(
-        &s_vnd_models[0], opcode, len, (uint8_t *)data, ROLE_PROVISIONER);
-    if (err != ESP_OK)
-        ESP_LOGW(TAG, "publish 0x%08" PRIx32 " -> 0x%04x FAILED: %s", opcode, dst, esp_err_to_name(err));
-    return err;
+	s_vnd_models[0].pub->publish_addr = dst;
+	s_vnd_models[0].pub->app_idx = s_app_key_idx;
+	s_vnd_models[0].pub->ttl = 7;
+	esp_err_t err = esp_ble_mesh_model_publish(
+	    &s_vnd_models[0], opcode, len, (uint8_t*)data, ROLE_PROVISIONER);
+	if (err != ESP_OK)
+		ESP_LOGW(TAG, "publish 0x%08" PRIx32 " -> 0x%04x FAILED: %s", opcode, dst, esp_err_to_name(err));
+	return err;
 }
 
-uint32_t bmt_mesh_get_received_count(void) { return s_mesh_received; }
+uint32_t bmt_mesh_get_received_count(void)
+{
+	return s_mesh_received;
+}
 
 int bmt_mesh_wipe_all_provisioned(void)
 {
-    const esp_ble_mesh_node_t **entry = esp_ble_mesh_provisioner_get_node_table_entry();
-    int erased = 0;
-    if (entry) {
-        for (int i = 0; i < CONFIG_BLE_MESH_MAX_PROV_NODES; i++)
-            if (entry[i]) { esp_ble_mesh_provisioner_delete_node_with_uuid(entry[i]->dev_uuid); erased++; }
-    }
-    return erased;
+	const esp_ble_mesh_node_t** entry = esp_ble_mesh_provisioner_get_node_table_entry();
+	int erased = 0;
+	if (entry)
+	{
+		for (int i = 0; i < CONFIG_BLE_MESH_MAX_PROV_NODES; i++)
+			if (entry[i])
+			{
+				esp_ble_mesh_provisioner_delete_node_with_uuid(entry[i]->dev_uuid);
+				erased++;
+			}
+	}
+	return erased;
 }
 
 void bmt_mesh_print_keys(void)
 {
-    printf("NetKey: ");
-    for (int i = 0; i < 16; i++) { printf("%02X", s_net_key[i]); if (i != 15) printf(":"); }
-    printf("\n");
-    printf("AppKey: ");
-    for (int i = 0; i < 16; i++) { printf("%02X", s_app_key[i]); if (i != 15) printf(":"); }
-    printf("\n");
+	printf("NetKey: ");
+	for (int i = 0; i < 16; i++)
+	{
+		printf("%02X", s_net_key[i]);
+		if (i != 15)
+			printf(":");
+	}
+	printf("\n");
+	printf("AppKey: ");
+	for (int i = 0; i < 16; i++)
+	{
+		printf("%02X", s_app_key[i]);
+		if (i != 15)
+			printf(":");
+	}
+	printf("\n");
 }
