@@ -190,7 +190,8 @@ void bmt_tag_table_print(uint8_t scanner_id)
 		       " | Loss=%.1f%% | %lus ago\n",
 		       t->tag_id,
 		       t->tag_type == BMT_TAG_TYPE_PERSON ? "PERSON" : "ASSET",
-		       t->rssi_raw, t->rssi_filtered, t->distance, lr, age);
+		       t->rssi_raw, t->rssi_filtered, t->distance, lr,
+		       (unsigned long)age);
 	}
 	if (!has_tag)
 		printf("  No tags in range\n");

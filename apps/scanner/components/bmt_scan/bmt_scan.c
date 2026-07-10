@@ -176,9 +176,9 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 
 		int idx = bmt_tag_table_find(payload.tag_id);
 		if (idx < 0)
-			idx = bmt_tag_table_add(payload.tag_id, payload.tag_type,
-			                        payload.tx_power, param->scan_rst.rssi,
-			                        payload.sequence, param->scan_rst.bda);
+			bmt_tag_table_add(payload.tag_id, payload.tag_type,
+			                  payload.tx_power, param->scan_rst.rssi,
+			                  payload.sequence, param->scan_rst.bda);
 		else
 			bmt_tag_table_update(idx, param->scan_rst.rssi, payload.sequence);
 
