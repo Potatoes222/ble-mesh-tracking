@@ -1,23 +1,6 @@
-set(srcs
-    "main.c"
-    "bmt_mesh.c"
-    "bmt_ota.c"
-    "bmt_uart.c"
-)
-
 idf_component_register(
-    SRCS "${srcs}"
-    INCLUDE_DIRS "."
+    SRCS "main.c"
     REQUIRES
-        nvs_flash
-        bt
-        app_update
-        esp_rom
-        esp_system
-        example_init
-        esp_driver_uart
-        esp_wifi
-        esp_http_client
-        esp_https_ota
-        esp-tls
+        bmt_config bmt_mesh bmt_ota bmt_uart
+        nvs_flash bt esp_system example_init
 )
