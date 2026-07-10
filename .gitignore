@@ -6,4 +6,8 @@ dependencies.lock
 
 # IDE / OS
 .vscode/
+.idea/
+.DS_Store
 Thumbs.db
+*.swp
+*.swo
