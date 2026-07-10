@@ -4,7 +4,7 @@
 
 </div>
 
-# BMT - BLE Mesh Tracking
+# BLE Mesh Tracking
 
 <hr>
 
@@ -23,7 +23,7 @@
 
 ## Introduction
 
-BMT tracks tags to rooms indoors.
+BLE Mesh Tracking tracks tags to rooms indoors.
 
 Tags send BLE beacons. Scanners read the signal strength. A relay passes mesh packets along. The gateway sends raw data to ThingsBoard over MQTTS. ThingsBoard picks the room using a rule chain.
 
