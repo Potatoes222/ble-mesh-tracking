@@ -10,6 +10,9 @@ file(GLOB_RECURSE BMT_VER_SRC_FILES
     "${CMAKE_CURRENT_LIST_DIR}/main/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/main/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/main/CMakeLists.txt"
+    "${CMAKE_CURRENT_LIST_DIR}/components/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/components/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/components/*/CMakeLists.txt"
 )
 foreach(_bmt_src_file ${BMT_VER_SRC_FILES})
     file(TIMESTAMP "${_bmt_src_file}" _bmt_src_ts "%Y%m%d%H%M%S" UTC)

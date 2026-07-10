@@ -1,21 +1,7 @@
 idf_component_register(
-    SRCS "bmt_uart.c" "bmt_watchdog.c" "bmt_thingsboard.c" "bmt_mqtt.c" "bmt_wifi.c" "bmt_ota.c" "bmt_mesh.c" "bmt_zone.c" "bmt_scan_list.c" "bmt_node_table.c" "bmt_mac_cache.c" "main.c"
-    INCLUDE_DIRS "."
+    SRCS "main.c"
     REQUIRES
-        nvs_flash
-        bt
-        esp_wifi
-        esp_event
-        esp_netif
-        mqtt
-        esp_driver_uart
-        example_init
-        esp_http_client
-        esp_https_ota
-        bootloader_support
-        esp_system
-        mbedtls
-        esp-tls
-    EMBED_TXTFILES
-        "ca.pem"
+        bmt_config bmt_mesh bmt_mqtt bmt_node_table bmt_ota bmt_thingsboard
+        bmt_uart bmt_watchdog bmt_wifi bmt_zone
+        nvs_flash bt esp_system example_init
 )
