@@ -1,19 +1,19 @@
 # ThingsBoard setup
 
-Self-host ThingsBoard CE with Docker instead of using the cloud.
+Run ThingsBoard CE on your own machine with Docker.
 
-## `thingsboard/` layout
+## What is in `thingsboard/`
 
 - `docker-compose.yml` — ThingsBoard CE 3.7 and PostgreSQL.
 - `rulechain/` — rule chain exports (`ble_tag_zone_detection.json` plus backups).
-- `dashboard/indoor_tracking.json` — dashboard ready to import.
+- `dashboard/indoor_tracking.json` — dashboard, ready to import.
 - `tls/` — CA and server certs (SAN `bmt-tb.local`).
 
 ## Steps
 
 ### 1. Install Docker Desktop
 
-Download from `https://www.docker.com/products/docker-desktop`. Keep it running in the background.
+Download it from `https://www.docker.com/products/docker-desktop`. Keep it running.
 
 ### 2. Start ThingsBoard
 
@@ -32,34 +32,34 @@ docker compose ps
 
 Open `http://localhost:8080`. Log in with `tenant@thingsboard.org` / `tenant`.
 
-### 4. Create two device profiles
+### 4. Add two device profiles
 
-Menu Device profiles > `+`. Names must match exactly:
+Menu Device profiles > `+`. The names must match exactly:
 
 - `ble_tag`
 - `ble_mesh_node`
 
-### 5. Create the gateway device and copy the token
+### 5. Add the gateway device and copy the token
 
-Menu Devices > `+ Add device`. Name it `bmt_gateway`. Enable `Is gateway`. In the Credentials tab, copy the Access Token.
+Menu Devices > `+ Add device`. Name it `bmt_gateway`. Turn on `Is gateway`. In the Credentials tab, copy the Access Token.
 
-Paste it into `apps/gateway/main/bmt_config.h`:
+Paste it into `apps/gateway/components/bmt_config/bmt_config.h`:
 
 ```
 #define BMT_TB_GATEWAY_TOKEN "<paste token here>"
 ```
 
-### 6. Check the IP
+### 6. Set the IP
 
-`apps/gateway/main/bmt_config.h` defines `BMT_TB_IP`. Update it if the Docker host has a different IP.
+`apps/gateway/components/bmt_config/bmt_config.h` sets `BMT_TB_IP`. Change it if the Docker host is on a different IP.
 
 ### 7. Import the rule chain
 
 Menu Rule chains > `+ Import` > pick `thingsboard/rulechain/ble_tag_zone_detection.json`.
 
-Open the `ble_tag` profile and set the imported rule chain as its default.
+Open the `ble_tag` profile. Set the new rule chain as its default.
 
-In the "Apply hysteresis" node, edit `ZONE_MAP`: pair each scanner MAC with a room name. Read scanner MACs by sending UART `1` to each scanner.
+In the "Apply hysteresis" node, edit `ZONE_MAP`. Pair each scanner MAC with a room name. Read the scanner MACs by pressing `1` on each scanner UART.
 
 ### 8. Import the dashboard
 
@@ -72,20 +72,20 @@ Map the two Entity Aliases:
 
 ### 9. Rebuild the gateway
 
-After you set the real token in step 5, rebuild and flash `apps/gateway`. It will connect over MQTTS on port 8883 and auto-register sub-devices with the right profile.
+After you set the token in step 5, rebuild and flash `apps/gateway`. The gateway connects over MQTTS on port 8883 and adds sub-devices under the right profile.
 
 ## New certs
 
 ```
 cd thingsboard/tls
 bash gen_certs.sh
-cp ca.pem ../../apps/gateway/main/ca.pem
+cp ca.pem ../../apps/gateway/components/bmt_mqtt/ca.pem
 ```
 
-Rebuild the gateway. `EMBED_TXTFILES` bundles the new `ca.pem` into the firmware.
+Rebuild the gateway. `EMBED_TXTFILES` bakes the new `ca.pem` into the firmware.
 
 ## Quick check
 
-- Gateway serial log shows `MQTT connected to ThingsBoard`.
-- ThingsBoard Devices tab shows `bmt_gateway` online, plus sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) as scanners, relays, and tags come online.
+- Gateway serial log prints `MQTT connected to ThingsBoard`.
+- ThingsBoard Devices tab shows `bmt_gateway` online. Sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) show up as scanners, relays, and tags come online.
 - The Indoor Tracking dashboard updates in real time.
