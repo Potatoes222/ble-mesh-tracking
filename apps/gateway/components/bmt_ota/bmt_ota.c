@@ -16,12 +16,6 @@
 #include "freertos/task.h"
 
 #include "psa/crypto.h"
-
-/* [v5.0-nimble] NimBLE native GAP API thay cho esp_gap_ble_api.h (Bluedroid-only)
- * — esp_ble_gap_config_adv_data_raw/start_advertising KHÔNG tồn tại dưới NimBLE.
- * Include "host/ble_hs.h" (không phải "host/ble_gap.h" riêng lẻ) — giống cách
- * example_init.c (common component) làm, vì BLE_OWN_ADDR_PUBLIC/BLE_HS_FOREVER
- * nằm ở nimble/ble.h được kéo vào gián tiếp qua chain include của ble_hs.h. */
 #include "host/ble_hs.h"
 
 #include "bmt_config.h"
@@ -44,22 +38,12 @@ static void print_sha256_hex(const char* label, const uint8_t* sha, size_t len)
 		printf("%02x", sha[i]);
 	printf("\n");
 }
-
-/* ============================================================================
- * GATEWAY SELF-UPDATE
- * ============================================================================ */
 static void self_update_task(void* arg)
 {
 	(void)arg;
 	printf("\n[OTA] ===== Gateway self-update =====\n");
 	printf("[OTA] URL: %s\n", BMT_OTA_GATEWAY_URL);
 
-	/* [SECURITY] HTTP thuần (LAN nội bộ) — quyết định có chủ đích, xem comment
-	 * tại BMT_OTA_SERVER_BASE trong bmt_config.h. Không gắn crt_bundle_attach
-	 * vì không có tác dụng gì với http://.
-	 * [v6.0-auto-ota] Dùng bộ API "advanced" để đọc version trong header .bin
-	 * trên server TRƯỚC khi tải hết, so với version đang chạy — bỏ qua nếu
-	 * cùng version thay vì luôn tải lại toàn bộ ~1MB không cần thiết. */
 	esp_http_client_config_t http_cfg = {
 	    .url = BMT_OTA_GATEWAY_URL,
 	    .timeout_ms = BMT_OTA_HTTP_TIMEOUT_MS,
@@ -85,7 +69,6 @@ static void self_update_task(void* arg)
 
 	const esp_app_desc_t* cur_desc = esp_app_get_description();
 
-	/* ===== GIAI ĐOẠN 1: SHA256 — nội dung .elf có thật sự khác không ===== */
 	print_sha256_hex("[OTA] Node   SHA256: ", cur_desc->app_elf_sha256, sizeof(cur_desc->app_elf_sha256));
 	print_sha256_hex("[OTA] Server SHA256: ", new_desc.app_elf_sha256, sizeof(new_desc.app_elf_sha256));
 
@@ -99,8 +82,6 @@ static void self_update_task(void* arg)
 	}
 	printf("[OTA] SHA256 differ — node firmware DIFFERS from server firmware, checking version...\n");
 
-	/* ===== GIAI ĐOẠN 2: SHA256 đã khác — so version (mtime nguồn, dạng
-	 * YYYYMMDDHHMMSS) để biết bản nào MỚI HƠN, tránh downgrade. ===== */
 	printf("[OTA] Node   version: %s\n", cur_desc->version);
 	printf("[OTA] Server version: %s\n", new_desc.version);
 
@@ -160,45 +141,12 @@ esp_err_t bmt_ota_gateway_self_update(void)
 	}
 	return ESP_OK;
 }
-
-/* ============================================================================
- * OTA-BEACON  [v4.9-security → v5.0-nimble]
- * ----------------------------------------------------------------------------
- * Gateway advertise 1 gói BLE ADV thô đặc biệt → Scanner GAP-scan 100% duty
- * chắc chắn bắt được → tự bật WiFi OTA. Bypass hoàn toàn mesh bearer.
- *
- * [SECURITY] HMAC-16 chống giả mạo (key RIÊNG, KHÔNG dùng chung với Tag) —
- * PHẢI GIỐNG HỆT BMT_OTA_BEACON_HMAC_KEY trong Scanner/main/bmt_auth.c.
- *
- * [⚠️ CHƯA KIỂM CHỨNG TRÊN PHẦN CỨNG THẬT] Dưới Bluedroid, code gốc dùng
- * esp_ble_gap_config_adv_data_raw()/esp_ble_gap_start_advertising(). API này
- * KHÔNG tồn tại dưới NimBLE — thay bằng ble_gap_adv_set_data()/ble_gap_adv_start()
- * (NimBLE host API thuần, "host/ble_gap.h"). Rủi ro chưa xác nhận được: BLE Mesh
- * (esp_ble_mesh) chạy trên NimBLE có thể ĐANG tự chiếm advertising instance của
- * host (network/proxy beacon) → ble_gap_adv_start() có thể trả lỗi
- * BLE_HS_EALREADY. Nếu vậy, hàm bên dưới sẽ return lỗi và
- * bmt_ota_trigger_all_scanners() tự động fallback sang mesh unicast (không có
- * broadcast đồng thời, nhưng vẫn cập nhật được đầy đủ scanner).
- * ============================================================================ */
-/* [SECURITY] Key HMAC beacon KHÔNG còn hardcode cố định — chỉ dùng làm giá trị
- * "bootstrap" cho lần boot ĐẦU TIÊN của Gateway (trước khi NVS có key nào).
- * Ngay từ lần boot đó, Gateway tự sinh 1 key RANDOM thật (esp_fill_random,
- * giống hệt cách sinh NetKey/AppKey ở bmt_mesh.c) và lưu NVS — key hardcode
- * bên dưới sau đó không còn ý nghĩa gì (không node nào cần match nó, vì mỗi
- * Scanner nhận key hiện hành trực tiếp từ Gateway ngay sau khi provision
- * xong, qua kênh mesh đã được AppKey mã hóa — xem bmt_ota_push_beacon_key_to_node).
- * Root cause được giải quyết: dump firmware chỉ lộ key TẠI THỜI ĐIỂM ĐÓ (nếu
- * còn ở dạng NVS-random), không suy ra được key của lần rotate khác vì key
- * mới sinh random độc lập, không suy diễn được từ key cũ hay từ firmware. */
 static const uint8_t BMT_OTA_BEACON_HMAC_KEY_BOOTSTRAP[16] = {
     0x5A, 0x59, 0xD8, 0xBB, 0x51, 0xCE, 0xB4, 0xD8,
     0xEF, 0xC3, 0x4D, 0xC5, 0xA2, 0x2C, 0x36, 0x43};
 
 #define BMT_OTA_NVS_NAMESPACE "bmt_ota"
 #define BMT_OTA_NVS_KEY_BEACON_KEY "beacon_key"
-/* [v6.4-security] Chu kỳ tự sinh key HMAC beacon MỚI (random) rồi push cho
- * toàn bộ Scanner đã provision qua mesh — giới hạn thời gian sống của 1 key,
- * theo yêu cầu của thầy hướng dẫn. */
 #define BMT_OTA_KEY_ROTATE_INTERVAL_MS (24ULL * 60 * 60 * 1000)
 
 static psa_key_id_t s_beacon_hmac_key_id = 0;
@@ -267,9 +215,6 @@ static void beacon_hmac_key_init(void)
 		return;
 	}
 
-	/* Lần boot đầu tiên: sinh key RANDOM thật, không dùng key bootstrap
-	 * hardcode để verify — bootstrap key chỉ tồn tại trong Scanner cho tới
-	 * khi Scanner đó được provision + nhận push key thật lần đầu. */
 	uint8_t new_key[16];
 	esp_fill_random(new_key, sizeof(new_key));
 	beacon_key_persist(new_key);
@@ -303,10 +248,6 @@ static void beacon_key_rotate_and_push(void)
 	}
 	ESP_LOGW(TAG, "[SECURITY] Key rotate: pushed to %d scanner(s)", pushed);
 }
-
-/* Gọi ngay sau khi 1 scanner hoàn tất provision + config (scan_config_task
- * trong bmt_mesh.c) — đảm bảo scanner mới join luôn có key hiện hành, kể cả
- * khi join sau 1 hoặc nhiều lần rotate đã xảy ra. */
 void bmt_ota_push_beacon_key_to_node(uint16_t addr)
 {
 	if (s_beacon_hmac_key_id == 0)
@@ -399,10 +340,6 @@ static esp_err_t beacon_send(uint8_t target_type)
 	printf("[OTA] NimBLE beacon stopped\n");
 	return ESP_OK;
 }
-
-/* ============================================================================
- * DISTRIBUTE TASK
- * ============================================================================ */
 typedef struct
 {
 	uint8_t node_type;
@@ -437,10 +374,6 @@ static void distribute_task(void* arg)
 	}
 	printf("[OTA] Found %d %s node(s)\n", node_count, type_str);
 
-	/* ===== SCANNER: thử 1 beacon broadcast → tất cả scanner OTA gần như đồng thời.
-	 * Nếu beacon gửi thất bại (NimBLE chưa xác nhận tương thích), fallback sang
-	 * mesh unicast lần lượt — Scanner đã đăng ký nhận OTA_TRIGGER qua mesh sẵn
-	 * (dùng cho Relay), nên fallback này không cần sửa gì bên Scanner. ===== */
 	if (is_scan)
 	{
 		printf("[OTA] Broadcasting NimBLE beacon (%ds) — all %d scanners OTA simultaneously\n",
@@ -457,7 +390,6 @@ static void distribute_task(void* arg)
 		printf("[OTA] Beacon broadcast failed — falling back to mesh unicast (chậm hơn nhưng chắc chắn)\n");
 	}
 
-	/* ===== RELAY (hoặc SCANNER fallback): mesh unicast lần lượt từng node ===== */
 	int idx = 0;
 	for (int i = 0; i < bmt_node_table_capacity(); i++)
 	{
@@ -472,11 +404,6 @@ static void distribute_task(void* arg)
 		idx++;
 		printf("\n[OTA] -- %s %d/%d: 0x%04x (%s) --\n", type_str, idx, node_count, n->addr, n->name);
 
-		/* [FIX] Gửi ĐỦ 5 lần liên tiếp không điều kiện (giống main.c gốc) — KHÔNG
-		 * break khi publish local trả OK, vì esp_ble_mesh_model_publish() chỉ xác
-		 * nhận gói đã được đưa vào hàng đợi gửi local, không xác nhận Relay/Scanner
-		 * thực sự nhận được qua sóng. Gửi lặp lại nhiều lần tăng khả năng gói tới
-		 * đích khi mesh đang bận (nhiều TAG_STATUS dồn dập cùng lúc). */
 		for (int retry = 0; retry < 5; retry++)
 		{
 			esp_err_t e = bmt_mesh_publish(n->addr, BMT_OP_VND_OTA_TRIGGER, &target_type, sizeof(target_type));
@@ -531,12 +458,6 @@ void bmt_ota_beacon_key_init(void)
 {
 	beacon_hmac_key_init();
 }
-
-/* [v6.3-auto-ota] Đồng bộ với Scanner/Relay — Gateway cũng tự định kỳ kiểm tra
- * version/SHA256 của chính mình, không cần ai bấm 'g'/gửi RPC nữa. Gọi lại
- * đúng bmt_ota_gateway_self_update() nên an toàn nhờ guard s_running sẵn có
- * (không đụng độ nếu đang có OTA relay/scanner distribute chạy cùng lúc, vì
- * chung 1 s_running — self_update sẽ tự lùi lại lần check kế tiếp nếu bận). */
 #define BMT_OTA_GATEWAY_AUTO_CHECK_INTERVAL_MS (3 * 60 * 1000)
 
 static void gateway_auto_check_task(void* arg)

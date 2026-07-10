@@ -27,21 +27,11 @@ static const uint8_t BMT_OTA_BEACON_HMAC_KEY[16] = {
 
 static psa_key_id_t s_tag_key_id = 0;
 static psa_key_id_t s_ota_beacon_key_id = 0;
-
-/* [FIX] mbedtls 4 (ESP-IDF v6.0.1) đã bỏ các hàm tiện ích mbedtls_md_hmac_*
- * → dùng PSA Crypto API chuẩn. Key import 1 LẦN lúc khởi động, tái sử dụng
- * key_id cho mọi lần verify sau đó (Scanner verify liên tục mỗi khi có ADV
- * tới, không thể import/destroy key mỗi lần mà không tốn CPU đáng kể). */
 static psa_key_id_t import_hmac_key(const uint8_t* key, size_t key_len, const char* label)
 {
 	psa_key_id_t key_id = 0;
 	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
 
-	/* [FIX] psa_mac_compute() yêu cầu quyền SIGN_MESSAGE dù dùng để verify —
-	 * PSA phân biệt "tính MAC" (sign) và "so khớp MAC" (verify) là 2 API/quyền
-	 * riêng. Ở đây ta tự tính lại rồi so sánh thủ công thay vì dùng
-	 * psa_mac_verify(), nên vẫn cần quyền SIGN_MESSAGE để gọi psa_mac_compute()
-	 * thành công. Dùng VERIFY_MESSAGE sẽ luôn lỗi PSA_ERROR_NOT_PERMITTED. */
 	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
 	psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
 	psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
@@ -67,12 +57,6 @@ void bmt_auth_init(void)
 	}
 	s_tag_key_id = import_hmac_key(BMT_TAG_HMAC_KEY, sizeof(BMT_TAG_HMAC_KEY), "tag");
 
-	/* [SECURITY] Key OTA-beacon: nếu Gateway đã từng rotate + push key mới
-	 * qua mesh (bmt_auth_set_ota_beacon_key), dùng lại key đó từ NVS — chỉ
-	 * fallback về key hardcode mặc định khi node CHƯA BAO GIỜ nhận rotate
-	 * nào (ví dụ vừa flash lần đầu, chưa kịp provision xong). Sau lần
-	 * provision đầu tiên, Gateway sẽ push ngay key hiện hành cho node nên
-	 * key hardcode gần như không còn dùng thật để verify beacon nào cả. */
 	uint8_t nvs_key[16];
 	bool have_nvs_key = false;
 	nvs_handle_t h;

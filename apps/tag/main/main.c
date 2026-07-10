@@ -1,12 +1,3 @@
-/* ============================================================================
- * BMT (BLE Mesh Tracking) — TAG firmware  [v3.0-modular]
- * ----------------------------------------------------------------------------
- * v3.0-modular — tách thành module riêng:
- *   bmt_config.h    — định danh Tag (UUID, major/minor, tx_power) ĐỔI CHO TỪNG THIẾT BỊ
- *   bmt_auth.c/h    — HMAC (thay CRC16 của bản gốc) cho payload ADV
- *   bmt_beacon.c/h  — build payload, GAP callback, ADV timer, BT init
- *   bmt_uart.c/h    — UART status task
- * ============================================================================ */
 
 #include "esp_err.h"
 #include "esp_log.h"

@@ -33,11 +33,6 @@ static const char* TAG = "BMT_MESH";
 
 #define BMT_RELAY_PING_INTERVAL_MS 20000
 #define BMT_RELAY_OFFLINE_TIMEOUT_MS 60000
-
-/* [v6.6] Scanner không có cơ chế ping riêng như Relay — nhưng mỗi lần Gateway
- * nhận TAG_STATUS từ 1 scanner, đó chính là bằng chứng scanner đó còn sống.
- * Tận dụng luôn để "làm mới" trạng thái online của SCANNER trên ThingsBoard,
- * giới hạn tần suất để không spam MQTT (không gọi publish mỗi report). */
 #define BMT_SCAN_STATUS_REFRESH_MS 30000
 
 static uint16_t s_net_key_idx = 0x0000;
@@ -49,27 +44,9 @@ static uint8_t s_net_key[16];
 static uint8_t s_app_key[16];
 
 static volatile uint32_t s_mesh_received = 0;
-
-/* ============================================================================
- * SECURITY — Static OOB provisioning authentication
- * ----------------------------------------------------------------------------
- * [v5.1-security] Trước đây provisioner nhận diện node hợp lệ chỉ qua 4-5 byte
- * đầu UUID ("SCAN"/"RELAY") — đây là hằng số công khai trong source code, kẻ
- * tấn công dựng 1 ESP32 giả unprovisioned-adv với UUID trùng prefix là auto
- * được provision (chế độ AUTO) và được cấp cả NetKey lẫn AppKey.
- * Static OOB là cơ chế CHUẨN của BLE Mesh cho đúng vấn đề này: node phải biết
- * trước 1 khóa bí mật 16 byte (nhúng sẵn trong firmware, giống HMAC key) thì
- * bắt tay xác thực lúc provisioning mới thành công — không biết đúng giá trị
- * thì provisioning FAIL ngay ở tầng crypto, dù UUID/MAC có giả đúng cỡ nào.
- * PHẢI GIỐNG HỆT giá trị BMT_MESH_STATIC_OOB_VAL trong Scanner/Relay bmt_mesh.c.
- * ============================================================================ */
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
     0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92};
-
-/* ============================================================================
- * MESH MODELS
- * ============================================================================ */
 static esp_ble_mesh_cfg_srv_t s_cfg_server = {
     .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
     .relay = ESP_BLE_MESH_RELAY_ENABLED,
@@ -82,12 +59,6 @@ static esp_ble_mesh_cfg_srv_t s_cfg_server = {
 
 static esp_ble_mesh_client_t s_cfg_client;
 static esp_ble_mesh_client_t s_vnd_client;
-
-/* [FIX] Buffer publish phải đủ cho message LỚN NHẤT Gateway từng gửi qua
- * bmt_mesh_publish() — trước đây chỉ tính theo bmt_tag_report_t (8 byte,
- * nhỏ nhất), nên khi thêm tính năng push key HMAC beacon (16 byte,
- * BMT_OP_VND_OTA_KEY_PUSH) thì bị lỗi "Too small publication msg size 12"
- * (ESP_ERR_INVALID_ARG) — key không bao giờ tới được scanner. */
 ESP_BLE_MESH_MODEL_PUB_DEFINE(s_vnd_pub, 20, ROLE_PROVISIONER);
 
 static esp_ble_mesh_model_op_t s_vnd_ops[] = {
@@ -119,16 +90,8 @@ static esp_ble_mesh_prov_t s_provision = {
     .prov_unicast_addr = 0x0001,
     .prov_start_address = 0x0002,
 };
-
-/* ============================================================================
- * SECURITY — Random NetKey/AppKey  [v4.9-security]
- * ============================================================================ */
 void bmt_mesh_generate_keys_if_needed(void)
 {
-	/* [v6.9] Ham nay chay TRUOC bluetooth_init nen get_local_net_key luon NULL —
-	 * key sinh o day chi la "ung vien", CHI duoc add vao stack neu sau khi init
-	 * stack chua co key nao (first boot that su). Voi SETTINGS=y, cac boot sau
-	 * stack tu khoi phuc key cu tu NVS va key ung vien nay bi bo qua. */
 	const uint8_t* exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
 	if (!exist_net)
 	{
@@ -141,10 +104,6 @@ void bmt_mesh_generate_keys_if_needed(void)
 		ESP_LOGI(TAG, "[SECURITY] Mesh keys already exist, skip generate");
 	}
 }
-
-/* ============================================================================
- * SCAN NODE CONFIG TASK — gửi APP_KEY_ADD + MODEL_APP_BIND cho scanner
- * ============================================================================ */
 static void scan_config_task(void* arg)
 {
 	uint16_t addr = (uint16_t)(uint32_t)arg;
@@ -195,21 +154,11 @@ static void scan_config_task(void* arg)
 	}
 	ESP_LOGI(TAG, "[SCN_CFG] Scan node 0x%04x fully configured!", addr);
 
-	/* [SECURITY] Push ngay key HMAC beacon hiện hành cho scanner vừa join —
-	 * đảm bảo scanner luôn có key mới nhất kể cả khi join sau 1 vài lần
-	 * rotate đã xảy ra trước đó (xem bmt_ota_start_key_rotation). */
 	bmt_ota_push_beacon_key_to_node(addr);
 
 	bmt_node_table_print();
 	vTaskDelete(NULL);
 }
-
-/* ============================================================================
- * RELAY NODE CONFIG TASK  [FIX-6]
- * Relay cần AppKey bound cho vendor model mới decrypt được RESET_CMD từ watchdog
- * (Relay FORWARD ở Network Layer không cần AppKey, nhưng TỰ XỬ LÝ message ở
- * Transport/Access Layer thì cần).
- * ============================================================================ */
 static void relay_config_task(void* arg)
 {
 	uint16_t addr = (uint16_t)(uint32_t)arg;
@@ -262,10 +211,6 @@ static void relay_config_task(void* arg)
 	bmt_node_table_print();
 	vTaskDelete(NULL);
 }
-
-/* ============================================================================
- * CALLBACKS
- * ============================================================================ */
 static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t* param)
 {
 	switch (event)
@@ -306,13 +251,6 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 			break;
 		}
 
-		/* [v6.9] Node co uuid DA provision ma van beacon unprovisioned = node do
-		 * da tu reset (mat nguon/nhan nut — Scanner/Relay khong bat SETTINGS nen
-		 * reboot la mat provision). Truoc day chi `break` => tu khi Gateway nho
-		 * bang qua reboot (SETTINGS=y), node mat dien se ket ngoai mesh vinh vien.
-		 * Gio: xoa entry cu (stack + bang BMT) roi de provision lai binh thuong.
-		 * Chi ap dung khi config_done=true de tranh race voi beacon tre con sot
-		 * lai ngay sau PROV_COMPLETE (config mat ~7s, beacon dung sau ~1s). */
 		{
 			int stale = -1;
 			for (int i = 0; i < bmt_node_table_capacity(); i++)
@@ -363,9 +301,6 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 		}
 		bmt_node_t* n = bmt_node_table_get(idx);
 
-		/* [FIX-6] Relay: launch relay_config_task giống scanner — TRƯỚC (v4.5):
-		 * config_done=true ngay, không AppKey → relay không nhận được RESET_CMD
-		 * từ watchdog vì Transport Layer không decrypt được. */
 		if (bmt_uuid_is_relay(uuid))
 		{
 			n->is_relay = true;
@@ -430,28 +365,15 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 		ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
 	if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT)
 	{
-		/* [FIX-watchdog-v3] GET_STATE_EVT no CA KHI GUI THAT BAI (vd "Failed to
-		 * find Dst" luc stack chua biet node) — phai check error_code, neu khong
-		 * se dem ACK "ma" (Relay ONLINE gia + s_mesh_received++ gia lam watchdog
-		 * bao "Mesh OK" trong khi mesh thuc su da chet, mat kha nang tu phuc hoi). */
 		if (param->error_code != 0)
 		{
 			ESP_LOGW(TAG, "[PING] 0x%04x FAILED (err=%d) — khong tinh ACK",
 			         addr, param->error_code);
 			return;
 		}
-		/* [FIX-watchdog-v2] CHI ping Relay. Da thu ping ca Scan node nhung config
-		 * client la instance DUNG CHUNG, chi 1 giao dich tai 1 thoi diem — ping 4
-		 * node chong len nhau (gap 500ms < timeout 5s) gay tranh chap, ACK bi mat
-		 * -> Scan node nhap nhay online/offline. Scan node da tu chung minh con
-		 * song qua TAG_STATUS roi, khong can ping chu dong. */
 		if (n && n->is_relay)
 		{
 			n->last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
-			/* [FIX-watchdog] ACK ping Relay la bang chung mesh song thuc su
-			 * (round-trip qua Network+Transport layer), khong phu thuoc co Tag —
-			 * Relay ping moi 20s du de watchdog thay mesh con song ke ca khi khong
-			 * co Tag nao o gan Scanner, tranh false-trigger reset toan mesh. */
 			s_mesh_received++;
 			if (!n->online)
 			{
@@ -494,20 +416,12 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 
 		s_mesh_received++;
 
-		/* [v6.5-relay-only] Gateway KHÔNG dùng report.scanner_id (do Scanner tự
-		 * đặt thủ công qua UART) để định danh nữa — thay vào đó tra MAC thật
-		 * của scanner theo địa chỉ mesh nguồn (src), đã có sẵn từ lúc provision
-		 * (bmt_node_table). MAC này gửi lên ThingsBoard, rule chain bên đó tự
-		 * ánh xạ MAC -> zone, Gateway không tính zone/không cần biết vị trí. */
 		const uint8_t* scanner_mac = NULL;
 		int node_idx = bmt_node_table_find(src);
 		bmt_node_t* scan_node = (node_idx >= 0) ? bmt_node_table_get(node_idx) : NULL;
 		if (scan_node)
 			scanner_mac = scan_node->mac;
 
-		/* [v6.6] Scanner tự chứng minh còn sống qua chính TAG_STATUS này —
-		 * làm mới trạng thái online trên TB, giới hạn tối đa 1 lần mỗi
-		 * BMT_SCAN_STATUS_REFRESH_MS/scanner để tránh spam MQTT. */
 		if (scan_node && scan_node->is_scan)
 		{
 			uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -563,12 +477,6 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 		return;
 	}
 }
-
-/* [FIX-watchdog-v2] CHI ping Relay (khong ping Scan node). Scan node tu chung
- * minh con song qua TAG_STATUS; ping them chung qua config client dung chung se
- * gay tranh chap giao dich -> ACK mat -> nhap nhay online/offline. ACK ping Relay
- * dong thoi lam tin hieu "mesh song" cho watchdog (xem s_mesh_received++ trong
- * cfg_client_cb GET_STATE_EVT), doc lap voi viec co Tag hay khong. */
 static void node_ping_task(void* arg)
 {
 	(void)arg;
@@ -605,10 +513,6 @@ static void node_ping_task(void* arg)
 		vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
 	}
 }
-
-/* ============================================================================
- * PUBLIC API
- * ============================================================================ */
 esp_err_t bmt_mesh_init(void)
 {
 	esp_err_t err;
@@ -621,9 +525,6 @@ esp_err_t bmt_mesh_init(void)
 	if (err != ESP_OK)
 		return err;
 
-	/* [SECURITY] PHẢI set trước khi enable provisioner — node nào không biết
-	 * đúng giá trị này thì provisioning sẽ fail ở tầng xác thực, bất kể UUID
-	 * có giả mạo đúng prefix "SCAN"/"RELAY" hay không. */
 	err = esp_ble_mesh_provisioner_set_static_oob_value(BMT_MESH_STATIC_OOB_VAL, sizeof(BMT_MESH_STATIC_OOB_VAL));
 	if (err != ESP_OK)
 		return err;
@@ -635,11 +536,6 @@ esp_err_t bmt_mesh_init(void)
 	if (err != ESP_OK)
 		return err;
 
-	/* [v6.9] LUU Y: prov_enable() o tren TU SINH san 1 NetKey primary trong stack
-	 * neu chua co — nen exist_net != NULL KHONG dong nghia "khoi phuc tu NVS".
-	 * Voi CONFIG_BLE_MESH_SETTINGS=y (moi bat), key nay MOI that su duoc stack
-	 * luu/khoi phuc qua reboot. Copy nguoc ve s_net_key/s_app_key de banner in
-	 * DUNG key dang dung (truoc day banner in key random cua app — sai). */
 	const uint8_t* exist_net = esp_ble_mesh_provisioner_get_local_net_key(s_net_key_idx);
 	if (!exist_net)
 	{

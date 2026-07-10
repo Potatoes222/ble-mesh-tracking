@@ -3,10 +3,6 @@
 #include <stdint.h>
 
 #include "esp_ble_mesh_defs.h"
-
-/* ============================================================================
- * BLE MESH VENDOR MODEL — opcode & struct dùng chung giữa Gateway/Scanner/Relay
- * ============================================================================ */
 #define BMT_CID_ESP 0x02E5
 #define BMT_VND_MODEL_ID 0x0000
 

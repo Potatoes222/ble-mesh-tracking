@@ -13,10 +13,6 @@
 #include "bmt_zone.h"
 
 #define BMT_MAX_SEEN_TAGS 16
-
-/* [DASHBOARD] "type" phai trung ten 1 Device Profile da tao san trong TB UI
- * (BMT_PROFILE_TAG/BMT_PROFILE_NODE) — TB tu gan profile cho sub-device luc
- * auto-provision, giup Entity Alias trong dashboard loc duoc theo profile. */
 static void tb_connect_device(const char* dev, const char* profile)
 {
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
@@ -78,9 +74,6 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	if (!r)
 		return;
 
-	/* [v6.5-relay-only] Vẫn cập nhật bảng track + tính zone cục bộ NHƯ CŨ —
-	 * nhưng CHỈ để phục vụ UART '2' debug tại chỗ (bmt_zone_log_tracked()).
-	 * KHÔNG dùng current_zone_id bên dưới để publish lên ThingsBoard nữa. */
 	bmt_tag_track_t* t = bmt_zone_track_get_or_add(r->tag_id, r->tag_type);
 	if (!t)
 		return;
@@ -125,11 +118,6 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 		tb_set_role(dev, BMT_ROLE_TAG);
 	}
 
-	/* [v6.5-relay-only] "scanner_id" gửi lên giờ là MAC THẬT (12 hex char) của
-	 * scanner — không phải số 1-8 tự đặt qua UART nữa. Rule chain bên
-	 * ThingsBoard tự ánh xạ MAC -> zone (xem ZONE_MAP), KHÔNG gửi zone/zone_id
-	 * tính sẵn — Gateway chỉ relay dữ liệu thô. Fallback về "id_0x%02x" nếu
-	 * chưa tra ra MAC (scanner chưa provision xong lúc gửi report này). */
 	char scanner_key[16];
 	if (scanner_mac)
 	{
@@ -193,13 +181,6 @@ static void zone_timeout_task(void* arg)
 				t->valid_by_scanner[j] = false;
 			if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
 				continue;
-			/* [v6.5-relay-only] Ngoại lệ có chủ đích duy nhất: đây KHÔNG phải
-			 * thuật toán định vị (không so sánh/chọn scanner gì cả), chỉ là
-			 * phát hiện "im lặng quá lâu" — rule chain bên TB xử lý theo từng
-			 * message tới, không có cơ chế lịch định kỳ để tự phát hiện việc
-			 * KHÔNG có message nào tới nữa. Nên Gateway set thẳng attribute
-			 * current_zone/current_zone_num = out_of_range, đúng tên key mà
-			 * dashboard/rule chain đang dùng, bỏ qua nhánh tính toán RSSI. */
 			char dev[32], json[192];
 			snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, t->tag_id);
 			snprintf(json, sizeof(json),

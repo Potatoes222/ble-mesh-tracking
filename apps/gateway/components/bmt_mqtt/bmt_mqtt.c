@@ -18,20 +18,11 @@ static const char* TAG = "BMT_MQTT";
 
 #define BMT_MQTT_QUEUE_SIZE 64
 #define BMT_MQTT_PUBLISH_TIMEOUT_MS 500
-
-/* [SECURITY] ca.pem được nhúng vào firmware qua EMBED_TXTFILES (xem
- * main/CMakeLists.txt) — dùng để verify chứng chỉ TLS của ThingsBoard
- * (mqtts://, port 8883). Copy từ tls/ca.pem (thingsboard/tls/gen_certs.sh)
- * sang main/ca.pem mỗi khi regenerate cert. */
 extern const uint8_t bmt_ca_pem_start[] asm("_binary_ca_pem_start");
 extern const uint8_t bmt_ca_pem_end[] asm("_binary_ca_pem_end");
 
 static esp_mqtt_client_handle_t s_client = NULL;
 static bool s_connected = false;
-
-/* [v6.5-relay-only] Gói kèm MAC scanner (tra sẵn ở bmt_mesh.c) vào hàng đợi,
- * không đụng tới wire struct bmt_tag_report_t (Scanner vẫn gửi y nguyên qua
- * mesh, không cần build lại Scanner). */
 typedef struct
 {
 	bmt_tag_report_t report;
@@ -84,10 +75,6 @@ void bmt_mqtt_enqueue_tag_report(const bmt_tag_report_t* report, const uint8_t* 
 		ESP_LOGW(TAG, "MQTT queue FULL (dropped: %" PRIu32 ")", s_dropped);
 	}
 }
-
-/* [FIX-5] mesh_received (bmt_mesh.c) vs mqtt_published — phân biệt tầng để
- * debug nhanh: mesh_received=0 → vấn đề BLE Mesh/NVS key binding;
- * mesh_received>0, published=0 → vấn đề MQTT/WiFi/ThingsBoard */
 void bmt_mqtt_log_stats(void)
 {
 	UBaseType_t in_q = s_queue ? uxQueueMessagesWaiting(s_queue) : 0;

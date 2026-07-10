@@ -31,19 +31,7 @@ static uint16_t s_node_addr = 0x0000;
 static uint16_t s_net_idx = 0xFFFF;
 static uint16_t s_app_idx = 0xFFFF;
 static EventGroupHandle_t s_mesh_evgrp;
-
-/* [v6.7-fix] esp_ble_mesh_node_local_reset() la ham BAT DONG BO — chi thuc su
- * xoa xong NVS mesh khi event ESP_BLE_MESH_NODE_PROV_RESET_EVT ban ve, KHONG
- * dam bao xong trong 1 khoang delay co dinh nao. Truoc day UART 'r' va
- * RESET_CMD tu delay 500ms roi reboot ngay — neu chua kip xong, reboot len
- * van con nghi da provision (dung trieu chung da gap: 'r' khong tac dung,
- * phai bam reset vat ly may lan moi an). Gio doi dung event nay moi reboot,
- * co fallback timeout phong khi event khong ve (VD loi mesh stack). */
 static volatile bool s_reboot_after_reset = false;
-
-/* [FIX-1] UUID không hardcode — sinh từ MAC trong bmt_mesh_init()
- * Layout: "SCAN"(4B) + MAC(6B) + 0x00(5B) + scanner_id(1B)
- * → Mỗi chip có UUID riêng theo MAC → không bao giờ trùng */
 static uint8_t s_scan_uuid[16] = {
     0x53,
     0x43,
@@ -62,10 +50,6 @@ static uint8_t s_scan_uuid[16] = {
     0x00,
     0x00,
 };
-
-/* ============================================================================
- * MESH MODELS
- * ============================================================================ */
 static esp_ble_mesh_cfg_srv_t s_cfg_server = {
     .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
     .relay = ESP_BLE_MESH_RELAY_ENABLED,
@@ -104,16 +88,6 @@ static esp_ble_mesh_comp_t s_composition = {
     .element_count = ARRAY_SIZE(s_elements),
     .elements = s_elements,
 };
-
-/* ============================================================================
- * SECURITY — Static OOB provisioning authentication  [v5.1-security]
- * ----------------------------------------------------------------------------
- * Trước đây Gateway nhận diện Scanner hợp lệ chỉ qua 4 byte đầu UUID "SCAN" —
- * hằng số công khai trong source code, không phải bí mật. Static OOB là cơ
- * chế CHUẨN của BLE Mesh: node phải biết trước khóa 16 byte này thì bắt tay
- * xác thực lúc provisioning mới thành công. PHẢI GIỐNG HỆT giá trị
- * BMT_MESH_STATIC_OOB_VAL trong Gateway/main/bmt_mesh.c và Relay/main/bmt_mesh.c.
- * ============================================================================ */
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
     0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92};
@@ -123,10 +97,6 @@ static esp_ble_mesh_prov_t s_provision = {
     .static_val = BMT_MESH_STATIC_OOB_VAL,
     .static_val_len = sizeof(BMT_MESH_STATIC_OOB_VAL),
 };
-
-/* ============================================================================
- * CALLBACKS
- * ============================================================================ */
 static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
                          esp_ble_mesh_prov_cb_param_t* param)
 {
@@ -220,10 +190,6 @@ static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
 		return;
 	}
 }
-
-/* ============================================================================
- * PUBLIC API
- * ============================================================================ */
 esp_err_t bmt_mesh_init(void)
 {
 	s_mesh_evgrp = xEventGroupCreate();
@@ -365,10 +331,6 @@ static void reset_reboot_fallback_task(void* arg)
 
 void bmt_mesh_local_reset(void)
 {
-	/* [v6.7-fix] KHONG con tu delay-roi-reboot o day nua — de
-	 * ESP_BLE_MESH_NODE_PROV_RESET_EVT (mesh_prov_cb) tu reboot dung luc
-	 * reset THUC SU xong. Task fallback ben duoi chi la luoi an toan phong
-	 * khi event khong ve vi ly do gi do (khong de treo vinh vien). */
 	s_reboot_after_reset = true;
 	xTaskCreate(reset_reboot_fallback_task, "bmt_rst_fb", 2048, NULL, 3, NULL);
 	esp_ble_mesh_node_local_reset();

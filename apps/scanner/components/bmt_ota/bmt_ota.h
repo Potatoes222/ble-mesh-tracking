@@ -1,10 +1,6 @@
 #pragma once
 
 #include <stdbool.h>
-
-/* Bắt đầu WiFi OTA nếu chưa đang chạy (idempotent) — gọi từ bmt_mesh.c khi
- * nhận OTA_TRIGGER qua mesh, từ bmt_scan.c khi nhận OTA-beacon hợp lệ, hoặc
- * từ bmt_uart.c khi test thủ công bằng lệnh 'o' */
 void bmt_ota_trigger(void);
 
 /* true khi đang trong quá trình OTA — bmt_scan.c dùng để tạm dừng GAP scan

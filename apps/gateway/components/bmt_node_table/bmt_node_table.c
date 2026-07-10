@@ -79,10 +79,6 @@ int bmt_node_table_add(uint16_t addr, const uint8_t* uuid,
 	}
 	return -1;
 }
-
-/* [v6.8] Save/load truoc day nuot loi im lang — neu NVS day hoac blob hong thi
- * khong co bat ky dau vet nao trong log, dan toi ca tuan khong hieu vi sao bang
- * node cu boot len la trong. Gio moi nhanh loi deu in ro esp_err_to_name. */
 void bmt_node_table_save(void)
 {
 	nvs_handle_t h;
@@ -140,12 +136,6 @@ void bmt_node_table_load(void)
 			if (!s_nodes[i].used)
 				continue;
 			count++;
-			/* [FIX-watchdog] last_seen_ms la tick-count cua PHIEN BOOT TRUOC —
-			 * xTaskGetTickCount() ve lai 0 sau reboot, neu khong reset o day thi
-			 * "now - last_seen_ms" (uint32_t) se underflow ra so khong lo, khien
-			 * node_ping_task tuong node vua load da "OFFLINE" ngay lap tuc du
-			 * that ra chi la chua kip ping lai. Ap dung cho CA Scan lan Relay vi
-			 * ca 2 gio deu duoc ping chu dong (xem node_ping_task). */
 			if (s_nodes[i].is_relay || s_nodes[i].is_scan)
 			{
 				s_nodes[i].online = false;

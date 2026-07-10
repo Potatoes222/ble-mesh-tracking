@@ -12,12 +12,6 @@ void bmt_mqtt_init(void);
 
 bool bmt_mqtt_is_connected(void);
 esp_mqtt_client_handle_t bmt_mqtt_get_client(void);
-
-/* Gọi từ bmt_mesh.c khi nhận TAG_STATUS — enqueue vào hàng đợi, KHÔNG publish
- * trực tiếp trong mesh callback (tránh block BLE host task).
- * [v6.5-relay-only] scanner_mac: MAC thật (6 byte) của scanner gửi báo cáo,
- * tra từ bmt_node_table theo địa chỉ mesh nguồn — NULL nếu tra không ra
- * (chưa kịp provision xong). */
 void bmt_mqtt_enqueue_tag_report(const bmt_tag_report_t* report, const uint8_t* scanner_mac);
 
 /* [FIX-5] bmt_thingsboard.c gọi sau mỗi lần publish thành công, để thống kê

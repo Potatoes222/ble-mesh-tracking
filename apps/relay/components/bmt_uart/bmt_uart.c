@@ -16,10 +16,6 @@
 /* [v1.4] In health log định kỳ ra UART — chỉ phục vụ giám sát trực quan khi
  * cắm cáp debug tại chỗ, không ảnh hưởng logic forward/OTA/reset của Relay */
 #define BMT_RELAY_MONITOR_INTERVAL_MS 30000
-
-/* [v6.7] BMT_RELAY_UUID la hang so co dinh (khong sinh tu MAC nhu Scanner),
- * nen phai doc MAC rieng qua esp_read_mac() — in ra de biet dung board nao
- * dang chay Relay khi nhin tu xa (Gateway) khong phan biet duoc. */
 static void print_relay_mac(void)
 {
 	uint8_t mac[6];

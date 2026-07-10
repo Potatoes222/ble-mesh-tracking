@@ -4,22 +4,6 @@
 #include <stdint.h>
 
 #include "esp_err.h"
-
-/* ============================================================================
- * PAYLOAD STRUCT — so sánh với iBeacon:
- *
- *   iBeacon (Apple CID 0x004C):
- *     CID(2) + 0215(2) + UUID(16) + Major(2) + Minor(2) + TXPwr(1) = 25B
- *
- *   Custom (Espressif CID 0x02E5):
- *     CID(2) + UUID(16) + Major(2) + Minor(2) + TXPwr(1) + Seq(1) + MAC(2) = 26B
- *
- *   Bỏ "02 15" marker (chỉ cần cho iOS CLBeaconRegion, không cần với scanner)
- *   → tiết kiệm 2B → có chỗ cho Seq + MAC, tổng ADV = 31B (vừa khít)
- *
- * iPhone dùng RNF Beacon Toolkit: Set UUID = AB000000-..., Major = 1 (PERSON),
- * Minor = tag_id. Scanner detect qua CID 0x004C → không có Seq/MAC → loss = 0%
- * ============================================================================ */
 #pragma pack(1)
 typedef struct
 {

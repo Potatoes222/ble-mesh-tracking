@@ -4,20 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* ============================================================================
- * BMT_AUTH — HMAC-16 cho Tag ADV + OTA-beacon  [thay bmt_crc.c của bản gốc]
- * ----------------------------------------------------------------------------
- * CRC16 chỉ chống lỗi nhiễu ngẫu nhiên, không chống giả mạo (ai cũng tính lại
- * được vì không cần khóa bí mật). HMAC-SHA256 (rút gọn 2 byte đầu) yêu cầu
- * biết đúng key mới verify được — chống giả mạo trong khi vẫn giữ khả năng
- * phát hiện lỗi truyền như CRC cũ (nhờ avalanche effect của SHA-256).
- *
- * 2 key TÁCH BIỆT, không dùng chung:
- *   - Tag key: verify payload Tag ADV (Tag → Scanner)
- *   - OTA-beacon key: verify beacon OTA-trigger (Gateway → Scanner)
- * Tách để 1 key lộ không ảnh hưởng kênh còn lại.
- * ============================================================================ */
-
 /* Gọi 1 lần lúc boot, TRƯỚC khi bmt_scan bắt đầu nhận/verify bất kỳ ADV nào */
 void bmt_auth_init(void);
 

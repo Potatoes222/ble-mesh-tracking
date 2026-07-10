@@ -22,12 +22,6 @@ static const char* TAG = "BMT_WDG";
 #define BMT_WDG_RESET_TRIES 5
 #define BMT_WDG_RESET_GAP_MS 1500
 #define BMT_WDG_NODE_WAIT_MS 12000
-
-/* [v6.7] Ngay sau khi Gateway vua boot lai, tang NimBLE/mesh bearer (proxy,
- * advertising...) can vai giay de thuc su san sang gui/nhan — neu watchdog
- * bat dau dem gio qua som, RESET_CMD (va ca viec quan sat mesh_received)
- * co the "false" vi mang chua thong, dan toi wipe oan khi thuc ra mesh van
- * on, chi la Gateway chua kip ket noi lai. Doi them truoc khi bat dau. */
 #define BMT_WDG_STABILIZE_MS 15000
 
 static void data_watchdog_task(void* arg)
@@ -90,12 +84,6 @@ static void data_watchdog_task(void* arg)
 		vTaskDelay(pdMS_TO_TICKS(BMT_WDG_RESET_GAP_MS));
 	}
 
-	/* [v6.7] Neu CA 5 lan gui deu that bai — bang chung mesh/radio chua san
-	 * sang thuc su (khong phai node kia da chet) — KHONG xoa bookkeeping cua
-	 * Gateway, vi node vat ly rat co the van con provisioned binh thuong, xoa
-	 * luc nay se gay dung tinh trang "Gateway tuong khong con node nao nhung
-	 * node cu van nghi minh da provision" nhu da gap. Thoat, de lan sau (hoac
-	 * reboot thu cong) thu lai thay vi tu wipe sai. */
 	if (sent_ok == 0)
 	{
 		ESP_LOGE(TAG, "RESET_CMD that bai ca %d lan — mesh/radio co ve chua san sang, "

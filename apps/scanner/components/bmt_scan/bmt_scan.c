@@ -19,22 +19,9 @@
 #include "bmt_scan_core.h"
 
 static const char* TAG = "BMT_SCAN";
-
-/* [FIX] Gateway giu 1 beacon OTA-trigger phat lien tuc trong ~15s (xem
- * BMT_OTA_BEACON_DURATION_MS ben Gateway) de chac chan scanner bat duoc du
- * dang scan luc nao. Nhung khi SHA256 trung (khong can flash), 1 chu ky
- * WiFi-connect-roi-skip cua scanner xong rat nhanh (vai giay) — nhanh hon
- * nhieu so voi 15s beacon con phat — nen scanner quay lai GAP scan va thay
- * NGAY chinh beacon do van con phat, roi trigger lai lien tuc nhieu lan.
- * Fix: nho lai mac16 cua beacon vua xu ly + thoi diem, bo qua neu thay lai
- * dung mac16 do trong khoang cooldown (dai hon thoi luong beacon ben Gateway). */
 #define BMT_OTA_BEACON_COOLDOWN_US (20 * 1000 * 1000)
 static uint16_t s_last_ota_beacon_mac = 0;
 static int64_t s_last_ota_beacon_us = -((int64_t)BMT_OTA_BEACON_COOLDOWN_US);
-
-/* ============================================================================
- * TIME DIVISION RADIO MANAGEMENT
- * ============================================================================ */
 #define BMT_GAP_SCAN_DURATION_MS 800
 #define BMT_MESH_PUBLISH_DURATION_MS 700
 /* Scan window < interval → chừa khe cho mesh bearer RX nhận ANNOUNCE
@@ -58,10 +45,6 @@ static esp_ble_scan_params_t s_scan_params = {
     .scan_window = BMT_SCAN_WINDOW_UNITS,
     .scan_duplicate = BLE_SCAN_DUPLICATE_DISABLE,
 };
-
-/* ============================================================================
- * PARSE ADV PAYLOAD
- * ============================================================================ */
 static const uint8_t BMT_SYSTEM_UUID_PREFIX[4] = {0xAB, 0x00, 0x00, 0x00};
 
 static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payload_t* out)
@@ -117,10 +100,6 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 	}
 	return false;
 }
-
-/* ============================================================================
- * GAP CALLBACK
- * ============================================================================ */
 static void gap_event_handler(esp_gap_ble_cb_event_t event,
                               esp_ble_gap_cb_param_t* param)
 {
@@ -138,11 +117,6 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 		if (param->scan_rst.search_evt != ESP_GAP_SEARCH_INQ_RES_EVT)
 			break;
 
-		/* [v2.5] Kiểm tra OTA beacon TRƯỚC khi xử lý tag
-		 * Gateway advertise beacon: CID(E502) + "BMT" + 0xFA + target + mac16
-		 * Scanner đang scan 100% duty → CHẮC CHẮN nhận được beacon này
-		 * [SECURITY] verify HMAC-16 (offset 9-10) trước khi trigger, chặn
-		 * kẻ giả mạo tự phát beacon với đúng magic nhưng không biết key */
 		if (!bmt_ota_is_triggered())
 		{
 			uint8_t* adv = param->scan_rst.ble_adv;
@@ -175,9 +149,6 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 					if (recv_mac == s_last_ota_beacon_mac &&
 					    (now - s_last_ota_beacon_us) < BMT_OTA_BEACON_COOLDOWN_US)
 					{
-						/* Beacon giong het lan vua roi va Gateway con dang phat —
-						 * da xu ly (hoac da skip vi trung SHA256) roi, khong
-						 * trigger lai. */
 						break;
 					}
 					s_last_ota_beacon_mac = recv_mac;
@@ -218,10 +189,6 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 		break;
 	}
 }
-
-/* ============================================================================
- * TASKS
- * ============================================================================ */
 static void radio_manager_task(void* arg)
 {
 	(void)arg;

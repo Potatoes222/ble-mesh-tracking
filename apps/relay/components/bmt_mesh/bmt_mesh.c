@@ -26,16 +26,7 @@ static uint16_t s_node_addr = 0x0000;
 static uint16_t s_net_idx = 0xFFFF;
 static uint16_t s_app_idx = 0xFFFF;
 static EventGroupHandle_t s_mesh_evgrp;
-
-/* [v6.7-fix] esp_ble_mesh_node_local_reset() la ham bat dong bo — chi thuc su
- * xong khi event ESP_BLE_MESH_NODE_PROV_RESET_EVT ban ve, khong dam bao xong
- * trong 1 khoang delay co dinh. Doi dung event nay moi reboot, co fallback
- * timeout phong khi event khong ve. */
 static volatile bool s_reboot_after_reset = false;
-
-/* ============================================================================
- * MESH MODELS
- * ============================================================================ */
 static const uint8_t s_health_test_ids[] = {ESP_BLE_MESH_HEALTH_STANDARD_TEST};
 
 static esp_ble_mesh_health_srv_t s_health_server = {
@@ -87,16 +78,6 @@ static esp_ble_mesh_comp_t s_composition = {
     .element_count = ARRAY_SIZE(s_elements),
     .elements = s_elements,
 };
-
-/* ============================================================================
- * SECURITY — Static OOB provisioning authentication  [v5.1-security]
- * ----------------------------------------------------------------------------
- * Trước đây Gateway nhận diện Relay hợp lệ chỉ qua 5 byte đầu UUID "RELAY" —
- * hằng số công khai trong source code, không phải bí mật. Static OOB là cơ
- * chế CHUẨN của BLE Mesh: node phải biết trước khóa 16 byte này thì bắt tay
- * xác thực lúc provisioning mới thành công. PHẢI GIỐNG HỆT giá trị
- * BMT_MESH_STATIC_OOB_VAL trong Gateway/main/bmt_mesh.c và Scanner/main/bmt_mesh.c.
- * ============================================================================ */
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
     0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92};
@@ -106,10 +87,6 @@ static esp_ble_mesh_prov_t s_provision = {
     .static_val = BMT_MESH_STATIC_OOB_VAL,
     .static_val_len = sizeof(BMT_MESH_STATIC_OOB_VAL),
 };
-
-/* ============================================================================
- * CALLBACKS
- * ============================================================================ */
 static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
                          esp_ble_mesh_prov_cb_param_t* param)
 {
@@ -193,10 +170,6 @@ static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
 		bmt_mesh_local_reset();
 	}
 }
-
-/* ============================================================================
- * PUBLIC API
- * ============================================================================ */
 esp_err_t bmt_mesh_init(void)
 {
 	s_mesh_evgrp = xEventGroupCreate();
@@ -282,9 +255,6 @@ static void reset_reboot_fallback_task(void* arg)
 
 void bmt_mesh_local_reset(void)
 {
-	/* [v6.7-fix] Khong con tu set field/reboot o day nua — de
-	 * ESP_BLE_MESH_NODE_PROV_RESET_EVT (mesh_prov_cb) tu reboot dung luc
-	 * reset THUC SU xong. Task fallback la luoi an toan phong event khong ve. */
 	s_reboot_after_reset = true;
 	xTaskCreate(reset_reboot_fallback_task, "bmt_rst_fb", 2048, NULL, 3, NULL);
 	esp_ble_mesh_node_local_reset();

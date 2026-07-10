@@ -8,10 +8,6 @@
 #include "freertos/event_groups.h"
 
 #define BMT_PROV_COMPLETE_BIT BIT0
-
-/* Khởi tạo mesh: đăng ký callback, init composition (health server + vendor
- * model RESET_CMD/OTA_TRIGGER/OTA_RESULT), khôi phục provision từ NVS hoặc
- * enable provisioning mới */
 esp_err_t bmt_mesh_init(void);
 
 EventGroupHandle_t bmt_mesh_evgrp(void);

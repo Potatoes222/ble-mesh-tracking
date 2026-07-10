@@ -1,17 +1,3 @@
-/* ============================================================================
- * BMT (BLE Mesh Tracking) — RELAY firmware  [v2.0-modular]
- * ----------------------------------------------------------------------------
- * v2.0-modular — tách thành module riêng:
- *   bmt_types.h    — struct/opcode dùng chung
- *   bmt_config.h   — định danh Relay (UUID/relay ID), WiFi, OTA URL
- *   bmt_mesh.c/h   — provisioning, models (health + vendor), callbacks, publish
- *   bmt_ota.c/h    — WiFi OTA task, NVS pending flag, báo cáo kết quả
- *   bmt_uart.c/h   — UART command task + monitor task định kỳ
- *
- * Role  : Passive forwarder (mở rộng vùng phủ sóng BLE Mesh)
- * Board : ESP32 DevKitC WROOM-32
- * IDF   : v6.0
- * ============================================================================ */
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -26,10 +12,6 @@
 #include "bmt_uart.h"
 
 static const char* TAG = "BMT_MAIN";
-
-/* ============================================================================
- * BLUETOOTH INIT — platform-level, không thuộc module cụ thể nào
- * ============================================================================ */
 static esp_err_t bluetooth_init(void)
 {
 	ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));

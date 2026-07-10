@@ -16,10 +16,6 @@ typedef struct
 
 /* Số ô tối đa trong bảng — dùng để vòng lặp từ module khác qua bmt_node_table_get(i) */
 int bmt_node_table_capacity(void);
-
-/* Trả về con trỏ trực tiếp vào ô trong bảng (không copy) — cho phép module khác
- * (bmt_mesh.c, bmt_watchdog.c...) sửa trực tiếp is_relay/is_scan/config_done/
- * online/last_seen_ms. NULL nếu idx ngoài phạm vi. */
 bmt_node_t* bmt_node_table_get(int idx);
 
 int bmt_node_table_find(uint16_t addr);

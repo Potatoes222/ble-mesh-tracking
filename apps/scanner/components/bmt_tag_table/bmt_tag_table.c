@@ -17,10 +17,6 @@ typedef struct
 
 static bmt_scan_tag_info_t s_tags[BMT_MAX_TAGS];
 static bmt_kalman_t s_kalman[BMT_MAX_TAGS];
-
-/* ============================================================================
- * KALMAN FILTER
- * ============================================================================ */
 static void kalman_init(bmt_kalman_t* kf, float initial_rssi)
 {
 	kf->q = 0.1f;
@@ -38,10 +34,6 @@ static float kalman_update(bmt_kalman_t* kf, float rssi)
 	kf->p = (1.0f - kf->k) * kf->p;
 	return kf->x;
 }
-
-/* ============================================================================
- * DISTANCE CALCULATION
- * ============================================================================ */
 static float calculate_distance(int8_t tx_power, float rssi_filtered)
 {
 	if (rssi_filtered >= 0)
@@ -121,15 +113,6 @@ void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence)
 	if (diff < 0 && diff > -10)
 		return;
 
-	/* [SECURITY] Anti-replay lớp 2: |diff| vượt ngưỡng hợp lý — không blindly
-	 * accept với "missed" tính kiểu cũ (256 - last - 1 + seq, dễ bị lợi dụng
-	 * bởi 1 gói replay rất cũ khiến phép trừ vòng trông như tiến rất xa),
-	 * mà reset sạch trạng thái track (Kalman, rssi, distance) giống phát
-	 * hiện tag mới, đồng thời log cảnh báo. Trường hợp Tag thật reboot
-	 * (sequence reset về gần 0) cũng rơi vào nhánh này — được xử lý đúng hơn
-	 * bản cũ (reset sạch thay vì cộng dồn số "missed" vô nghĩa). Giới hạn
-	 * còn lại: không phân biệt được reboot thật với 1 lần replay đơn lẻ do
-	 * sequence chỉ 1 byte, không có timestamp — chấp nhận là giới hạn đã biết. */
 	if (diff < -10 || diff > BMT_MAX_SEQ_JUMP)
 	{
 		ESP_LOGW(TAG, "Tag 0x%04X: sequence nhay bat thuong (%u -> %u, diff=%d)"

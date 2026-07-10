@@ -6,22 +6,11 @@
 #include "psa/crypto.h"
 
 static const char* TAG = "BMT_AUTH";
-
-/* [SECURITY] HMAC pre-shared key — PHẢI GIỐNG HỆT giá trị trong
- * Scanner/main/bmt_auth.c (copy y nguyên, không được lệch dù 1 byte).
- * Giá trị dưới đây được sinh ngẫu nhiên bằng CSPRNG (python secrets.token_bytes),
- * KHÔNG phải pattern dễ đoán. Nếu cần đổi key mới, sinh lại và dán vào cả
- * 2 file (Tag + Scanner), rồi flash lại cả 2 phía. */
 static const uint8_t BMT_TAG_HMAC_KEY[16] = {
     0x2C, 0x5C, 0xBE, 0x42, 0x87, 0xAE, 0x95, 0x4A,
     0xDE, 0xEE, 0x0C, 0x6C, 0x8B, 0x74, 0x9C, 0x45};
 
 static psa_key_id_t s_key_id = 0;
-
-/* [FIX] mbedtls 4 (ESP-IDF v6.0.1) đã bỏ các hàm tiện ích mbedtls_md_hmac_*
- * → dùng PSA Crypto API chuẩn. Key import 1 LẦN lúc khởi động, tái sử dụng
- * key_id cho mọi lần tính HMAC sau đó (tránh import/destroy lặp lại mỗi
- * 500ms mỗi lần build_adv_data). */
 void bmt_auth_init(void)
 {
 	psa_status_t st = psa_crypto_init();

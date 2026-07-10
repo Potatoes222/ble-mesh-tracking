@@ -24,19 +24,11 @@
 static const char* TAG = "BMT_OTA";
 
 #define BMT_OTA_NVS_KEY_PENDING "ota_pending"
-
-/* [v6.0-auto-ota] Chu kỳ tự kiểm tra version — không cần Gateway/UART trigger.
- * Mỗi lần chỉ đọc phần header nhỏ đầu file (esp_https_ota_get_img_desc), nếu
- * SHA256/version giống thì bỏ qua ngay không tải tiếp. */
 #define BMT_OTA_AUTO_CHECK_INTERVAL_MS (3 * 60 * 1000)
 
 static volatile bool s_ota_triggered = false;
 static EventGroupHandle_t s_wifi_evgrp = NULL;
 static const int WIFI_CONNECTED_BIT = BIT0;
-
-/* [FIX] Cần lưu lại để dọn dẹp đúng cách khi OTA fail — thiếu bước này khiến
- * lần trigger OTA kế tiếp (không reboot) gọi esp_netif_create_default_wifi_sta()
- * lần 2 trên netif STA còn tồn tại từ lần trước → assert crash. */
 static esp_netif_t* s_sta_netif = NULL;
 static esp_event_handler_instance_t s_evt_any_id = NULL;
 static esp_event_handler_instance_t s_evt_got_ip = NULL;
@@ -45,15 +37,6 @@ bool bmt_ota_is_triggered(void)
 {
 	return s_ota_triggered;
 }
-
-/* ============================================================================
- * NVS — OTA PENDING FLAG
- * ----------------------------------------------------------------------------
- * esp_https_ota() thành công thì reboot ngay — không kịp/không đáng tin cậy
- * để gửi mesh report NGAY TRƯỚC lúc reboot. Giải pháp: đánh dấu "đang chờ
- * báo cáo" vào NVS trước khi reboot, sau khi boot lại vào firmware mới,
- * kiểm tra cờ này rồi mới gửi báo cáo THÀNH CÔNG về Gateway qua mesh.
- * ============================================================================ */
 static void mark_pending(void)
 {
 	nvs_handle_t h;
@@ -158,10 +141,6 @@ static void ota_wifi_task(void* arg)
 		goto ota_fail_wifi;
 	}
 
-	/* [SECURITY] HTTP thuần — không gắn crt_bundle_attach vì không có tác
-	 * dụng với http://, tránh gây hiểu nhầm là đang dùng TLS.
-	 * [v6.0-auto-ota] Dùng bộ API "advanced" để đọc version trong header .bin
-	 * trên server TRƯỚC khi tải hết, so với version đang chạy. */
 	printf("[OTA] WiFi OK — checking firmware version...\n");
 	{
 		esp_http_client_config_t http_cfg = {
@@ -190,7 +169,6 @@ static void ota_wifi_task(void* arg)
 
 		const esp_app_desc_t* cur_desc = esp_app_get_description();
 
-		/* ===== GIAI ĐOẠN 1: SHA256 — nội dung .elf có thật sự khác không ===== */
 		print_sha256_hex("[OTA] Node   SHA256: ", cur_desc->app_elf_sha256, sizeof(cur_desc->app_elf_sha256));
 		print_sha256_hex("[OTA] Server SHA256: ", new_desc.app_elf_sha256, sizeof(new_desc.app_elf_sha256));
 
@@ -203,8 +181,6 @@ static void ota_wifi_task(void* arg)
 		}
 		printf("[OTA] SHA256 differ — node firmware DIFFERS from server firmware, checking version...\n");
 
-		/* ===== GIAI ĐOẠN 2: SHA256 đã khác — so version (mtime nguồn, dạng
-		 * YYYYMMDDHHMMSS) để biết bản nào MỚI HƠN, tránh downgrade. ===== */
 		printf("[OTA] Node   version: %s\n", cur_desc->version);
 		printf("[OTA] Server version: %s\n", new_desc.version);
 
@@ -252,9 +228,6 @@ static void ota_wifi_task(void* arg)
 ota_fail_wifi:
 	esp_wifi_stop();
 ota_fail:
-	/* [FIX] Dọn sạch netif/event handler/event group — bắt buộc trước lần
-	 * OTA kế tiếp (không reboot), nếu không esp_netif_create_default_wifi_sta()
-	 * sẽ assert crash vì netif STA mặc định vẫn còn tồn tại từ lần trước. */
 	if (s_evt_any_id)
 	{
 		esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_evt_any_id);

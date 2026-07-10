@@ -58,9 +58,6 @@ static void uart_cmd_task(void* arg)
 		{
 		case 'r':
 		case 'R':
-			/* [v6.7-fix] bmt_mesh_local_reset() gio tu reboot dung luc reset
-			 * mesh THUC SU xong (qua event), khong con doan mo delay co dinh
-			 * o day nua — tranh reboot som khi NVS chua ghi xong. */
 			printf("\n[UART] Reset mesh — se tu reboot khi xong...\n");
 			bmt_mesh_local_reset();
 			break;
@@ -72,9 +69,6 @@ static void uart_cmd_task(void* arg)
 			{
 				uint8_t id_char = 0;
 				int r;
-				/* [FIX] byte '\r'/'\n' con sot lai tu phim Enter cua lenh 'i'
-				 * truoc do van con trong RX buffer — phai bo qua no, khong thi
-				 * lan bam dau tien luon bi doc nham thanh ID khong hop le. */
 				do
 				{
 					r = uart_read_bytes(UART_NUM_0, &id_char, 1, pdMS_TO_TICKS(10000));
@@ -100,9 +94,6 @@ static void uart_cmd_task(void* arg)
 			printf("MAC        : ");
 			{
 				const uint8_t* uuid = bmt_mesh_uuid();
-				/* [v6.6] MAC nam san trong UUID (byte 4-9, xem bmt_mesh_init)
-				 * — in rieng ra day cho de doc, dung de dien vao ZONE_MAP tren
-				 * ThingsBoard (biet dung scanner nao dang gan phong nao). */
 				for (int i = 4; i < 10; i++)
 					printf("%02x", uuid[i]);
 				printf("\n");

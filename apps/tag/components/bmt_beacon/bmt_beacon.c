@@ -16,23 +16,9 @@
 #include "bmt_auth.h"
 
 static const char* TAG = "BMT_BEACON";
-
-/* ============================================================================
- * GLOBALS
- * ============================================================================ */
 static uint8_t s_sequence = 0;
 static TimerHandle_t s_seq_timer = NULL;
 static bool s_adv_active = false;
-
-/* Raw ADV buffer — 31 bytes (maximum BLE ADV payload)
- *
- * Layout:
- *   [0..2]   Flags:   02 01 06
- *   [3]      Mfr len: 0x1B = 27 (= 1 type + 2 CID + 24 payload)
- *   [4]      Type:    0xFF (Manufacturer Specific)
- *   [5..6]   CID:     E5 02 (Espressif, little-endian)
- *   [7..30]  Payload: bmt_tag_adv_payload_t (24 bytes)
- */
 #define ADV_RAW_LEN 31
 #define ADV_PAYLOAD_OFF 7
 
@@ -72,10 +58,6 @@ static uint8_t s_adv_raw[ADV_RAW_LEN] = {
     0x00,
     0x00,
 };
-
-/* ============================================================================
- * BUILD ADV DATA
- * ============================================================================ */
 static void build_adv_data(void)
 {
 	bmt_tag_adv_payload_t p;
@@ -92,10 +74,6 @@ static void build_adv_data(void)
 
 	memcpy(s_adv_raw + ADV_PAYLOAD_OFF, &p, sizeof(p));
 }
-
-/* ============================================================================
- * ADV PARAMS & START
- * ============================================================================ */
 static esp_ble_adv_params_t s_adv_params = {
     .adv_int_min = 0,
     .adv_int_max = 0,
@@ -121,14 +99,6 @@ static void start_adv_random_interval(void)
 	/* config_adv_data_raw → GAP callback → start_advertising */
 	esp_ble_gap_config_adv_data_raw(s_adv_raw, ADV_RAW_LEN);
 }
-
-/* ============================================================================
- * SEQUENCE TIMER
- *
- * Non-connectable ADV (ADV_NONCONN_IND) không trigger ADV_STOP_COMPLETE_EVT
- * → không thể increment sequence trong callback
- * → dùng FreeRTOS timer ~500ms để increment + restart ADV
- * ============================================================================ */
 static void seq_timer_cb(TimerHandle_t xTimer)
 {
 	(void)xTimer;
@@ -137,10 +107,6 @@ static void seq_timer_cb(TimerHandle_t xTimer)
 	esp_ble_gap_stop_advertising();
 	start_adv_random_interval();
 }
-
-/* ============================================================================
- * GAP CALLBACK
- * ============================================================================ */
 static void gap_event_handler(esp_gap_ble_cb_event_t event,
                               esp_ble_gap_cb_param_t* param)
 {
@@ -174,10 +140,6 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 		break;
 	}
 }
-
-/* ============================================================================
- * BT INIT
- * ============================================================================ */
 static esp_err_t bluetooth_init(void)
 {
 	ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
@@ -195,10 +157,6 @@ static esp_err_t bluetooth_init(void)
 
 	return ESP_OK;
 }
-
-/* ============================================================================
- * PUBLIC API
- * ============================================================================ */
 esp_err_t bmt_beacon_start(void)
 {
 	esp_err_t err = bluetooth_init();
