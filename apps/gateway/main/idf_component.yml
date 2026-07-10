@@ -2,5 +2,5 @@ dependencies:
   idf:
     version: ">=5.0"
   example_init:
-    path: G:\ESP_IDF\.espressif\v6.0.1\esp-idf\examples\bluetooth\esp_ble_mesh\common_components\example_init
+    path: ${IDF_PATH}/examples/bluetooth/esp_ble_mesh/common_components/example_init
   espressif/mqtt: "*"
