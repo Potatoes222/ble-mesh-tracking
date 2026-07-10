@@ -1,0 +1,8 @@
+# Name,    Type,  SubType,  Offset,  Size
+nvs,       data,  nvs,      ,        64K
+phy_init,  data,  phy,      ,        4K
+factory,   app,   factory,  ,        2M
+ota_0,     app,   ota_0,    ,        2M
+ota_1,     app,   ota_1,    ,        2M
+otadata,   data,  ota,      ,        8K
+storage, data, spiffs,      ,        0x400000

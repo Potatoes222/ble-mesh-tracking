@@ -1,0 +1,166 @@
+{
+  "ruleChain": {
+    "name": "ble_tag_zone_detection",
+    "type": "CORE",
+    "firstRuleNodeId": null,
+    "root": false,
+    "debugMode": false,
+    "configuration": null,
+    "additionalInfo": null
+  },
+  "metadata": {
+    "firstNodeIndex": 0,
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Parse and map zone",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "jsScript": "if (msgType !== \"POST_TELEMETRY_REQUEST\") {\n    return {msg: msg, metadata: metadata, msgType: \"IGNORED\"};\n}\nvar ZONE_MAP = {\n    \"86eab91ad6b8\": \"room_1\",\n    \"12a60986e694\": \"room_2\",\n    \"9a01c6842178\": \"room_3\"\n};\nvar ZONE_NUM_MAP = {\n    \"out_of_range\": 0, \"room_1\": 1, \"room_2\": 2, \"room_3\": 3\n};\nvar scannerId = msg.scanner_id;\nvar rssi = msg.rssi;\nif (!scannerId || rssi === undefined || rssi === null) {\n    return {msg: {error: \"missing scanner_id or rssi\"}, metadata: metadata, msgType: \"INVALID\"};\n}\nvar zone = ZONE_MAP[scannerId] || \"out_of_range\";\nmsg.zone = zone;\nmsg.scanner_id = scannerId;\nmsg.rssi = rssi;\nmsg.zone_num = ZONE_NUM_MAP[zone];\nreturn {msg: msg, metadata: metadata, msgType: msgType};",
+          "scriptLang": "JS",
+          "tbelScript": ""
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 260,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "Fetch tag state",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "fetchTo": "METADATA",
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "current_zone",
+            "current_rssi",
+            "current_scanner",
+            "rssi_scan_01",
+            "rssi_scan_02",
+            "rssi_scan_03",
+            "ts_scan_01",
+            "ts_scan_02",
+            "ts_scan_03"
+          ],
+          "latestTsKeyNames": [],
+          "tellFailureIfAbsent": false,
+          "getLatestValueWithTs": false
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 520,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Apply hysteresis",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "jsScript": "var HYSTERESIS_DBM = 5;\nvar SCANNER_VALID_MS = 10000;\nvar ZONE_MAP = {\n    \"86eab91ad6b8\": \"room_1\",\n    \"12a60986e694\": \"room_2\",\n    \"9a01c6842178\": \"room_3\"\n};\nvar ZONE_NUM_MAP = {\n    \"out_of_range\": 0, \"room_1\": 1, \"room_2\": 2, \"room_3\": 3\n};\nvar SCANNERS = [\"86eab91ad6b8\", \"12a60986e694\", \"9a01c6842178\"];\nvar now = Date.now();\nvar newScannerId = msg.scanner_id;\nvar newRssi = parseInt(msg.rssi);\nvar snap = {};\nfor (var i = 0; i < SCANNERS.length; i++) {\n    var s = SCANNERS[i];\n    var rKey = \"ss_rssi_\" + s;\n    var tKey = \"ss_ts_\" + s;\n    if (metadata[rKey] !== undefined && metadata[tKey] !== undefined) {\n        snap[s] = { rssi: parseInt(metadata[rKey]), ts: parseInt(metadata[tKey]) };\n    }\n}\nsnap[newScannerId] = { rssi: newRssi, ts: now };\nvar bestScanner = null;\nvar bestRssi = -999;\nfor (var j = 0; j < SCANNERS.length; j++) {\n    var sc = SCANNERS[j];\n    if (snap[sc] && (now - snap[sc].ts) <= SCANNER_VALID_MS) {\n        if (snap[sc].rssi > bestRssi) { bestRssi = snap[sc].rssi; bestScanner = sc; }\n    }\n}\nvar curZone = metadata.ss_current_zone;\nvar finalZone, finalRssi, finalScanner;\nif (!bestScanner) {\n    finalZone = \"out_of_range\"; finalRssi = -999; finalScanner = \"\";\n} else {\n    var bestZone = ZONE_MAP[bestScanner] || \"out_of_range\";\n    if (!curZone || curZone === \"out_of_range\") {\n        finalZone = bestZone; finalRssi = bestRssi; finalScanner = bestScanner;\n    } else if (bestZone === curZone) {\n        finalZone = curZone; finalRssi = bestRssi; finalScanner = bestScanner;\n    } else {\n        var curZoneScanner = null;\n        for (var k = 0; k < SCANNERS.length; k++) {\n            if (ZONE_MAP[SCANNERS[k]] === curZone) { curZoneScanner = SCANNERS[k]; break; }\n        }\n        var curZoneRssi = -999;\n        if (curZoneScanner && snap[curZoneScanner] && (now - snap[curZoneScanner].ts) <= SCANNER_VALID_MS) {\n            curZoneRssi = snap[curZoneScanner].rssi;\n        }\n        if ((bestRssi - curZoneRssi) >= HYSTERESIS_DBM) {\n            finalZone = bestZone; finalRssi = bestRssi; finalScanner = bestScanner;\n        } else {\n            finalZone = curZone; finalRssi = curZoneRssi; finalScanner = curZoneScanner;\n        }\n    }\n}\nmsg.current_zone = finalZone;\nmsg.current_rssi = finalRssi;\nmsg.current_scanner = finalScanner;\nmsg.current_zone_num = ZONE_NUM_MAP[finalZone];\nmsg.last_seen = now;\nmsg.rssi_scan_01 = snap[SCANNERS[0]] ? snap[SCANNERS[0]].rssi : null;\nmsg.rssi_scan_02 = snap[SCANNERS[1]] ? snap[SCANNERS[1]].rssi : null;\nmsg.rssi_scan_03 = snap[SCANNERS[2]] ? snap[SCANNERS[2]].rssi : null;\nmsg.ts_scan_01 = snap[SCANNERS[0]] ? snap[SCANNERS[0]].ts : null;\nmsg.ts_scan_02 = snap[SCANNERS[1]] ? snap[SCANNERS[1]].ts : null;\nmsg.ts_scan_03 = snap[SCANNERS[2]] ? snap[SCANNERS[2]].ts : null;\nreturn {msg: msg, metadata: metadata, msgType: msgType};",
+          "scriptLang": "JS",
+          "tbelScript": ""
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 780,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Build attrs payload",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "jsScript": "var attrsPayload = {\n    current_zone: msg.current_zone,\n    current_rssi: msg.current_rssi,\n    current_scanner: msg.current_scanner,\n    last_seen: msg.last_seen\n};\nif (msg.rssi_scan_01 !== null) { attrsPayload.rssi_scan_01 = msg.rssi_scan_01; attrsPayload.ts_scan_01 = msg.ts_scan_01; }\nif (msg.rssi_scan_02 !== null) { attrsPayload.rssi_scan_02 = msg.rssi_scan_02; attrsPayload.ts_scan_02 = msg.ts_scan_02; }\nif (msg.rssi_scan_03 !== null) { attrsPayload.rssi_scan_03 = msg.rssi_scan_03; attrsPayload.ts_scan_03 = msg.ts_scan_03; }\nreturn {msg: attrsPayload, metadata: metadata, msgType: \"POST_ATTRIBUTES_REQUEST\"};",
+          "scriptLang": "JS",
+          "tbelScript": ""
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 1040,
+          "layoutY": 80
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "Save tag state",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 2,
+        "configuration": {
+          "scope": "SERVER_SCOPE",
+          "notifyDevice": false,
+          "sendAttributesUpdatedNotification": false,
+          "updateAttributesOnlyOnValueChange": false
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 1300,
+          "layoutY": 80
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode",
+        "name": "Save zone history",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "defaultTTL": 0,
+          "skipLatestPersistence": false,
+          "useServerTs": false
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 1301,
+          "layoutY": 255
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Build TS payload",
+        "debugMode": false,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "var tsPayload = {\n    current_zone_num: msg.current_zone_num,\n    current_rssi: msg.current_rssi\n};\nreturn {msg: tsPayload, metadata: metadata, msgType: \"POST_TELEMETRY_REQUEST\"};",
+          "tbelScript": "var tsPayload = {\n    current_zone_num: msg.current_zone_num,\n    current_rssi: msg.current_rssi\n};\nreturn {msg: tsPayload, metadata: metadata, msgType: \"POST_TELEMETRY_REQUEST\"};"
+        },
+        "additionalInfo": {
+          "description": "",
+          "layoutX": 1046,
+          "layoutY": 251
+        }
+      }
+    ],
+    "connections": [
+      { "fromIndex": 0, "toIndex": 1, "type": "Success" },
+      { "fromIndex": 1, "toIndex": 2, "type": "Success" },
+      { "fromIndex": 2, "toIndex": 3, "type": "Success" },
+      { "fromIndex": 2, "toIndex": 6, "type": "Success" },
+      { "fromIndex": 3, "toIndex": 4, "type": "Success" },
+      { "fromIndex": 6, "toIndex": 5, "type": "Success" }
+    ],
+    "ruleChainConnections": null
+  }
+}

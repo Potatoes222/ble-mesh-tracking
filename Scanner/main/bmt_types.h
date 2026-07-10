@@ -1,0 +1,64 @@
+#pragma once
+
+#include <stdint.h>
+
+#include "esp_ble_mesh_defs.h"
+
+/* ============================================================================
+ * BLE MESH VENDOR MODEL — opcode & struct dùng chung
+ * ============================================================================ */
+#define BMT_CID_ESP                     0x02E5
+#define BMT_VND_MODEL_ID                0x0000
+
+#define BMT_OP_VND_TAG_STATUS           ESP_BLE_MESH_MODEL_OP_3(0x00, BMT_CID_ESP)
+#define BMT_OP_VND_OTA_TRIGGER          ESP_BLE_MESH_MODEL_OP_3(0x06, BMT_CID_ESP)  /* [v2.5] lệnh bật WiFi OTA */
+#define BMT_OP_VND_RESET_CMD            ESP_BLE_MESH_MODEL_OP_3(0x05, BMT_CID_ESP)
+#define BMT_OP_VND_OTA_RESULT           ESP_BLE_MESH_MODEL_OP_3(0x07, BMT_CID_ESP)  /* [v2.7] báo cáo OTA thành công/thất bại về Gateway */
+#define BMT_OP_VND_OTA_KEY_PUSH         ESP_BLE_MESH_MODEL_OP_3(0x08, BMT_CID_ESP)  /* [SECURITY] key HMAC beacon moi tu Gateway, da duoc mesh AppKey ma hoa */
+
+#define BMT_NODE_TYPE                   0x01   /* scanner (dùng để lọc target trong OTA-beacon) */
+
+#pragma pack(1)
+typedef struct {
+    uint8_t  scanner_id;
+    uint8_t  tag_type;
+    uint16_t tag_id;
+    int8_t   rssi;
+    int16_t  distance_dm;
+    uint8_t  loss_pct;
+} bmt_tag_report_t;
+
+typedef struct {
+    uint8_t status;   /* 0 = OTA thành công, khác 0 = thất bại */
+} bmt_ota_result_t;
+#pragma pack()
+
+/* ============================================================================
+ * TAG ADV PROTOCOL
+ * ============================================================================ */
+#define BMT_TAG_TYPE_PERSON             0x01
+#define BMT_TAG_TYPE_ASSET              0x02
+#define BMT_CID_ESPRESSIF               0x02E5
+#define BMT_CID_APPLE                   0x004C
+#define BMT_TAG_MAJOR_PERSON            0x0001
+#define BMT_TAG_MAJOR_ASSET             0x0002
+#define BMT_PHONE_TX_POWER_1M           (-59)
+
+#pragma pack(1)
+typedef struct {
+    uint8_t  uuid[16];
+    uint16_t major;
+    uint16_t minor;
+    int8_t   tx_power;
+    uint8_t  sequence;
+    uint16_t mac16;
+} bmt_tag_adv_payload_t;
+
+typedef struct {
+    uint8_t  tag_type;
+    uint16_t tag_id;
+    int8_t   tx_power;
+    uint8_t  sequence;
+    uint16_t mac16;
+} bmt_tag_payload_t;
+#pragma pack()

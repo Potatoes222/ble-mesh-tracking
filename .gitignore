@@ -1,14 +1,9 @@
-# Bỏ qua thư mục build
+# ESP-IDF build output
 build/
-*/build/
-*/*/build/
-
-# Bỏ qua các file cấu hình máy cá nhân
+managed_components/
 sdkconfig.old
-sdkconfig
-# giữ sdkconfig.defaults + sdkconfig.defaults.* trong git
-!sdkconfig.defaults
-!sdkconfig.defaults.*
+dependencies.lock
 
-# Bỏ qua thư mục ẩn của VS Code (tuỳ chọn)
+# IDE / OS
 .vscode/
+Thumbs.db

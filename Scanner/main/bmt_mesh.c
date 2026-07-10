@@ -1,0 +1,327 @@
+#include "bmt_mesh.h"
+
+#include <string.h>
+
+#include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_system.h"
+
+#include "esp_ble_mesh_defs.h"
+#include "esp_ble_mesh_common_api.h"
+#include "esp_ble_mesh_networking_api.h"
+#include "esp_ble_mesh_provisioning_api.h"
+#include "esp_ble_mesh_config_model_api.h"
+#include "esp_ble_mesh_generic_model_api.h"
+
+#include "freertos/task.h"
+
+#include "bmt_types.h"
+#include "bmt_tag_table.h"
+#include "bmt_auth.h"
+#include "bmt_ota.h"
+#include "bmt_scan_core.h"
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
+static const char *TAG = "BMT_MESH";
+
+static uint16_t           s_node_addr = 0x0000;
+static uint16_t           s_net_idx   = 0xFFFF;
+static uint16_t           s_app_idx   = 0xFFFF;
+static EventGroupHandle_t s_mesh_evgrp;
+
+/* [v6.7-fix] esp_ble_mesh_node_local_reset() la ham BAT DONG BO — chi thuc su
+ * xoa xong NVS mesh khi event ESP_BLE_MESH_NODE_PROV_RESET_EVT ban ve, KHONG
+ * dam bao xong trong 1 khoang delay co dinh nao. Truoc day UART 'r' va
+ * RESET_CMD tu delay 500ms roi reboot ngay — neu chua kip xong, reboot len
+ * van con nghi da provision (dung trieu chung da gap: 'r' khong tac dung,
+ * phai bam reset vat ly may lan moi an). Gio doi dung event nay moi reboot,
+ * co fallback timeout phong khi event khong ve (VD loi mesh stack). */
+static volatile bool s_reboot_after_reset = false;
+
+/* [FIX-1] UUID không hardcode — sinh từ MAC trong bmt_mesh_init()
+ * Layout: "SCAN"(4B) + MAC(6B) + 0x00(5B) + scanner_id(1B)
+ * → Mỗi chip có UUID riêng theo MAC → không bao giờ trùng */
+static uint8_t s_scan_uuid[16] = {
+    0x53, 0x43, 0x41, 0x4E,   /* "SCAN" — gateway dùng để nhận ra scanner */
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00,
+    0x00,
+};
+
+/* ============================================================================
+ * MESH MODELS
+ * ============================================================================ */
+static esp_ble_mesh_cfg_srv_t s_cfg_server = {
+    .net_transmit     = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .relay            = ESP_BLE_MESH_RELAY_ENABLED,
+    .relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20),
+    .beacon           = ESP_BLE_MESH_BEACON_ENABLED,
+    .gatt_proxy       = ESP_BLE_MESH_GATT_PROXY_ENABLED,
+    .friend_state     = ESP_BLE_MESH_FRIEND_NOT_SUPPORTED,
+    .default_ttl      = 7,
+};
+
+ESP_BLE_MESH_MODEL_PUB_DEFINE(s_vnd_pub, sizeof(bmt_tag_report_t) + 4, ROLE_NODE);
+
+static esp_ble_mesh_model_op_t s_vnd_ops[] = {
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_TAG_STATUS,  sizeof(bmt_tag_report_t)),
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_OTA_TRIGGER, 1),
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_RESET_CMD,   1),
+    ESP_BLE_MESH_MODEL_OP(BMT_OP_VND_OTA_RESULT,  sizeof(bmt_ota_result_t)),
+    ESP_BLE_MESH_MODEL_OP_END,
+};
+
+static esp_ble_mesh_model_t s_vnd_models[] = {
+    ESP_BLE_MESH_VENDOR_MODEL(BMT_CID_ESP, BMT_VND_MODEL_ID,
+                              s_vnd_ops, &s_vnd_pub, NULL),
+};
+
+static esp_ble_mesh_model_t s_root_models[] = {
+    ESP_BLE_MESH_MODEL_CFG_SRV(&s_cfg_server),
+};
+
+static esp_ble_mesh_elem_t s_elements[] = {
+    ESP_BLE_MESH_ELEMENT(0, s_root_models, s_vnd_models),
+};
+
+static esp_ble_mesh_comp_t s_composition = {
+    .cid           = BMT_CID_ESP,
+    .element_count = ARRAY_SIZE(s_elements),
+    .elements      = s_elements,
+};
+
+/* ============================================================================
+ * SECURITY — Static OOB provisioning authentication  [v5.1-security]
+ * ----------------------------------------------------------------------------
+ * Trước đây Gateway nhận diện Scanner hợp lệ chỉ qua 4 byte đầu UUID "SCAN" —
+ * hằng số công khai trong source code, không phải bí mật. Static OOB là cơ
+ * chế CHUẨN của BLE Mesh: node phải biết trước khóa 16 byte này thì bắt tay
+ * xác thực lúc provisioning mới thành công. PHẢI GIỐNG HỆT giá trị
+ * BMT_MESH_STATIC_OOB_VAL trong Gateway/main/bmt_mesh.c và Relay/main/bmt_mesh.c.
+ * ============================================================================ */
+static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
+    0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
+    0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92
+};
+
+static esp_ble_mesh_prov_t s_provision = {
+    .uuid           = s_scan_uuid,
+    .static_val     = BMT_MESH_STATIC_OOB_VAL,
+    .static_val_len = sizeof(BMT_MESH_STATIC_OOB_VAL),
+};
+
+/* ============================================================================
+ * CALLBACKS
+ * ============================================================================ */
+static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
+                         esp_ble_mesh_prov_cb_param_t *param)
+{
+    switch (event) {
+    case ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT:
+        s_net_idx  = param->node_prov_complete.net_idx;
+        s_node_addr = param->node_prov_complete.addr;
+        ESP_LOGI(TAG, "Provisioned! addr=0x%04x", s_node_addr);
+        xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
+        break;
+    case ESP_BLE_MESH_NODE_PROV_RESET_EVT:
+        s_node_addr = 0x0000;
+        s_net_idx   = 0xFFFF;
+        s_app_idx   = 0xFFFF;
+        xEventGroupClearBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
+        if (s_reboot_after_reset) {
+            /* [v6.7-fix] Reset mesh NVS THUC SU da xong (event nay la bang
+             * chung) — gio moi reboot an toan, khong con doan mo 500ms nua. */
+            ESP_LOGW(TAG, "[RESET] Local reset COMPLETE — rebooting now");
+            s_reboot_after_reset = false;
+            vTaskDelay(pdMS_TO_TICKS(300));
+            esp_restart();
+            return;
+        }
+        esp_ble_mesh_node_prov_enable(
+            ESP_BLE_MESH_PROV_ADV | ESP_BLE_MESH_PROV_GATT);
+        break;
+    default: break;
+    }
+}
+
+static void mesh_cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
+                               esp_ble_mesh_cfg_server_cb_param_t *param)
+{
+    if (event != ESP_BLE_MESH_CFG_SERVER_STATE_CHANGE_EVT) return;
+    switch (param->ctx.recv_op) {
+    case ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD:
+        s_app_idx = param->value.state_change.appkey_add.app_idx;
+        ESP_LOGI(TAG, "=== AppKey received! idx=0x%04x — Ready! ===", s_app_idx);
+        break;
+    case ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND:
+        ESP_LOGI(TAG, "Model AppKey bind done");
+        break;
+    default: break;
+    }
+}
+
+static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
+                                 esp_ble_mesh_model_cb_param_t *param)
+{
+    if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param) return;
+
+    uint32_t opcode = param->model_operation.opcode;
+    uint16_t src    = param->model_operation.ctx->addr;
+
+    /* [v2.5] OTA_TRIGGER: nhận lệnh → nhờ bmt_ota spawn task bật WiFi
+     * KHÔNG làm OTA trong callback (block BLE host task) */
+    if (opcode == BMT_OP_VND_OTA_TRIGGER) {
+        ESP_LOGW(TAG, "[OTA] OTA_TRIGGER received from 0x%04x — starting WiFi OTA", src);
+        bmt_ota_trigger();
+        return;
+    }
+    if (opcode == BMT_OP_VND_RESET_CMD) {
+        /* [v6.7-fix] Dung chung bmt_mesh_local_reset() — tu reboot dung luc
+         * reset THUC SU xong qua event, khong con delay co dinh doan mo. */
+        ESP_LOGW(TAG, "[VND] RESET_CMD — resetting mesh, se tu reboot khi xong...");
+        vTaskDelay(pdMS_TO_TICKS(300));
+        bmt_mesh_local_reset();
+        return;
+    }
+    if (opcode == BMT_OP_VND_OTA_KEY_PUSH) {
+        if (param->model_operation.length == 16) {
+            ESP_LOGW(TAG, "[SECURITY] OTA_KEY_PUSH nhan tu 0x%04x — rotate key beacon", src);
+            bmt_auth_set_ota_beacon_key(param->model_operation.msg, 16);
+        } else {
+            ESP_LOGE(TAG, "[SECURITY] OTA_KEY_PUSH sai do dai: %d", param->model_operation.length);
+        }
+        return;
+    }
+}
+
+/* ============================================================================
+ * PUBLIC API
+ * ============================================================================ */
+esp_err_t bmt_mesh_init(void)
+{
+    s_mesh_evgrp = xEventGroupCreate();
+
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    memcpy(&s_scan_uuid[4], mac, 6);
+    s_scan_uuid[15] = bmt_scan_core_scanner_id();
+
+    ESP_LOGI(TAG, "MAC  : %02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ESP_LOGI(TAG, "UUID : SCAN+%02X%02X%02X%02X%02X%02X+...+%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+             bmt_scan_core_scanner_id());
+
+    esp_ble_mesh_register_prov_callback(mesh_prov_cb);
+    esp_ble_mesh_register_config_server_callback(mesh_cfg_server_cb);
+    esp_ble_mesh_register_custom_model_callback(mesh_custom_model_cb);
+
+    esp_err_t err = esp_ble_mesh_init(&s_provision, &s_composition);
+    if (err != ESP_OK) return err;
+
+    if (esp_ble_mesh_node_is_provisioned()) {
+        ESP_LOGI(TAG, "Already provisioned (restored from NVS)");
+        s_node_addr = 0x00FF;   /* sentinel: provisioned, addr thật do stack quản lý */
+        s_app_idx   = 0x0000;
+        xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
+        ESP_LOGI(TAG, "[MESH] NVS restore OK | scanner_id=0x%02X | app_idx=0x%04X",
+                 bmt_scan_core_scanner_id(), s_app_idx);
+    } else {
+        err = esp_ble_mesh_node_prov_enable(ESP_BLE_MESH_PROV_ADV | ESP_BLE_MESH_PROV_GATT);
+        if (err != ESP_OK) return err;
+        ESP_LOGI(TAG, "Scanner ID=0x%02X | Waiting provision...", bmt_scan_core_scanner_id());
+    }
+    return ESP_OK;
+}
+
+EventGroupHandle_t bmt_mesh_evgrp(void) { return s_mesh_evgrp; }
+uint16_t bmt_mesh_node_addr(void)       { return s_node_addr; }
+uint16_t bmt_mesh_app_idx(void)         { return s_app_idx; }
+const uint8_t *bmt_mesh_uuid(void)      { return s_scan_uuid; }
+
+void bmt_mesh_publish_tags(void)
+{
+    if (s_node_addr == 0x0000) return;
+    if (s_app_idx   == 0xFFFF) return;
+
+    int published = 0;
+    for (int i = 0; i < BMT_MAX_TAGS; i++) {
+        const bmt_scan_tag_info_t *t = bmt_tag_table_at(i);
+        if (!t) continue;
+
+        uint32_t total    = t->total_received + t->total_missed;
+        uint8_t  loss_pct = (total > 0) ? (uint8_t)(t->total_missed * 100 / total) : 0;
+        int16_t  dist_dm  = (int16_t)(t->distance * 10.0f);
+        if (dist_dm < 0) dist_dm = 0;
+
+        bmt_tag_report_t report = {
+            .scanner_id  = bmt_scan_core_scanner_id(),
+            .tag_type    = t->tag_type,
+            .tag_id      = t->tag_id,
+            .rssi        = (int8_t)t->rssi_filtered,
+            .distance_dm = dist_dm,
+            .loss_pct    = loss_pct,
+        };
+
+        s_vnd_models[0].pub->publish_addr = 0x0001;
+        s_vnd_models[0].pub->app_idx      = s_app_idx;
+        s_vnd_models[0].pub->ttl          = 7;
+
+        esp_err_t err = esp_ble_mesh_model_publish(
+            &s_vnd_models[0], BMT_OP_VND_TAG_STATUS,
+            sizeof(report), (uint8_t *)&report, ROLE_NODE);
+
+        if (err == ESP_OK) {
+            published++;
+            ESP_LOGI(TAG, "[Mesh] Published 0x%04X rssi=%d dist=%.1fm loss=%u%%",
+                     report.tag_id, report.rssi, dist_dm / 10.0f, loss_pct);
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (published == 0) ESP_LOGD(TAG, "[Mesh] No tags");
+}
+
+esp_err_t bmt_mesh_report_ota_result(uint8_t status)
+{
+    if (s_node_addr == 0x0000 || s_app_idx == 0xFFFF) {
+        ESP_LOGW(TAG, "[OTA] Chua provision, khong gui duoc bao cao ket qua OTA");
+        return ESP_ERR_INVALID_STATE;
+    }
+    bmt_ota_result_t r = { .status = status };
+    s_vnd_models[0].pub->publish_addr = 0x0001;
+    s_vnd_models[0].pub->app_idx      = s_app_idx;
+    s_vnd_models[0].pub->ttl          = 7;
+    esp_err_t e = esp_ble_mesh_model_publish(&s_vnd_models[0], BMT_OP_VND_OTA_RESULT,
+                                             sizeof(r), (uint8_t *)&r, ROLE_NODE);
+    ESP_LOGI(TAG, "[OTA] Bao cao ket qua status=%u: %s", status,
+             e == ESP_OK ? "sent" : esp_err_to_name(e));
+    return e;
+}
+
+static void reset_reboot_fallback_task(void *arg)
+{
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    if (s_reboot_after_reset) {
+        ESP_LOGW(TAG, "[RESET] Fallback timeout — event reset khong ve kip trong 5s, "
+                 "reboot cuong buc (co the reset chua kip ghi xong NVS)");
+        esp_restart();
+    }
+    vTaskDelete(NULL);
+}
+
+void bmt_mesh_local_reset(void)
+{
+    /* [v6.7-fix] KHONG con tu delay-roi-reboot o day nua — de
+     * ESP_BLE_MESH_NODE_PROV_RESET_EVT (mesh_prov_cb) tu reboot dung luc
+     * reset THUC SU xong. Task fallback ben duoi chi la luoi an toan phong
+     * khi event khong ve vi ly do gi do (khong de treo vinh vien). */
+    s_reboot_after_reset = true;
+    xTaskCreate(reset_reboot_fallback_task, "bmt_rst_fb", 2048, NULL, 3, NULL);
+    esp_ble_mesh_node_local_reset();
+}
