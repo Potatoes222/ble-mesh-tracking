@@ -11,8 +11,6 @@
 #include "bmt_mqtt.h"
 #include "bmt_node_table.h"
 #include "bmt_zone.h"
-
-#define BMT_MAX_SEEN_TAGS 16
 static void tb_connect_device(const char* dev, const char* profile)
 {
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
@@ -74,6 +72,9 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	if (!r)
 		return;
 
+	/* Check truoc get_or_add de biet co phai tag moi khong — dung cho quyet
+	 * dinh connect/set_role voi TB o duoi. */
+	bool was_new = (bmt_zone_track_find(r->tag_id) == NULL);
 	bmt_tag_track_t* t = bmt_zone_track_get_or_add(r->tag_id, r->tag_type);
 	if (!t)
 		return;
@@ -102,18 +103,8 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	char dev[32], json[384];
 	snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, r->tag_id);
 
-	static uint16_t s_seen_tags[BMT_MAX_SEEN_TAGS] = {0};
-	static int s_seen_count = 0;
-	bool first_seen = true;
-	for (int i = 0; i < s_seen_count; i++)
-		if (s_seen_tags[i] == r->tag_id)
-		{
-			first_seen = false;
-			break;
-		}
-	if (first_seen && s_seen_count < BMT_MAX_SEEN_TAGS)
+	if (was_new)
 	{
-		s_seen_tags[s_seen_count++] = r->tag_id;
 		tb_connect_device(dev, BMT_PROFILE_TAG);
 		tb_set_role(dev, BMT_ROLE_TAG);
 	}
