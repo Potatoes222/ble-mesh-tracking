@@ -47,50 +47,53 @@ static void data_watchdog_task(void* arg)
 		return;
 	}
 
-	uint32_t snap = bmt_mesh_get_received_count();
-	ESP_LOGI(TAG, "NVS nodes detected — watching %ds... (snap=%" PRIu32 ")",
-	         BMT_WDG_TIMEOUT_MS / 1000, snap);
-
-	vTaskDelay(pdMS_TO_TICKS(BMT_WDG_TIMEOUT_MS));
-
-	if (bmt_mesh_get_received_count() > snap)
+	while (1)
 	{
-		ESP_LOGI(TAG, "Mesh OK (%" PRIu32 " -> %" PRIu32 ") — watchdog done",
-		         snap, bmt_mesh_get_received_count());
-		vTaskDelete(NULL);
-		return;
-	}
+		uint32_t snap = bmt_mesh_get_received_count();
+		ESP_LOGI(TAG, "NVS nodes detected — watching %ds... (snap=%" PRIu32 ")",
+		         BMT_WDG_TIMEOUT_MS / 1000, snap);
 
-	ESP_LOGW(TAG, "============================================");
-	ESP_LOGW(TAG, "No mesh data in %ds — starting reset cycle", BMT_WDG_TIMEOUT_MS / 1000);
-	ESP_LOGW(TAG, "============================================");
+		vTaskDelay(pdMS_TO_TICKS(BMT_WDG_TIMEOUT_MS));
 
-	uint8_t dummy = 0;
-	int sent_ok = 0;
-	for (int i = 0; i < BMT_WDG_RESET_TRIES; i++)
-	{
-		if (bmt_ota_is_running())
+		if (bmt_mesh_get_received_count() > snap)
 		{
-			ESP_LOGW(TAG, "RESET_CMD [%d/%d]: skipped (OTA running)", i + 1, BMT_WDG_RESET_TRIES);
+			ESP_LOGI(TAG, "Mesh OK (%" PRIu32 " -> %" PRIu32 ") — watchdog done",
+			         snap, bmt_mesh_get_received_count());
+			vTaskDelete(NULL);
+			return;
 		}
-		else
-		{
-			esp_err_t e = bmt_mesh_publish(0xFFFF, BMT_OP_VND_RESET_CMD, &dummy, sizeof(dummy));
-			if (e == ESP_OK)
-				sent_ok++;
-			ESP_LOGW(TAG, "RESET_CMD [%d/%d]: %s (ok=%d)",
-			         i + 1, BMT_WDG_RESET_TRIES, e == ESP_OK ? "sent" : esp_err_to_name(e), sent_ok);
-		}
-		vTaskDelay(pdMS_TO_TICKS(BMT_WDG_RESET_GAP_MS));
-	}
 
-	if (sent_ok == 0)
-	{
-		ESP_LOGE(TAG, "RESET_CMD that bai ca %d lan — mesh/radio co ve chua san sang, "
-		              "HUY chu trinh reset (khong xoa bookkeeping) de tranh wipe oan",
-		         BMT_WDG_RESET_TRIES);
-		vTaskDelete(NULL);
-		return;
+		ESP_LOGW(TAG, "============================================");
+		ESP_LOGW(TAG, "No mesh data in %ds — starting reset cycle", BMT_WDG_TIMEOUT_MS / 1000);
+		ESP_LOGW(TAG, "============================================");
+
+		uint8_t dummy = 0;
+		int sent_ok = 0;
+		for (int i = 0; i < BMT_WDG_RESET_TRIES; i++)
+		{
+			if (bmt_ota_is_running())
+			{
+				ESP_LOGW(TAG, "RESET_CMD [%d/%d]: skipped (OTA running)", i + 1, BMT_WDG_RESET_TRIES);
+			}
+			else
+			{
+				esp_err_t e = bmt_mesh_publish(0xFFFF, BMT_OP_VND_RESET_CMD, &dummy, sizeof(dummy));
+				if (e == ESP_OK)
+					sent_ok++;
+				ESP_LOGW(TAG, "RESET_CMD [%d/%d]: %s (ok=%d)",
+				         i + 1, BMT_WDG_RESET_TRIES, e == ESP_OK ? "sent" : esp_err_to_name(e), sent_ok);
+			}
+			vTaskDelay(pdMS_TO_TICKS(BMT_WDG_RESET_GAP_MS));
+		}
+
+		if (sent_ok == 0)
+		{
+			ESP_LOGE(TAG, "RESET_CMD that bai ca %d lan — mesh/radio co ve chua san sang, "
+			              "retry sau %ds",
+			         BMT_WDG_RESET_TRIES, BMT_WDG_TIMEOUT_MS / 1000);
+			continue;
+		}
+		break;
 	}
 
 	ESP_LOGW(TAG, "Waiting %ds for nodes to complete reset + reboot...", BMT_WDG_NODE_WAIT_MS / 1000);
