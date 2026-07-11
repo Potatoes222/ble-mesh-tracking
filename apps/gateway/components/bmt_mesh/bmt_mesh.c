@@ -14,6 +14,7 @@
 #include "esp_ble_mesh_provisioning_api.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "freertos/task.h"
 
 #include "bmt_config.h"
@@ -44,6 +45,27 @@ static uint8_t s_net_key[16];
 static uint8_t s_app_key[16];
 
 static volatile uint32_t s_mesh_received = 0;
+
+#define BMT_CFG_ACK_BIT BIT0
+#define BMT_CFG_ACK_TIMEOUT_MS 10000
+static EventGroupHandle_t s_cfg_ack_evgrp = NULL;
+static volatile uint16_t s_cfg_wait_addr = 0;
+static volatile uint32_t s_cfg_wait_opcode = 0;
+
+static bool wait_cfg_ack(uint16_t addr, uint32_t opcode)
+{
+	if (!s_cfg_ack_evgrp)
+		return false;
+	xEventGroupClearBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT);
+	s_cfg_wait_addr = addr;
+	s_cfg_wait_opcode = opcode;
+	EventBits_t bits = xEventGroupWaitBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT,
+	                                       pdTRUE, pdFALSE,
+	                                       pdMS_TO_TICKS(BMT_CFG_ACK_TIMEOUT_MS));
+	s_cfg_wait_addr = 0;
+	s_cfg_wait_opcode = 0;
+	return (bits & BMT_CFG_ACK_BIT) != 0;
+}
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
     0x47, 0xE8, 0x1C, 0x63, 0xAF, 0x29, 0x5D, 0x92};
@@ -124,9 +146,21 @@ static void scan_config_task(void* arg)
 		s.app_key_add.app_idx = s_app_key_idx;
 		memcpy(s.app_key_add.app_key, s_app_key, 16);
 		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		ESP_LOGI(TAG, "[SCN_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+		if (e != ESP_OK)
+		{
+			ESP_LOGE(TAG, "[SCN_CFG] Step1 APP_KEY_ADD send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
+			vTaskDelete(NULL);
+			return;
+		}
+		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD))
+		{
+			ESP_LOGE(TAG, "[SCN_CFG] Step1 APP_KEY_ADD no ACK from 0x%04x in %ds — abort",
+			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
+			vTaskDelete(NULL);
+			return;
+		}
+		ESP_LOGI(TAG, "[SCN_CFG] Step1 APP_KEY_ADD ACK from 0x%04x", addr);
 	}
-	vTaskDelay(pdMS_TO_TICKS(3000));
 	{
 		esp_ble_mesh_client_common_param_t c = {0};
 		esp_ble_mesh_cfg_client_set_state_t s = {0};
@@ -142,9 +176,21 @@ static void scan_config_task(void* arg)
 		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
 		s.model_app_bind.company_id = BMT_CID_ESP;
 		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		ESP_LOGI(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+		if (e != ESP_OK)
+		{
+			ESP_LOGE(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
+			vTaskDelete(NULL);
+			return;
+		}
+		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND))
+		{
+			ESP_LOGE(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND no ACK from 0x%04x in %ds — abort",
+			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
+			vTaskDelete(NULL);
+			return;
+		}
+		ESP_LOGI(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND ACK from 0x%04x", addr);
 	}
-	vTaskDelay(pdMS_TO_TICKS(2000));
 
 	int idx = bmt_node_table_find(addr);
 	if (idx >= 0)
@@ -179,9 +225,21 @@ static void relay_config_task(void* arg)
 		s.app_key_add.app_idx = s_app_key_idx;
 		memcpy(s.app_key_add.app_key, s_app_key, 16);
 		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		ESP_LOGI(TAG, "[RLY_CFG] Step1 APP_KEY_ADD to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+		if (e != ESP_OK)
+		{
+			ESP_LOGE(TAG, "[RLY_CFG] Step1 APP_KEY_ADD send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
+			vTaskDelete(NULL);
+			return;
+		}
+		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD))
+		{
+			ESP_LOGE(TAG, "[RLY_CFG] Step1 APP_KEY_ADD no ACK from 0x%04x in %ds — abort",
+			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
+			vTaskDelete(NULL);
+			return;
+		}
+		ESP_LOGI(TAG, "[RLY_CFG] Step1 APP_KEY_ADD ACK from 0x%04x", addr);
 	}
-	vTaskDelay(pdMS_TO_TICKS(3000));
 	{
 		esp_ble_mesh_client_common_param_t c = {0};
 		esp_ble_mesh_cfg_client_set_state_t s = {0};
@@ -197,9 +255,21 @@ static void relay_config_task(void* arg)
 		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
 		s.model_app_bind.company_id = BMT_CID_ESP;
 		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		ESP_LOGI(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND to 0x%04x: %s", addr, e == ESP_OK ? "OK" : esp_err_to_name(e));
+		if (e != ESP_OK)
+		{
+			ESP_LOGE(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
+			vTaskDelete(NULL);
+			return;
+		}
+		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND))
+		{
+			ESP_LOGE(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND no ACK from 0x%04x in %ds — abort",
+			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
+			vTaskDelete(NULL);
+			return;
+		}
+		ESP_LOGI(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND ACK from 0x%04x", addr);
 	}
-	vTaskDelay(pdMS_TO_TICKS(2000));
 
 	int idx = bmt_node_table_find(addr);
 	if (idx >= 0)
@@ -349,16 +419,20 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 	if (event == ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT)
 	{
 		uint32_t op = param->params->opcode;
+		if (param->error_code == 0 && addr == s_cfg_wait_addr && op == s_cfg_wait_opcode && s_cfg_ack_evgrp)
+			xEventGroupSetBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT);
 		if (op == ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD)
-			ESP_LOGI(TAG, "[CFG] APP_KEY_ADD ACK from 0x%04x", addr);
+			ESP_LOGI(TAG, "[CFG] APP_KEY_ADD ACK from 0x%04x (err=%d)", addr, param->error_code);
 		if (op == ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND)
 		{
-			ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x", addr);
-			/* [FIX-6] Báo TB ONLINE cho cả scanner lẫn relay khi bind xong */
-			if (n && n->is_scan)
-				bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
-			if (n && n->is_relay)
-				bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+			ESP_LOGI(TAG, "[CFG] MODEL_APP_BIND ACK from 0x%04x (err=%d)", addr, param->error_code);
+			if (param->error_code == 0)
+			{
+				if (n && n->is_scan)
+					bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
+				if (n && n->is_relay)
+					bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+			}
 		}
 	}
 	if (event == ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT)
@@ -516,6 +590,7 @@ static void node_ping_task(void* arg)
 esp_err_t bmt_mesh_init(void)
 {
 	esp_err_t err;
+	s_cfg_ack_evgrp = xEventGroupCreate();
 	esp_ble_mesh_register_prov_callback(mesh_prov_cb);
 	esp_ble_mesh_register_config_client_callback(cfg_client_cb);
 	esp_ble_mesh_register_config_server_callback(cfg_server_cb);
