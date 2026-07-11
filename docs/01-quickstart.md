@@ -1,17 +1,17 @@
 # Quickstart
 
-Get the whole system running on a clean machine. Common flow first, then OS-specific notes.
+Common flow first, then OS-specific notes. Assumes you have a workstation on the same LAN as the boards you flash.
 
 ## What you need
 
-- 1x ESP32-S3 (for Gateway) and 5x ESP32 (for 3 scanners, 1 relay, 1 tag).
-- A USB-to-Serial cable per board.
 - ESP-IDF v6.0.1.
 - Docker (Desktop on Windows, native on Linux).
-- Python 3 for the OTA HTTP server.
+- Python 3.
 - Git.
+- 1x ESP32-S3 (gateway) and 5x ESP32 (3 scanners, 1 relay, 1 tag).
+- One USB-serial cable per board.
 
-## 1. Clone the repo
+## 1. Clone
 
 ```
 git clone https://github.com/caotrongphuoc/ble-mesh-tracking.git
@@ -30,134 +30,76 @@ cd esp-idf
 . ./export.sh
 ```
 
-Add `. ~/esp/esp-idf/export.sh` to your shell rc file if you want it in every session.
+Add `. ~/esp/esp-idf/export.sh` to your shell rc to get `idf.py` in every session.
 
 ### Windows
 
-Use the official ESP-IDF Installer:
-
-1. Download from `https://dl.espressif.com/dl/esp-idf/`, pick the v6.0.1 offline installer.
-2. Run it. Pick a short install path like `C:\esp` to avoid long-path issues.
-3. It creates a shortcut "ESP-IDF v6.0.1 CMD" on the Start menu. Open that shortcut to get a shell with `idf.py` on PATH.
-
-VS Code users: install the "Espressif IDF" extension. Point it at the ESP-IDF folder the installer set up.
+Download the ESP-IDF Installer v6.0.1 from `https://dl.espressif.com/dl/esp-idf/` and run it. Pick a short path like `C:\esp`. The installer creates a Start Menu shortcut "ESP-IDF v6.0.1 CMD" that opens a shell with `idf.py` on PATH.
 
 ## 3. Start ThingsBoard
 
-### Linux
+Install Docker first. Linux: `sudo apt install docker.io docker-compose-plugin`. Windows: Docker Desktop (needs WSL2 on first run).
 
-```
-sudo apt install docker.io docker-compose-plugin
-sudo systemctl start docker
-cd thingsboard
-docker compose up -d
-```
-
-### Windows
-
-1. Install Docker Desktop from `https://www.docker.com/products/docker-desktop`.
-2. Start Docker Desktop and let it finish setting up WSL2 if it asks.
-3. In PowerShell:
+Then:
 
 ```
 cd thingsboard
 docker compose up -d
 ```
 
-### Both
+Wait 1-2 minutes. Open `http://localhost:8080`, log in with `tenant@thingsboard.org` / `tenant`, change the password.
 
-Wait 1-2 minutes for ThingsBoard to boot. Check status:
-
-```
-docker compose ps
-```
-
-Open `http://localhost:8080`. Log in with `tenant@thingsboard.org` / `tenant`. Change the password.
-
-Full ThingsBoard steps (device profiles, rule chain, dashboard import, token copy) are in [05-thingsboard-setup.md](05-thingsboard-setup.md). Do those before flashing the gateway.
+Device profiles, rule chain, dashboard, and gateway token: see [05-thingsboard-setup.md](05-thingsboard-setup.md). Do these before flashing.
 
 ## 4. Set firmware config
 
 Edit `apps/*/components/bmt_config/bmt_config.h`:
 
-| Define | In which app | Value |
+| Define | Where | Value |
 |---|---|---|
-| `BMT_WIFI_SSID` / `BMT_WIFI_PASS` | gateway, scanner, relay | Your WiFi credentials. |
+| `BMT_WIFI_SSID` / `BMT_WIFI_PASS` | gateway, scanner, relay | Your WiFi. |
 | `BMT_TB_IP` | gateway | Docker host IP. |
-| `BMT_TB_GATEWAY_TOKEN` | gateway | Access token from ThingsBoard setup. |
+| `BMT_TB_GATEWAY_TOKEN` | gateway | Token from step 3. |
 | `BMT_OTA_*_URL` | gateway, scanner, relay | `http://<host-ip>:8080/<name>.bin`. |
 
-If you generated new TLS certs, copy `thingsboard/tls/ca.pem` over `apps/gateway/components/bmt_mqtt/ca.pem`.
+If you regenerated TLS certs, copy `thingsboard/tls/ca.pem` over `apps/gateway/components/bmt_mqtt/ca.pem`.
 
 ## 5. Build and flash
 
-### Linux
+Find the serial ports first: Linux `ls /dev/ttyUSB*`, Windows Device Manager under "Ports (COM & LPT)".
 
 ```
-# Gateway needs erase on first flash (custom partition table)
-cd apps/gateway && idf.py -p /dev/ttyUSB0 erase-flash flash
-
-# Same firmware for all three scanners
-cd apps/scanner && idf.py -p /dev/ttyUSB1 flash
-
-cd apps/relay && idf.py -p /dev/ttyUSB2 flash
-cd apps/tag   && idf.py -p /dev/ttyUSB3 flash
+# Gateway needs erase-flash the first time (custom partition table)
+cd apps/gateway && idf.py -p <port> erase-flash flash
+cd apps/scanner && idf.py -p <port> flash
+cd apps/relay   && idf.py -p <port> flash
+cd apps/tag     && idf.py -p <port> flash
 ```
 
-Find the port with `ls /dev/ttyUSB*` after plugging in the board. If permission denied, add yourself to the `dialout` group: `sudo usermod -aG dialout $USER`, then log out and back in.
+Each build copies its `.bin` into `firmware/`. Override with `idf.py -DBMT_OTA_DIR=/some/dir build`.
 
-### Windows
-
-```
-cd apps/gateway
-idf.py -p COM11 erase-flash flash
-
-cd apps/scanner
-idf.py -p COM19 flash
-
-cd apps/relay
-idf.py -p COM10 flash
-
-cd apps/tag
-idf.py -p COM22 flash
-```
-
-Find COM ports in Device Manager under "Ports (COM & LPT)".
-
-### Both
-
-Each build copies its `.bin` into `firmware/` for the OTA server to serve. Override the target folder:
-
-```
-idf.py -DBMT_OTA_DIR=/some/dir build
-```
+Linux permission denied on `/dev/ttyUSB*`: `sudo usermod -aG dialout $USER`, then log out and back in.
 
 ## 6. Run
 
-1. Power up the tag, scanners, relay, and gateway. Any order works.
-2. The gateway is in AUTO mode. It finds and provisions every node on its own.
-3. Open the gateway serial monitor at 115200 baud (`idf.py -p <port> monitor`).
-4. Press `1` on the gateway UART. You should see all four nodes as `ACTIVE` or `ONLINE`.
-5. Open the Indoor Tracking dashboard in ThingsBoard. Tags should show up as they report.
+1. Power up the tag, scanners, relay, and gateway. Order does not matter.
+2. Gateway is in AUTO mode and provisions everything on its own.
+3. Open the gateway serial monitor at 115200: `idf.py -p <port> monitor`. Press `1` to see the node table.
+4. Open the Indoor Tracking dashboard in ThingsBoard.
 
-Full UART command list: [09-uart-commands.md](09-uart-commands.md).
+Full command list: [09-uart-commands.md](09-uart-commands.md). Test procedures: [10-testing.md](10-testing.md).
 
-## 7. OTA (optional)
-
-Serve the built binaries:
+## 7. OTA
 
 ```
-cd firmware
-python -m http.server 8080
+cd firmware && python -m http.server 8080
 ```
 
-On the gateway UART: press `u` for scanner+relay OTA, `g` for gateway self-update. See [11-testing-ota.md](11-testing-ota.md) for the full OTA test procedure.
+On gateway UART: `u` starts OTA for scanners and relays, `g` for gateway self-update. Full procedure: [11-testing-ota.md](11-testing-ota.md).
 
 ## Troubleshooting
 
-- **Gateway serial log stops at "MQTT connecting..."** — check `BMT_TB_IP` and `BMT_TB_GATEWAY_TOKEN` in `bmt_config.h`. Also check firewall on the Docker host.
-- **Scanners never provision** — check gateway is in AUTO mode (`a` on UART), and check radio distance. Relay first if scanners are far from gateway.
-- **`idf.py flash` fails "port not found"** — the ESP-IDF Installer on Windows sometimes needs a reboot to pick up new USB drivers.
-- **`docker compose up -d` fails** — on Linux, make sure the `docker` service is running: `sudo systemctl start docker`.
-
-More runtime behavior in [08-operation.md](08-operation.md). Failure and recovery tests in [10-testing.md](10-testing.md).
+- **Gateway stuck at "MQTT connecting..."** — wrong `BMT_TB_IP` or `BMT_TB_GATEWAY_TOKEN`, or firewall blocks port 8883.
+- **Scanners never provision** — check gateway is in AUTO mode (press `a`). Move the relay closer if scanners are far.
+- **`idf.py flash` "port not found"** on Windows — reboot to pick up new USB drivers, or check Device Manager for a yellow triangle.
+- **`docker compose up -d` fails** — on Linux, `sudo systemctl start docker`.

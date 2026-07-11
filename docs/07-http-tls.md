@@ -1,167 +1,103 @@
 # HTTP OTA server and TLS
 
-Two protocols outside the mesh:
-
-- **HTTP** carries the OTA `.bin` from your workstation to each node.
-- **TLS** protects MQTT between the gateway and ThingsBoard.
+Two protocols outside the mesh: HTTP for OTA `.bin` transfer, TLS for MQTT.
 
 ## HTTP OTA server
 
 ### Serve the built binaries
 
-Every `idf.py build` copies the `.bin` to the repo's `firmware/` folder. Run a plain HTTP server from that folder:
+Every build copies its `.bin` to `firmware/`. Serve from there:
 
 ```
 cd firmware
 python -m http.server 8080
 ```
 
-Files expected at these paths:
+Expected files:
 
 - `http://<host-ip>:8080/Gateway.bin`
 - `http://<host-ip>:8080/Scanner.bin`
 - `http://<host-ip>:8080/Relay.bin`
 
-The URLs in `bmt_config.h` (`BMT_OTA_GATEWAY_URL`, `BMT_OTA_SCANNER_URL`, `BMT_OTA_RELAY_URL`) must match.
+The URLs in `bmt_config.h` (`BMT_OTA_*_URL`) must match.
 
 ### Why plain HTTP, not HTTPS
 
-The OTA .bin already has its own protection:
+The `.bin` has its own protection: SHA256 in the app descriptor (verified after download), version compare stops downgrade, and the HMAC beacon means an attacker cannot even trigger OTA. A fake `.bin` fails the SHA256 check. HTTPS on the OTA server would just add setup pain without a real gain.
 
-- SHA256 baked into the app descriptor. `esp_https_ota` verifies it against the running slot before accepting.
-- Version compare with a monotonic `YYYYMMDDHHMMSS` timestamp prevents downgrade.
-- Anti-forgery on the mesh trigger: the HMAC-signed OTA beacon means a random attacker cannot make a node start OTA at all.
+If you want HTTPS anyway, change `esp_http_client_config_t` to use TLS. Not covered here.
 
-An attacker on the LAN can host a fake `.bin`, but the SHA256 check catches it because the fake `.bin` will not match the gateway's expectation. So plain HTTP saves a lot of setup pain (no cert on the OTA server) without opening a real attack vector.
+### Firewall
 
-If you want HTTPS anyway: swap the URL, add the CA to `bmt_config.h`, and change `esp_http_client_config_t` to use TLS. Not covered here.
+Port 8080 must be reachable from the LAN.
 
-### Firewall notes
+- Linux: `sudo ufw allow 8080/tcp`.
+- Windows: allow Python through Defender when it prompts.
 
-Port 8080 must be reachable from the LAN. On Linux:
-
-```
-sudo ufw allow 8080/tcp
-```
-
-On Windows the first time you run `python -m http.server 8080`, Windows Defender pops a dialog asking to allow Python through the firewall. Say yes.
-
-Check reachability from another machine on the LAN:
+Test from another machine:
 
 ```
-curl http://<host-ip>:8080/Gateway.bin -o /tmp/x.bin
+curl -s -o /dev/null -w "%{http_code}\n" http://<host-ip>:8080/Gateway.bin
 ```
 
-If it fails, the OTA will also fail. Fix the firewall first.
-
-### Alternatives to python http.server
-
-Any static file server works.
-
-- `busybox httpd -f -p 8080`
-- `caddy file-server --listen :8080`
-- `npx http-server -p 8080`
-
-Do not use nginx with fancy features. Plain, no caching, no redirect.
+Should print `200`.
 
 ## TLS for MQTT
 
-The MQTT connection to ThingsBoard uses TLS on port 8883. This protects the gateway token (which acts as a password) and prevents someone on the network from injecting fake telemetry.
+MQTT to ThingsBoard uses TLS on port 8883. Protects the gateway token and prevents someone on the network from injecting fake telemetry.
 
-### Certificate layout
+### Cert layout under `thingsboard/tls/`
 
-Everything lives under `thingsboard/tls/`:
-
-| File | What it is |
+| File | Role |
 |---|---|
-| `ca.key` | Private key of our own Certificate Authority. Never leaves the machine. |
-| `ca.pem` | Public certificate of our CA. Gateway trusts this to verify the server. |
-| `server.key` | Private key for the MQTT server. |
-| `server.pem` | Server cert signed by our CA. Presented during TLS handshake. |
-| `server.csr` | Intermediate signing request. Regenerated on each run. |
-| `server_ext.cnf` | OpenSSL extension file with the SAN. |
-| `ca.srl` | Serial number tracker for the CA. |
-| `gen_certs.sh` | Script that regenerates everything above. |
+| `ca.key` | CA private key. Never leaves the machine. |
+| `ca.pem` | CA cert. Gateway trusts this to verify the server. |
+| `server.key` | Server private key. |
+| `server.pem` | Server cert signed by CA. Presented in TLS handshake. |
+| `server.csr` | Intermediate signing request. Regenerated each run. |
+| `server_ext.cnf` | OpenSSL extension file with SAN. |
+| `gen_certs.sh` | Regenerates everything. |
 
-The gateway embeds `ca.pem` into its firmware at compile time via `EMBED_TXTFILES "ca.pem"` in `apps/gateway/components/bmt_mqtt/CMakeLists.txt`.
+Gateway embeds `ca.pem` via `EMBED_TXTFILES "ca.pem"` in `apps/gateway/components/bmt_mqtt/CMakeLists.txt`.
 
 ### CN verification (not full SAN)
 
-`bmt_mqtt.c` configures the MQTT client to verify the server's Common Name against `BMT_TB_CN = "bmt-tb.local"`.
+`bmt_mqtt.c` sets the client to verify the server's Common Name against `BMT_TB_CN = "bmt-tb.local"`. Not SAN. That means:
 
-That means the check is:
+- Server cert must have CN = `bmt-tb.local`.
+- IP of the server does not matter — you can change it without regenerating certs.
 
-```
-does server cert's CN equal "bmt-tb.local"?
-```
+Why CN and not SAN: the gateway has no DNS resolution, only IP. CN mode fits that constraint.
 
-Not:
-
-```
-does server cert's SAN cover this specific hostname or IP?
-```
-
-Why CN and not SAN: our gateway does not know its own hostname or IP resolution rules. Modern TLS libraries prefer SAN but ESP-IDF MQTT lets us pick CN mode for the exact case where the client cannot do DNS.
-
-The upshot: **you can change the ThingsBoard IP and keep the same certs**. Nothing in the certs is tied to a specific IP. The gateway just checks that whoever answered claims to be `bmt-tb.local` in the CN field.
-
-### Regenerate the certs
-
-The certs in `tls/` are development ones. For production, regenerate:
+### Regenerate certs (production deploy)
 
 ```
 cd thingsboard/tls
 bash gen_certs.sh
-```
-
-The script does, roughly:
-
-1. Create a new CA if one does not exist.
-2. Create a new server key.
-3. Generate a CSR with the extension file (CN = `bmt-tb.local`, SAN = same).
-4. Sign the CSR with the CA.
-5. Print the fingerprints.
-
-Then copy the new `ca.pem` into the gateway source so the firmware trusts it:
-
-```
 cp ca.pem ../../apps/gateway/components/bmt_mqtt/ca.pem
 ```
 
-Rebuild and flash the gateway. `EMBED_TXTFILES` picks up the new `ca.pem` at compile time.
-
-### Restart the broker
-
-ThingsBoard reads the cert files on start. After regenerating:
+Rebuild and flash the gateway. Then restart the broker:
 
 ```
 cd thingsboard
 docker compose restart
 ```
 
-Give it a minute to come back up.
+### Debug a failing handshake
 
-### Debug a failing TLS handshake
+Watch gateway serial log at boot:
 
-Watch the gateway serial log during boot. Look for one of:
+- `MQTT connected to ThingsBoard` — good.
+- `mbedtls: X509 - Certificate verification failed` — `ca.pem` in firmware does not match server's cert. Most common cause: regenerated certs but forgot to reflash gateway.
+- `mbedtls: X509 - The CRT/CRL/CSR verification failed` — CN mismatch. Check `BMT_TB_CN` against actual server cert CN.
 
-- `MQTT connected to ThingsBoard` -> everything works.
-- `mbedtls: SSL - The peer notified us that the connection is going to be closed` -> server rejected our handshake. Usually the wrong TLS version or cipher suite. Not typical for our stack.
-- `mbedtls: X509 - Certificate verification failed` -> the gateway does not trust the server cert. Either `ca.pem` in firmware does not match `ca.pem` in `tls/`, or the server presented a completely different cert.
-- `mbedtls: X509 - The CRT/CRL/CSR verification failed` -> CN mismatch. Check `BMT_TB_CN` in `bmt_config.h` matches whatever CN the server cert actually has.
-
-The most common cause: rebuilt certs, restarted the broker, but forgot to also update the gateway's `ca.pem` and reflash. Symptoms are `X509 - Certificate verification failed` every time.
-
-To rule out certs entirely, run `openssl s_client` from another machine:
+Rule out server side from another machine:
 
 ```
 openssl s_client -connect <host-ip>:8883 -showcerts
 ```
 
-If this returns the right CN and the right issuer, the server side is fine. Then the problem is on the gateway (wrong `ca.pem` embedded, or wrong `BMT_TB_CN`).
+If CN and issuer look right there, the problem is on the gateway side (wrong embedded `ca.pem` or wrong `BMT_TB_CN`).
 
-## Related docs
-
-- [05-thingsboard-setup.md](05-thingsboard-setup.md) — ThingsBoard install and device profile setup.
-- [06-thingsboard-mqtt.md](06-thingsboard-mqtt.md) — MQTT topics and payload format.
-- [11-testing-ota.md](11-testing-ota.md) — end-to-end OTA test procedure.
+Related: [05-thingsboard-setup.md](05-thingsboard-setup.md), [06-thingsboard-mqtt.md](06-thingsboard-mqtt.md), [11-testing-ota.md](11-testing-ota.md).

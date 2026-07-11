@@ -1,21 +1,14 @@
 # Algorithms
 
-The numeric tricks the firmware and the rule chain use. Each one has a code pointer so you can jump straight to the source.
+Numeric tricks used by firmware and rule chain. Each has a code pointer.
 
 ## 1. Kalman filter for RSSI
 
-**Where:** `apps/scanner/components/bmt_tag_table/bmt_tag_table.c`
+Where: `apps/scanner/components/bmt_tag_table/bmt_tag_table.c`.
 
-Raw BLE RSSI is noisy. Two readings 100 ms apart can differ by 6-8 dBm even when the tag has not moved. A rolling average would work but reacts slowly.
+Raw RSSI is noisy. We smooth with a 1D Kalman filter, constants `q = 0.1`, `r = 2.0`.
 
-We use a 1D Kalman filter with fixed constants:
-
-```
-process noise q = 0.1
-measurement noise r = 2.0
-```
-
-Update rule per RSSI sample:
+Per sample:
 
 ```
 p = p + q
@@ -24,188 +17,139 @@ x = x + k * (rssi - x)
 p = (1 - k) * p
 ```
 
-`x` is the smoothed RSSI we send over mesh. `p` is the internal uncertainty. `k` is the Kalman gain that decides how much to trust the new sample versus the old estimate.
+`x` is the smoothed value we send over mesh. Raise `r` to smooth harder, `q` to react faster.
 
-Tuning: raise `r` to smooth harder (slower to react). Raise `q` to trust new samples more (faster but noisier).
+## 2. Distance from RSSI
 
-## 2. Distance from RSSI (log-distance path loss)
+Where: same file, `calculate_distance()`.
 
-**Where:** `bmt_tag_table.c`, `calculate_distance()`
-
-BLE ADV includes a `tx_power` field: the RSSI measured at 1 meter. If we know that reference and the current RSSI, we can guess how far the tag is:
+BLE ADV includes `tx_power` (the RSSI at 1 m). Log-distance path loss:
 
 ```
 distance = 10 ^ ((tx_power - rssi_filtered) / (10 * n))
 ```
 
-`n` is the path-loss exponent. Free space is 2.0. Furnished indoor with walls is around 2.5 to 3.5. We use `BMT_PATH_LOSS_N = 2.5f`.
-
-Values are noisy. Do not use this for anything more precise than "close" vs "across the room".
+`n` is the path-loss exponent. We use `BMT_PATH_LOSS_N = 2.5f` (typical indoor with walls). Result is noisy — use it for "close" vs "far room", not precise distance.
 
 ## 3. Anti-replay via sequence number
 
-**Where:** `bmt_tag_table.c`, `bmt_tag_table_update()`
+Where: `bmt_tag_table_update()`.
 
-Each tag ADV packet carries a 1-byte `sequence` field that increments every 500 ms. Scanners keep the last sequence seen per tag.
+Each tag ADV carries a 1-byte sequence that increments every 500 ms. On a new packet:
 
-Rules when a new packet arrives:
+- Same seq — duplicate. Log and skip.
+- `diff <= -10` or `diff > BMT_MAX_SEQ_JUMP (30)` — tag reboot or replay attack. Reset filter, log warn.
+- Small backward (1..9) — late packet from advertising overlap. Drop.
+- Forward but skipped — count missed for loss stats.
 
-- Same sequence as before -> duplicate, count as extra reception, do not reset filter.
-- Sequence went backward by 10 or more (`diff <= -10`) OR forward by more than 30 (`diff > BMT_MAX_SEQ_JUMP`) -> looks like tag reboot or replay attack, reset the Kalman filter and log a warning.
-- Small backward (1..9) -> late packet from advertising overlap, drop silently.
-- Forward but skipped some -> count them as `missed` for loss statistics.
-
-The forward jump limit stops an attacker from capturing an old ADV and replaying it hours later.
+The forward jump limit stops replay of an ADV captured hours ago.
 
 ## 4. HMAC-16 for beacon authentication
 
-**Where:** `apps/tag/components/bmt_auth/bmt_auth.c` (build), `apps/scanner/components/bmt_auth/bmt_auth.c` (verify)
+Where: `apps/tag/components/bmt_auth/bmt_auth.c` (build), scanner counterpart (verify).
 
-Tag ADVs include a 2-byte HMAC over the payload. The scanner rejects any ADV with a wrong HMAC. That stops a phone from posing as a tag.
+Tag ADVs include a 2-byte HMAC over the payload. Steps:
 
-Steps to compute:
+1. Build 24-byte payload with `mac16 = 0`.
+2. `HMAC-SHA256(key, payload_without_mac16)`.
+3. Take first 2 bytes.
 
-1. Build the 24-byte ADV payload with `mac16` set to zero.
-2. Compute `HMAC-SHA256(key, payload_without_mac16)`.
-3. Take the first 2 bytes of the HMAC output. That is the 16-bit MAC.
+Why only 2 bytes: ADV field is small. Combined with anti-replay (above) it works well in practice.
 
-Why only 2 bytes? An ADV field is small. A full 32-byte HMAC would not fit. 16 bits is weak against dedicated collision attacks but strong enough against a casual attacker. Combined with anti-replay (see above) it works well in practice.
-
-We use two separate keys, not one:
-
-- Tag key -- signs tag ADVs. Same value on every tag and every scanner (`BMT_TAG_HMAC_KEY[16]` in `bmt_auth.c`).
-- OTA beacon key -- signs the gateway's OTA-trigger beacon. Rotates every 24h (see next section).
-
-If one key leaks the other still works.
+Two separate keys: tag key (signs tag ADVs) and OTA-beacon key (signs the gateway's OTA-trigger beacon). If one leaks, the other still works.
 
 ## 5. Key rotation for OTA beacon
 
-**Where:** `apps/gateway/components/bmt_ota/bmt_ota.c`, `beacon_key_rotate_and_push()`
+Where: `apps/gateway/components/bmt_ota/bmt_ota.c`, `beacon_key_rotate_and_push()`.
 
-Every 24 hours the gateway:
+Every 24 hours:
 
-1. Generates a fresh random 16-byte key via `esp_fill_random()`.
-2. Imports it into PSA. If import fails, aborts and keeps the old key (see the rollback-safe design in the changelog).
-3. Persists the new key to NVS.
-4. Pushes it to every provisioned scanner via `OTA_KEY_PUSH` opcode over mesh.
+1. Generate fresh 16-byte key via `esp_fill_random()`.
+2. Import to PSA. If fails, abort and keep old key.
+3. Persist to NVS.
+4. Push to every scanner via `OTA_KEY_PUSH`.
 
-Scanners receive the push in `bmt_auth_set_ota_beacon_key()`, import to their own PSA slot, and save to NVS so it survives their reboots.
-
-An attacker who captures a valid OTA beacon and tries to replay it more than 24 hours later gets rejected because the scanner has already moved to a new key.
+Scanners import to their PSA slot and save to NVS. An attacker replaying a valid OTA beacon >24 h later gets rejected.
 
 ## 6. Hysteresis for zone assignment
 
-**Where:** ThingsBoard rule chain node `Apply hysteresis` (`thingsboard/rulechain/ble_tag_zone_detection.json`)
+Where: rule chain node `Apply hysteresis` in `thingsboard/rulechain/ble_tag_zone_detection.json`.
 
-Multiple scanners can hear the same tag. The strongest RSSI wins. But if two scanners are close in strength, tiny RSSI wobbles would flip the zone every few seconds. Hysteresis prevents that.
-
-Rule: to switch zone, the new best scanner must beat the current zone's scanner by at least `HYSTERESIS_DBM = 8` dBm.
-
-```
-if best_scanner == current_zone_scanner:
-    stay
-elif (best_rssi - current_zone_rssi) >= HYSTERESIS_DBM:
-    switch (subject to debounce, see next)
-else:
-    stay
-```
-
-Tuning: raise to 10 or 12 dBm if you see jitter. Lower to 5 if zones are large and switching feels too slow.
+To switch zone, the new best scanner must beat the current one by at least `HYSTERESIS_DBM = 8` dBm. Otherwise stay. Raise to 10-12 dBm if you see jitter; lower to 5 if switching feels too slow.
 
 ## 7. Leaky-bucket debounce
 
-**Where:** same rule chain node
+Where: same rule chain node.
 
-Even with hysteresis, one strong outlier RSSI can flip zones. To require sustained evidence, we count consecutive readings that all agree on the new zone.
-
-```
-DEBOUNCE_COUNT = 2
-
-if new_zone == candidate_zone:
-    candidate_count += 1
-else:
-    candidate_zone = new_zone
-    candidate_count = 1
-
-if candidate_count >= DEBOUNCE_COUNT:
-    commit switch, reset candidate
-```
-
-A single-shot outlier only nudges the counter to 1, then the next report contradicts it and the counter drops. Only if two reports in a row point to the new zone does the switch actually commit.
-
-The "leaky" part: if a report says "keep the current zone" the counter drops by 1 instead of resetting to 0. This tolerates one flap in a two-report window instead of forcing three consecutive agreements.
-
-## 8. Fresh-sample window for zone eval
-
-**Where:** rule chain, `SCANNER_VALID_MS = 10000`
-
-The rule chain keeps the last RSSI from each scanner in server attributes. When evaluating zone, it only considers samples less than 10 seconds old.
-
-Why: a scanner that stopped reporting (dead battery, moved out of range) should not keep influencing the zone. If all samples are stale, the tag is "out_of_range".
-
-## 9. Out-of-range tag timeout
-
-**Where:** `apps/gateway/components/bmt_thingsboard/bmt_thingsboard.c`, `zone_timeout_task`
-
-The rule chain fires only when new telemetry arrives. If a tag disappears completely (dead battery), no more telemetry, no more rule chain runs, dashboard freezes on the last known zone.
-
-The gateway runs a background task every 1 second. For each tracked tag it checks: has any telemetry arrived in the last `BMT_TAG_OUT_OF_RANGE_MS = 10000` ms? If not, it publishes `current_zone = "out_of_range"` to ThingsBoard directly.
-
-## 10. OTA version comparison
-
-**Where:** `apps/gateway/CMakeLists.txt` (build side), `bmt_ota.c` (compare side)
-
-`PROJECT_VER` is computed at build time as the newest mtime of any source file, formatted `YYYYMMDDHHMMSS`. It ends up in the app descriptor of the built `.bin`.
-
-At OTA time we compare two version strings with `strncmp`:
+Require sustained evidence, not one outlier:
 
 ```
-if (strncmp(new_desc.version, cur_desc->version, 14) <= 0)
-    skip;   // server is not newer
-else
-    flash;
+if new_zone == candidate_zone: candidate_count += 1
+else: candidate_zone = new_zone; candidate_count = 1
+if candidate_count >= DEBOUNCE_COUNT (2): commit switch
 ```
 
-Because the format is fixed-width `YYYYMMDDHHMMSS`, lexicographic compare equals chronological compare. No date parsing required.
+Leaky part: a "stay" report drops the counter by 1 instead of resetting to 0, tolerating one flap in a two-report window.
 
-## 11. SHA256-skip to avoid pointless flashing
+## 8. Fresh-sample window
 
-**Where:** same file
+Where: rule chain, `SCANNER_VALID_MS = 10000`.
 
-Every ESP-IDF `.bin` embeds a SHA256 of the ELF. If server's SHA256 equals node's SHA256, the binaries are identical. Flashing again would just wear the flash for no benefit.
+Rule chain only considers RSSI samples <10 s old. A dead scanner's last value cannot keep influencing the zone.
+
+## 9. Out-of-range timeout (gateway safety net)
+
+Where: `bmt_thingsboard.c`, `zone_timeout_task`.
+
+Rule chain fires only on new telemetry. If a tag disappears entirely, dashboard would freeze. Gateway task checks every 1 s: no telemetry in `BMT_TAG_OUT_OF_RANGE_MS = 10000` ms means publish `current_zone = "out_of_range"`.
+
+## 10. OTA version compare
+
+Where: `apps/*/CMakeLists.txt` (build side), `bmt_ota.c` (compare side).
+
+`PROJECT_VER` is computed at build time as the newest source mtime, formatted `YYYYMMDDHHMMSS`. Because the format is fixed-width, `strncmp` on version strings equals chronological compare.
 
 ```
-if (memcmp(new_desc.app_elf_sha256, cur_desc->app_elf_sha256, 32) == 0)
-    skip;
+if (strncmp(new_desc.version, cur_desc->version, 14) <= 0) skip;   // not newer
 ```
 
-This runs before the version compare, so if you rebuild without changing source the OTA becomes a fast HTTP GET plus an instant abort.
+## 11. SHA256 skip
+
+Where: same file.
+
+Every `.bin` embeds a SHA256. Skip flashing if identical:
+
+```
+if (memcmp(new_desc.app_elf_sha256, cur_desc->app_elf_sha256, 32) == 0) skip;
+```
+
+Runs before version compare. Prevents pointless flash wear on the 3-minute auto-check.
 
 ## 12. Data watchdog
 
-**Where:** `apps/gateway/components/bmt_watchdog/bmt_watchdog.c`
+Where: `apps/gateway/components/bmt_watchdog/bmt_watchdog.c`.
 
-The watchdog protects against a subtle failure mode: mesh looks up (LEDs, no crashes) but no data is actually flowing.
+Protects against "mesh looks up but no data flows":
 
-- After boot: wait 15 seconds for the mesh to stabilize.
-- Loop: take a snapshot of `s_mesh_received`, sleep 30 seconds, compare. If unchanged, the mesh is dead.
-- Broadcast `RESET_CMD` five times with 1.5 second gap. Each successful send counts.
-- If at least one send succeeded: wait 12 seconds for nodes to reset, wipe local state, reboot.
-- If all five sends failed: retry the whole loop after 30 seconds (radio might have been busy).
+- 15 s stabilize after boot.
+- Snapshot `s_mesh_received`, sleep 30 s, compare. Unchanged = mesh dead.
+- Broadcast `RESET_CMD` x5 with 1.5 s gap.
+- Any send succeeded: wait 12 s, wipe, reboot.
+- All 5 sends failed: retry loop (radio might have been busy).
 
-The counter increments on `TAG_STATUS` and on ping ACKs, so "mesh alive" is not tied only to tag traffic. See `bmt_mesh.c:vnd_client_cb`.
+Counter increments on `TAG_STATUS` AND ping ACKs, so "alive" is not tied only to tag traffic.
 
 ## Where to tune
 
 | Constant | File | Effect |
 |---|---|---|
-| `BMT_PATH_LOSS_N` | scanner `bmt_tag_table.h` | Distance formula slope. |
+| `BMT_PATH_LOSS_N` | scanner `bmt_tag_table.h` | Distance slope. |
 | Kalman `q`, `r` | scanner `bmt_tag_table.c` | Smoothing aggressiveness. |
 | `BMT_MAX_SEQ_JUMP` | scanner `bmt_tag_table.h` | Anti-replay window. |
-| `HYSTERESIS_DBM` | rule chain node `Apply hysteresis` | Zone switch guard. |
+| `HYSTERESIS_DBM` | rule chain `Apply hysteresis` | Zone switch guard. |
 | `DEBOUNCE_COUNT` | same | Consecutive-agreement requirement. |
 | `SCANNER_VALID_MS` | same | Fresh-sample cutoff. |
-| `BMT_TAG_OUT_OF_RANGE_MS` | gateway `bmt_zone.h` | Server-side OOR timeout. |
-| `BMT_WDG_TIMEOUT_MS` | gateway `bmt_watchdog.c` | Data watchdog window. |
+| `BMT_TAG_OUT_OF_RANGE_MS` | gateway `bmt_zone.h` | OOR timeout. |
+| `BMT_WDG_TIMEOUT_MS` | gateway `bmt_watchdog.c` | Watchdog window. |
 
-Related runtime behavior is in [08-operation.md](08-operation.md). Protocol side of HMAC-16 keys is in [03-ble-mesh.md](03-ble-mesh.md).
+Runtime behavior: [08-operation.md](08-operation.md). Protocol side: [03-ble-mesh.md](03-ble-mesh.md).
