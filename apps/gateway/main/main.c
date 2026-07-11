@@ -53,6 +53,7 @@ void app_main(void)
 	ESP_ERROR_CHECK(err);
 
 	bmt_node_table_load();
+	bmt_zone_init();
 
 	/* [v4.9-security] Sinh NetKey/AppKey random nếu NVS mesh chưa có key nào.
 	 * PHẢI gọi trước bmt_mesh_init() vì hàm đó dùng key này để add vào mesh stack. */

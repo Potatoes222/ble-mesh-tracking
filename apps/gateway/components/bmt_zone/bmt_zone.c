@@ -6,9 +6,29 @@
 #include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 static bmt_tag_track_t s_tags[BMT_MAX_TRACKED_TAGS];
+static SemaphoreHandle_t s_lock = NULL;
+
+void bmt_zone_init(void)
+{
+	if (!s_lock)
+		s_lock = xSemaphoreCreateMutex();
+}
+
+void bmt_zone_lock(void)
+{
+	if (s_lock)
+		xSemaphoreTake(s_lock, portMAX_DELAY);
+}
+
+void bmt_zone_unlock(void)
+{
+	if (s_lock)
+		xSemaphoreGive(s_lock);
+}
 
 int bmt_zone_track_capacity(void)
 {

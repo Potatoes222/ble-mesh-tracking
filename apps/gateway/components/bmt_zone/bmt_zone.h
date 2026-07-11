@@ -22,6 +22,16 @@ typedef struct
 	uint32_t last_zone_change_ms, last_any_report_ms;
 } bmt_tag_track_t;
 
+/* Khoi tao mutex bao ve bang tag — goi 1 lan trong app_main truoc khi
+ * bat ky task nao co the goi ham khac trong module nay. */
+void bmt_zone_init(void);
+
+/* Take/give mutex bao ve toan bo bang bmt_tag_track_t — caller PHAI gom cac
+ * thao tac lien quan (find/get_or_add + update field + evaluate) vao mot cap
+ * lock/unlock, khong duoc giu con tro qua bien lock. */
+void bmt_zone_lock(void);
+void bmt_zone_unlock(void);
+
 int bmt_zone_track_capacity(void);
 bmt_tag_track_t* bmt_zone_track_get(int idx);
 bmt_tag_track_t* bmt_zone_track_find(uint16_t tag_id);

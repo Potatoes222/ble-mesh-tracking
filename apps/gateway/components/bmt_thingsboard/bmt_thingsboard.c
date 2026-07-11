@@ -72,12 +72,16 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	if (!r)
 		return;
 
+	bmt_zone_lock();
 	/* Check truoc get_or_add de biet co phai tag moi khong — dung cho quyet
 	 * dinh connect/set_role voi TB o duoi. */
 	bool was_new = (bmt_zone_track_find(r->tag_id) == NULL);
 	bmt_tag_track_t* t = bmt_zone_track_get_or_add(r->tag_id, r->tag_type);
 	if (!t)
+	{
+		bmt_zone_unlock();
 		return;
+	}
 	if (r->scanner_id >= 1 && r->scanner_id <= BMT_MAX_SCANNERS)
 	{
 		int sidx = r->scanner_id - 1;
@@ -96,6 +100,7 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 			t->last_zone_change_ms = now;
 		}
 	}
+	bmt_zone_unlock();
 
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
 		return;
@@ -156,6 +161,7 @@ static void zone_timeout_task(void* arg)
 	{
 		vTaskDelay(pdMS_TO_TICKS(1000));
 		uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+		bmt_zone_lock();
 		for (int i = 0; i < bmt_zone_track_capacity(); i++)
 		{
 			bmt_tag_track_t* t = bmt_zone_track_get(i);
@@ -179,6 +185,7 @@ static void zone_timeout_task(void* arg)
 			         dev);
 			esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/attributes", json, 0, 0, 0);
 		}
+		bmt_zone_unlock();
 	}
 }
 
