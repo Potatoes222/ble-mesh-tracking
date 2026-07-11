@@ -5,7 +5,6 @@
 
 #define BMT_MAX_SCANNERS 8
 #define BMT_MAX_TRACKED_TAGS 16
-#define BMT_ZONE_HYSTERESIS_DBM 5
 #define BMT_SCANNER_VALID_MS 3500
 #define BMT_TAG_OUT_OF_RANGE_MS 10000
 #define BMT_ZONE_UNKNOWN 0xFF
@@ -37,10 +36,6 @@ bmt_tag_track_t* bmt_zone_track_get(int idx);
 bmt_tag_track_t* bmt_zone_track_find(uint16_t tag_id);
 /* Tạo entry mới nếu chưa track tag_id — trả về NULL nếu bảng đầy */
 bmt_tag_track_t* bmt_zone_track_get_or_add(uint16_t tag_id, uint8_t tag_type);
-
-/* Đánh giá scanner nào đang giữ zone hiện tại, có hysteresis chống nhảy zone
- * liên tục khi 2 scanner có RSSI xấp xỉ nhau */
-uint8_t bmt_zone_evaluate(bmt_tag_track_t* t);
 
 const char* bmt_zone_name(uint8_t scanner_id);
 

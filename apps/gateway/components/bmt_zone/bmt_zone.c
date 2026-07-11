@@ -1,6 +1,5 @@
 #include "bmt_zone.h"
 
-#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -73,45 +72,6 @@ bmt_tag_track_t* bmt_zone_track_get_or_add(uint16_t tag_id, uint8_t tag_type)
 		}
 	}
 	return NULL;
-}
-
-uint8_t bmt_zone_evaluate(bmt_tag_track_t* t)
-{
-	uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-	int best_rssi = INT_MIN;
-	uint8_t best_scanner = BMT_ZONE_UNKNOWN;
-	int current_rssi = INT_MIN;
-	bool current_fresh = false;
-
-	for (int i = 0; i < BMT_MAX_SCANNERS; i++)
-	{
-		if (!t->valid_by_scanner[i])
-			continue;
-		if (now - t->ts_by_scanner[i] > BMT_SCANNER_VALID_MS)
-		{
-			t->valid_by_scanner[i] = false;
-			continue;
-		}
-		if ((int)t->rssi_by_scanner[i] > best_rssi)
-		{
-			best_rssi = t->rssi_by_scanner[i];
-			best_scanner = i + 1;
-		}
-		if ((i + 1) == t->current_zone_id)
-		{
-			current_rssi = t->rssi_by_scanner[i];
-			current_fresh = true;
-		}
-	}
-
-	if (best_scanner == BMT_ZONE_UNKNOWN)
-		return BMT_ZONE_UNKNOWN;
-	if (t->current_zone_id == BMT_ZONE_UNKNOWN || !current_fresh)
-		return best_scanner;
-	if (best_scanner != t->current_zone_id)
-		if ((best_rssi - current_rssi) < BMT_ZONE_HYSTERESIS_DBM)
-			return t->current_zone_id;
-	return best_scanner;
 }
 
 const char* bmt_zone_name(uint8_t scanner_id)
