@@ -78,6 +78,15 @@ void app_main(void)
 	}
 
 	bmt_uart_init();
+
+	bmt_ota_init(&(bmt_ota_config_t){
+	    .url = BMT_OTA_RELAY_URL,
+	    .wifi_ssid = BMT_WIFI_SSID,
+	    .wifi_pass = BMT_WIFI_PASS,
+	    .nvs_namespace = BMT_RELAY_NVS_NAMESPACE,
+	    .wifi_timeout_ms = BMT_OTA_WIFI_TIMEOUT_MS,
+	    .silence_log_during_ota = false,
+	});
 	bmt_ota_start_pending_report_task();
 	bmt_ota_start_auto_check();
 

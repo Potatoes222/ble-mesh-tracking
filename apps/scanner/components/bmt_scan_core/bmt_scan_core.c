@@ -6,6 +6,7 @@
 #include "ble_mesh_example_init.h"
 
 #include "bmt_auth.h"
+#include "bmt_config.h"
 #include "bmt_mesh.h"
 #include "bmt_scan.h"
 #include "bmt_uart.h"
@@ -96,6 +97,15 @@ esp_err_t bmt_scan_core_init(void)
 	}
 
 	bmt_uart_init();
+
+	bmt_ota_init(&(bmt_ota_config_t){
+	    .url = BMT_OTA_SCANNER_URL,
+	    .wifi_ssid = BMT_WIFI_SSID,
+	    .wifi_pass = BMT_WIFI_PASS,
+	    .nvs_namespace = BMT_SCAN_NVS_NAMESPACE,
+	    .wifi_timeout_ms = BMT_OTA_WIFI_TIMEOUT_MS,
+	    .silence_log_during_ota = true,
+	});
 	bmt_ota_start_pending_report_task();
 	bmt_ota_start_auto_check();
 

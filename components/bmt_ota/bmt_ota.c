@@ -3,29 +3,31 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "esp_log.h"
-#include "esp_err.h"
-#include "esp_system.h"
-#include "nvs.h"
-#include "esp_wifi.h"
-#include "esp_event.h"
-#include "esp_netif.h"
-#include "esp_https_ota.h"
-#include "esp_http_client.h"
 #include "esp_app_desc.h"
+#include "esp_err.h"
+#include "esp_event.h"
+#include "esp_http_client.h"
+#include "esp_https_ota.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "nvs.h"
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/task.h"
 
-#include "bmt_mesh.h"
-#include "bmt_scan_core.h"
-#include "bmt_config.h"
+#include "bmt_mesh.h" /* bmt_mesh_report_ota_result — mỗi app tự có */
 
 static const char* TAG = "BMT_OTA";
 
 #define BMT_OTA_NVS_KEY_PENDING "ota_pending"
-#define BMT_OTA_AUTO_CHECK_INTERVAL_MS (3 * 60 * 1000)
+#define BMT_OTA_DEFAULT_WIFI_TIMEOUT_MS 30000
+#define BMT_OTA_DEFAULT_AUTO_CHECK_MS (3 * 60 * 1000)
+
+static bmt_ota_config_t s_cfg;
+static bool s_inited = false;
 
 static volatile bool s_ota_triggered = false;
 static EventGroupHandle_t s_wifi_evgrp = NULL;
@@ -34,14 +36,32 @@ static esp_netif_t* s_sta_netif = NULL;
 static esp_event_handler_instance_t s_evt_any_id = NULL;
 static esp_event_handler_instance_t s_evt_got_ip = NULL;
 
+void bmt_ota_init(const bmt_ota_config_t* cfg)
+{
+	if (!cfg || !cfg->url || !cfg->wifi_ssid || !cfg->wifi_pass || !cfg->nvs_namespace)
+	{
+		ESP_LOGE(TAG, "bmt_ota_init: config thieu truong bat buoc");
+		return;
+	}
+	s_cfg = *cfg;
+	if (s_cfg.wifi_timeout_ms == 0)
+		s_cfg.wifi_timeout_ms = BMT_OTA_DEFAULT_WIFI_TIMEOUT_MS;
+	if (s_cfg.auto_check_interval_ms == 0)
+		s_cfg.auto_check_interval_ms = BMT_OTA_DEFAULT_AUTO_CHECK_MS;
+	s_inited = true;
+	ESP_LOGI(TAG, "OTA config: url=%s nvs_ns=%s wifi_timeout=%" PRIu32 "ms",
+	         s_cfg.url, s_cfg.nvs_namespace, s_cfg.wifi_timeout_ms);
+}
+
 bool bmt_ota_is_triggered(void)
 {
 	return s_ota_triggered;
 }
+
 static void mark_pending(void)
 {
 	nvs_handle_t h;
-	esp_err_t err = nvs_open(BMT_SCAN_NVS_NAMESPACE, NVS_READWRITE, &h);
+	esp_err_t err = nvs_open(s_cfg.nvs_namespace, NVS_READWRITE, &h);
 	if (err != ESP_OK)
 	{
 		ESP_LOGE(TAG, "mark_pending: nvs_open fail: %s", esp_err_to_name(err));
@@ -59,7 +79,7 @@ static bool check_and_clear_pending(void)
 {
 	nvs_handle_t h;
 	uint8_t val = 0;
-	if (nvs_open(BMT_SCAN_NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK)
+	if (nvs_open(s_cfg.nvs_namespace, NVS_READWRITE, &h) != ESP_OK)
 		return false;
 	nvs_get_u8(h, BMT_OTA_NVS_KEY_PENDING, &val);
 	if (val)
@@ -94,7 +114,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t base,
 	else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
 	{
 		ip_event_got_ip_t* ev = (ip_event_got_ip_t*)data;
-		ESP_LOGI(TAG, "WiFi got IP: " IPSTR, IP2STR(&ev->ip_info.ip));
+		ESP_LOGI(TAG, "[OTA] WiFi got IP: " IPSTR, IP2STR(&ev->ip_info.ip));
 		xEventGroupSetBits(s_wifi_evgrp, WIFI_CONNECTED_BIT);
 	}
 }
@@ -103,13 +123,14 @@ static void ota_wifi_task(void* arg)
 {
 	(void)arg;
 
-	esp_log_level_set("*", ESP_LOG_NONE);
+	if (s_cfg.silence_log_during_ota)
+		esp_log_level_set("*", ESP_LOG_NONE);
 
 	printf("\n[OTA] ===== WiFi OTA triggered =====\n");
-	printf("[OTA] URL: %s\n", BMT_OTA_SCANNER_URL);
+	printf("[OTA] URL: %s\n", s_cfg.url);
 
-	/* Mặc định coi là "fail" khi rớt xuống dọn dẹp — chỉ tắt cờ này khi bỏ
-	 * qua do cùng version (không phải lỗi, không cần báo Gateway) */
+	/* Mac dinh coi la "fail" khi roi xuong don dep — chi tat co nay khi bo qua
+	 * do cung version (khong phai loi, khong can bao Gateway) */
 	bool do_report_fail = true;
 
 	s_wifi_evgrp = xEventGroupCreate();
@@ -136,16 +157,16 @@ static void ota_wifi_task(void* arg)
 	                                    &wifi_event_handler, NULL, &s_evt_got_ip);
 
 	wifi_config_t wifi_cfg = {.sta = {.threshold.authmode = WIFI_AUTH_WPA2_PSK}};
-	strncpy((char*)wifi_cfg.sta.ssid, BMT_WIFI_SSID, sizeof(wifi_cfg.sta.ssid));
-	strncpy((char*)wifi_cfg.sta.password, BMT_WIFI_PASS, sizeof(wifi_cfg.sta.password));
+	strncpy((char*)wifi_cfg.sta.ssid, s_cfg.wifi_ssid, sizeof(wifi_cfg.sta.ssid));
+	strncpy((char*)wifi_cfg.sta.password, s_cfg.wifi_pass, sizeof(wifi_cfg.sta.password));
 	esp_wifi_set_mode(WIFI_MODE_STA);
 	esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
 	esp_wifi_start();
 
-	printf("[OTA] Connecting WiFi (max %ds)...\n", BMT_OTA_WIFI_TIMEOUT_MS / 1000);
+	printf("[OTA] Connecting WiFi (max %" PRIu32 "s)...\n", s_cfg.wifi_timeout_ms / 1000);
 	EventBits_t bits = xEventGroupWaitBits(s_wifi_evgrp, WIFI_CONNECTED_BIT,
 	                                       pdFALSE, pdFALSE,
-	                                       pdMS_TO_TICKS(BMT_OTA_WIFI_TIMEOUT_MS));
+	                                       pdMS_TO_TICKS(s_cfg.wifi_timeout_ms));
 	if (!(bits & WIFI_CONNECTED_BIT))
 	{
 		printf("[OTA] WiFi connect timeout\n");
@@ -155,7 +176,7 @@ static void ota_wifi_task(void* arg)
 	printf("[OTA] WiFi connected — checking firmware version...\n");
 	{
 		esp_http_client_config_t http_cfg = {
-		    .url = BMT_OTA_SCANNER_URL,
+		    .url = s_cfg.url,
 		    .timeout_ms = 120000,
 		    .keep_alive_enable = true,
 		};
@@ -225,7 +246,7 @@ static void ota_wifi_task(void* arg)
 
 	if (err == ESP_OK)
 	{
-		printf("[OTA] ===== OTA SUCCESS — rebooting into new firmware =====\n");
+		printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
 		mark_pending();
 		vTaskDelay(pdMS_TO_TICKS(1000));
 		esp_restart();
@@ -233,7 +254,6 @@ static void ota_wifi_task(void* arg)
 	else
 	{
 		printf("[OTA] esp_https_ota FAILED: %s\n", esp_err_to_name(err));
-		/* Không report ở đây — tự rơi xuống ota_fail bên dưới, chỉ report 1 lần */
 	}
 
 ota_fail_wifi:
@@ -261,15 +281,17 @@ ota_fail:
 		s_wifi_evgrp = NULL;
 	}
 
-	esp_log_level_set("*", ESP_LOG_INFO);
+	if (s_cfg.silence_log_during_ota)
+		esp_log_level_set("*", ESP_LOG_INFO);
+
 	if (do_report_fail)
 	{
 		bmt_mesh_report_ota_result(1);
-		printf("[OTA] OTA failed — back to BLE-only mode\n");
+		printf("[OTA] failed — back to BLE-only\n");
 	}
 	else
 	{
-		printf("[OTA] No update needed — back to BLE-only mode\n");
+		printf("[OTA] No update needed — back to BLE-only\n");
 	}
 	s_ota_triggered = false;
 	vTaskDelete(NULL);
@@ -277,9 +299,14 @@ ota_fail:
 
 void bmt_ota_trigger(void)
 {
+	if (!s_inited)
+	{
+		ESP_LOGE(TAG, "bmt_ota_trigger truoc bmt_ota_init — bo qua");
+		return;
+	}
 	if (s_ota_triggered)
 	{
-		ESP_LOGW(TAG, "Already triggered, ignoring");
+		ESP_LOGW(TAG, "Already triggered");
 		return;
 	}
 	s_ota_triggered = true;
@@ -292,7 +319,7 @@ static void report_pending_task(void* arg)
 	vTaskDelay(pdMS_TO_TICKS(5000));
 	if (check_and_clear_pending())
 	{
-		ESP_LOGI(TAG, "Phat hien vua OTA xong va reboot thanh cong - bao cao ve Gateway");
+		ESP_LOGI(TAG, "Phat hien vua OTA xong va reboot thanh cong — bao cao ve Gateway");
 		bmt_mesh_report_ota_result(0);
 	}
 	vTaskDelete(NULL);
@@ -300,19 +327,30 @@ static void report_pending_task(void* arg)
 
 void bmt_ota_start_pending_report_task(void)
 {
+	if (!s_inited)
+	{
+		ESP_LOGE(TAG, "start_pending_report truoc bmt_ota_init — bo qua");
+		return;
+	}
 	xTaskCreate(report_pending_task, "ota_rpt", 2048, NULL, 3, NULL);
 }
+
 static void auto_check_task(void* arg)
 {
 	(void)arg;
 	while (1)
 	{
-		vTaskDelay(pdMS_TO_TICKS(BMT_OTA_AUTO_CHECK_INTERVAL_MS));
+		vTaskDelay(pdMS_TO_TICKS(s_cfg.auto_check_interval_ms));
 		bmt_ota_trigger();
 	}
 }
 
 void bmt_ota_start_auto_check(void)
 {
+	if (!s_inited)
+	{
+		ESP_LOGE(TAG, "start_auto_check truoc bmt_ota_init — bo qua");
+		return;
+	}
 	xTaskCreate(auto_check_task, "bmt_ota_chk", 2048, NULL, 3, NULL);
 }
