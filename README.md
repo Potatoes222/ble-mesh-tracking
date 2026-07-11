@@ -13,13 +13,12 @@
 | File | Description |
 |---|---|
 | [README.md](README.md) | Overview, hardware, firmware layout, and quick run steps. |
-| [docs/architecture.md](docs/architecture.md) | System layout and how data moves between nodes. |
-| [docs/setup.md](docs/setup.md) | Full setup from ESP-IDF install to the dashboard. |
-| [docs/setup-thingsboard.md](docs/setup-thingsboard.md) | ThingsBoard install, device profiles, rule chain, dashboard. |
-| [docs/operation.md](docs/operation.md) | How each part works at runtime, and what each source file does. |
-| [docs/uart.md](docs/uart.md) | UART commands for each node. |
-| [docs/thingsboard-mqtt.md](docs/thingsboard-mqtt.md) | MQTT topics, payload format, and RPC. |
-| [docs/changelog.md](docs/changelog.md) | Change log. |
+| [docs/02-architecture.md](docs/02-architecture.md) | System layout and how data moves between nodes. |
+| [docs/05-thingsboard-setup.md](docs/05-thingsboard-setup.md) | ThingsBoard install, device profiles, rule chain, dashboard. |
+| [docs/06-thingsboard-mqtt.md](docs/06-thingsboard-mqtt.md) | MQTT topics, payload format, and RPC. |
+| [docs/08-operation.md](docs/08-operation.md) | How each part works at runtime, and what each source file does. |
+| [docs/09-uart-commands.md](docs/09-uart-commands.md) | UART commands for each node. |
+| [docs/99-changelog.md](docs/99-changelog.md) | Change log. |
 
 ## Introduction
 
