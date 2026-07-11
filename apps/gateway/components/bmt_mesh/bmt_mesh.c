@@ -352,7 +352,11 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 		dev.addr_type = addr_type;
 		dev.oob_info = oob_info;
 		dev.bearer = ESP_BLE_MESH_PROV_ADV;
-		esp_ble_mesh_provisioner_add_unprov_dev(&dev, ADD_DEV_FLUSHABLE_DEV_FLAG | ADD_DEV_START_PROV_NOW_FLAG);
+		{
+			esp_err_t e = esp_ble_mesh_provisioner_add_unprov_dev(&dev, ADD_DEV_FLUSHABLE_DEV_FLAG | ADD_DEV_START_PROV_NOW_FLAG);
+			if (e != ESP_OK)
+				ESP_LOGW(TAG, "add_unprov_dev fail [%s]: %s", bmt_uuid_type_str(uuid), esp_err_to_name(e));
+		}
 		break;
 	}
 
@@ -572,7 +576,9 @@ static void node_ping_task(void* arg)
 			common.ctx.addr = n->addr;
 			common.ctx.send_ttl = 7;
 			common.msg_timeout = 5000;
-			esp_ble_mesh_config_client_get_state(&common, &get);
+			esp_err_t pe = esp_ble_mesh_config_client_get_state(&common, &get);
+			if (pe != ESP_OK)
+				ESP_LOGW(TAG, "[PING] send fail to 0x%04x: %s", n->addr, esp_err_to_name(pe));
 			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS)
 			{
 				if (n->online)

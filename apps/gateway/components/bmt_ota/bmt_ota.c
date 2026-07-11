@@ -156,10 +156,17 @@ static uint8_t s_beacon_hmac_key_raw[16];
 static void beacon_key_persist(const uint8_t* key)
 {
 	nvs_handle_t h;
-	if (nvs_open(BMT_OTA_NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK)
+	esp_err_t err = nvs_open(BMT_OTA_NVS_NAMESPACE, NVS_READWRITE, &h);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG, "[SECURITY] persist: nvs_open fail: %s", esp_err_to_name(err));
 		return;
-	nvs_set_blob(h, BMT_OTA_NVS_KEY_BEACON_KEY, key, 16);
-	nvs_commit(h);
+	}
+	err = nvs_set_blob(h, BMT_OTA_NVS_KEY_BEACON_KEY, key, 16);
+	if (err != ESP_OK)
+		ESP_LOGE(TAG, "[SECURITY] persist: nvs_set_blob fail: %s", esp_err_to_name(err));
+	else if ((err = nvs_commit(h)) != ESP_OK)
+		ESP_LOGE(TAG, "[SECURITY] persist: nvs_commit fail: %s", esp_err_to_name(err));
 	nvs_close(h);
 }
 

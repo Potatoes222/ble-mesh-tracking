@@ -41,10 +41,17 @@ bool bmt_ota_is_triggered(void)
 static void mark_pending(void)
 {
 	nvs_handle_t h;
-	if (nvs_open(BMT_SCAN_NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK)
+	esp_err_t err = nvs_open(BMT_SCAN_NVS_NAMESPACE, NVS_READWRITE, &h);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG, "mark_pending: nvs_open fail: %s", esp_err_to_name(err));
 		return;
-	nvs_set_u8(h, BMT_OTA_NVS_KEY_PENDING, 1);
-	nvs_commit(h);
+	}
+	err = nvs_set_u8(h, BMT_OTA_NVS_KEY_PENDING, 1);
+	if (err != ESP_OK)
+		ESP_LOGE(TAG, "mark_pending: nvs_set_u8 fail: %s", esp_err_to_name(err));
+	else if ((err = nvs_commit(h)) != ESP_OK)
+		ESP_LOGE(TAG, "mark_pending: nvs_commit fail: %s", esp_err_to_name(err));
 	nvs_close(h);
 }
 
