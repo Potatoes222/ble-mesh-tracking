@@ -1,6 +1,7 @@
 #include "bmt_ota.h"
 
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -29,7 +30,7 @@ static const char* TAG = "BMT_OTA";
 #define BMT_OTA_NODE_GAP_MS 90000        /* 90s mỗi node: đủ download ~840KB + reboot */
 #define BMT_OTA_BEACON_DURATION_MS 15000 /* 15s: đủ nhiều chu kỳ GAP scan để scanner chắc chắn bắt được */
 
-static volatile bool s_running = false;
+static atomic_bool s_running = false;
 
 static void print_sha256_hex(const char* label, const uint8_t* sha, size_t len)
 {
@@ -76,7 +77,7 @@ static void self_update_task(void* arg)
 	{
 		printf("[OTA] SHA256 match — node firmware is IDENTICAL to server firmware, skip.\n");
 		esp_https_ota_abort(ota_handle);
-		s_running = false;
+		atomic_store(&s_running, false);
 		vTaskDelete(NULL);
 		return;
 	}
@@ -89,7 +90,7 @@ static void self_update_task(void* arg)
 	{
 		printf("[OTA] Server version is NOT newer — skip, no downgrade.\n");
 		esp_https_ota_abort(ota_handle);
-		s_running = false;
+		atomic_store(&s_running, false);
 		vTaskDelete(NULL);
 		return;
 	}
@@ -122,21 +123,21 @@ static void self_update_task(void* arg)
 
 self_update_fail:
 	printf("[OTA] Gateway self-update FAILED: %s\n", esp_err_to_name(err));
-	s_running = false;
+	atomic_store(&s_running, false);
 	vTaskDelete(NULL);
 }
 
 esp_err_t bmt_ota_gateway_self_update(void)
 {
-	if (s_running)
+	bool expected = false;
+	if (!atomic_compare_exchange_strong(&s_running, &expected, true))
 	{
 		ESP_LOGW(TAG, "OTA already running");
 		return ESP_ERR_INVALID_STATE;
 	}
-	s_running = true;
 	if (xTaskCreate(self_update_task, "bmt_ota_self", 8192, NULL, 4, NULL) != pdPASS)
 	{
-		s_running = false;
+		atomic_store(&s_running, false);
 		return ESP_ERR_NO_MEM;
 	}
 	return ESP_OK;
@@ -376,7 +377,7 @@ static void distribute_task(void* arg)
 	if (node_count == 0)
 	{
 		printf("[OTA] No configured %s nodes found\n", type_str);
-		s_running = false;
+		atomic_store(&s_running, false);
 		vTaskDelete(NULL);
 		return;
 	}
@@ -391,7 +392,7 @@ static void distribute_task(void* arg)
 			printf("[OTA] Waiting %ds for all scanners to download + reboot...\n", BMT_OTA_NODE_GAP_MS / 1000);
 			vTaskDelay(pdMS_TO_TICKS(BMT_OTA_NODE_GAP_MS));
 			printf("[OTA] ===== Scanner OTA complete =====\n");
-			s_running = false;
+			atomic_store(&s_running, false);
 			vTaskDelete(NULL);
 			return;
 		}
@@ -424,13 +425,14 @@ static void distribute_task(void* arg)
 	}
 
 	printf("\n[OTA] ===== All %s nodes triggered! =====\n", type_str);
-	s_running = false;
+	atomic_store(&s_running, false);
 	vTaskDelete(NULL);
 }
 
 static esp_err_t start_distribute(bool is_scan_filter, uint8_t node_type)
 {
-	if (s_running)
+	bool expected = false;
+	if (!atomic_compare_exchange_strong(&s_running, &expected, true))
 	{
 		ESP_LOGW(TAG, "OTA already running");
 		return ESP_ERR_INVALID_STATE;
@@ -438,10 +440,9 @@ static esp_err_t start_distribute(bool is_scan_filter, uint8_t node_type)
 	static distribute_arg_t s_arg; /* static: sống hết vòng đời task, task đọc 1 lần lúc start */
 	s_arg.is_scan_filter = is_scan_filter;
 	s_arg.node_type = node_type;
-	s_running = true;
 	if (xTaskCreate(distribute_task, "bmt_ota_dst", 4096, &s_arg, 4, NULL) != pdPASS)
 	{
-		s_running = false;
+		atomic_store(&s_running, false);
 		return ESP_ERR_NO_MEM;
 	}
 	return ESP_OK;
@@ -457,7 +458,7 @@ esp_err_t bmt_ota_trigger_all_relays(void)
 }
 bool bmt_ota_is_running(void)
 {
-	return s_running;
+	return atomic_load(&s_running);
 }
 
 /* Gọi 1 lần lúc boot (main.c) — import key HMAC cho OTA-beacon, cần sẵn sàng
