@@ -91,12 +91,12 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 		t->valid_by_scanner[sidx] = true;
 		t->last_any_report_ms = now;
 
-		uint8_t new_zone = bmt_zone_evaluate(t);
-		if (new_zone != t->current_zone_id)
+		/* Zone that su tinh o TB rule chain. Gateway chi track "co telemetry
+		 * gan day khong" de zone_timeout_task biet luc nao bao OOR khi tag
+		 * ngung report. Bat ky scanner_id nao != UNKNOWN cung du. */
+		if (t->current_zone_id == BMT_ZONE_UNKNOWN)
 		{
-			ESP_LOGI("BMT_TB", "[debug local] Tag 0x%04x ZONE: %s -> %s",
-			         r->tag_id, bmt_zone_name(t->current_zone_id), bmt_zone_name(new_zone));
-			t->current_zone_id = new_zone;
+			t->current_zone_id = r->scanner_id;
 			t->last_zone_change_ms = now;
 		}
 	}
