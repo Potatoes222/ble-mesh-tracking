@@ -13,11 +13,18 @@
 | File | Description |
 |---|---|
 | [README.md](README.md) | Overview, hardware, firmware layout, and quick run steps. |
+| [docs/01-quickstart.md](docs/01-quickstart.md) | Clone, install ESP-IDF, run Docker, build/flash, verify. Linux and Windows. |
 | [docs/02-architecture.md](docs/02-architecture.md) | System layout and how data moves between nodes. |
+| [docs/03-ble-mesh.md](docs/03-ble-mesh.md) | BLE Mesh parts used in this project. |
+| [docs/04-algorithms.md](docs/04-algorithms.md) | Kalman filter, HMAC, hysteresis, OTA compare, watchdog. |
 | [docs/05-thingsboard-setup.md](docs/05-thingsboard-setup.md) | ThingsBoard install, device profiles, rule chain, dashboard. |
 | [docs/06-thingsboard-mqtt.md](docs/06-thingsboard-mqtt.md) | MQTT topics, payload format, and RPC. |
-| [docs/08-operation.md](docs/08-operation.md) | How each part works at runtime, and what each source file does. |
+| [docs/07-http-tls.md](docs/07-http-tls.md) | HTTP OTA server and TLS cert flow. |
+| [docs/08-operation.md](docs/08-operation.md) | Runtime behavior and per-file source description. |
 | [docs/09-uart-commands.md](docs/09-uart-commands.md) | UART commands for each node. |
+| [docs/10-testing.md](docs/10-testing.md) | 9 manual tests + regression baseline. |
+| [docs/11-testing-ota.md](docs/11-testing-ota.md) | End-to-end OTA testing and fault injection. |
+| [docs/12-checklist.md](docs/12-checklist.md) | Pre-commit, pre-release, deployment checklists. |
 | [docs/99-changelog.md](docs/99-changelog.md) | Change log. |
 
 ## Introduction

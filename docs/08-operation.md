@@ -6,6 +6,8 @@ The gateway runs in AUTO mode. It finds unprovisioned nodes by their UUID prefix
 
 NetKey and AppKey are random. They live in NVS.
 
+Protocol details in [03-ble-mesh.md](03-ble-mesh.md).
+
 ## Tag data flow
 
 Tags send a 24-byte BLE ADV (Espressif CID `0x02E5`) with a sequence number and a 16-bit HMAC.
@@ -16,6 +18,8 @@ The gateway maps the mesh source address to a scanner MAC. It forwards `{scanner
 
 The rule chain picks `current_zone`. The dashboard shows it.
 
+Numbers behind the filters (Kalman, path loss, anti-replay, HMAC-16) are in [04-algorithms.md](04-algorithms.md).
+
 ## Self-healing
 
 - The gateway loses power? On boot, NVS restores the mesh keys and the node table. Data flows again on its own.
@@ -23,11 +27,15 @@ The rule chain picks `current_zone`. The dashboard shows it.
 - A node reboots and sends an unprovisioned beacon again. The gateway drops the old entry and re-provisions it.
 - The gateway pings the relay every 20 seconds. Only ACKs with `error_code == 0` count as "mesh alive".
 
+Watchdog exercise procedure: [10-testing.md](10-testing.md) test 7.
+
 ## OTA and beacon security
 
 - OTA for scanners and relays runs over mesh. Each node downloads its `.bin` from the LAN HTTP server and reports `OTA_RESULT` back.
 - The gateway checks its own firmware by SHA256. If it is the same, it skips OTA.
 - The HMAC beacon key rotates every 24 hours. The gateway makes a new random key, stores it in NVS, and pushes it to every scanner over mesh. Fake beacons fail HMAC and get dropped.
+
+HTTP OTA server and TLS setup: [07-http-tls.md](07-http-tls.md). Full OTA test procedure: [11-testing-ota.md](11-testing-ota.md). Key rotation math: [04-algorithms.md](04-algorithms.md).
 
 ## ThingsBoard rule chain
 
@@ -39,6 +47,8 @@ The `ble_tag_zone_detection` rule chain runs on every tag telemetry event:
 4. Save `current_zone` and `current_rssi`.
 
 To move a scanner to a different room, edit `ZONE_MAP` on the server. No reflash needed.
+
+Hysteresis and leaky-bucket debounce are explained in [04-algorithms.md](04-algorithms.md). MQTT topics and payloads used by the rule chain: [06-thingsboard-mqtt.md](06-thingsboard-mqtt.md).
 
 ## Source layout
 
@@ -59,7 +69,7 @@ Each app has one `main/main.c` and a set of components under `components/bmt_*/`
 - `bmt_thingsboard` — payload format for the ThingsBoard Gateway API.
 - `bmt_ota` — gateway self-OTA, mesh OTA for scanner and relay, HMAC OTA beacon, 24h key rotation.
 - `bmt_watchdog` — data watchdog and full-mesh reset.
-- `bmt_uart` — UART command menu (see [UART commands](uart.md)).
+- `bmt_uart` — UART command menu (see [09-uart-commands.md](09-uart-commands.md)).
 
 ### `apps/scanner/`
 
