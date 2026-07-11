@@ -142,10 +142,6 @@ esp_err_t bmt_ota_gateway_self_update(void)
 	}
 	return ESP_OK;
 }
-static const uint8_t BMT_OTA_BEACON_HMAC_KEY_BOOTSTRAP[16] = {
-    0x5A, 0x59, 0xD8, 0xBB, 0x51, 0xCE, 0xB4, 0xD8,
-    0xEF, 0xC3, 0x4D, 0xC5, 0xA2, 0x2C, 0x36, 0x43};
-
 #define BMT_OTA_NVS_NAMESPACE "bmt_ota"
 #define BMT_OTA_NVS_KEY_BEACON_KEY "beacon_key"
 #define BMT_OTA_KEY_ROTATE_INTERVAL_MS (24ULL * 60 * 60 * 1000)
@@ -231,7 +227,6 @@ static void beacon_hmac_key_init(void)
 	beacon_key_import(new_key);
 	ESP_LOGW(TAG, "[SECURITY] OTA-beacon key: sinh RANDOM lan dau (khong dung key hardcode), key_id=%" PRIu32,
 	         (uint32_t)s_beacon_hmac_key_id);
-	(void)BMT_OTA_BEACON_HMAC_KEY_BOOTSTRAP; /* chỉ để tham chiếu trong comment/tài liệu */
 }
 
 /* [v6.4-security] Sinh key HMAC beacon MỚI (random) + lưu NVS + push cho toàn
