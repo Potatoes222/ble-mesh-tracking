@@ -14,6 +14,7 @@
 
 static const char* TAG = "BMT_WIFI";
 static const int WIFI_CONNECTED_BIT = BIT0;
+#define BMT_WIFI_INIT_TIMEOUT_MS 15000
 
 static EventGroupHandle_t s_evgrp;
 
@@ -54,5 +55,12 @@ void bmt_wifi_init(void)
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
 	ESP_ERROR_CHECK(esp_wifi_start());
-	xEventGroupWaitBits(s_evgrp, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+	EventBits_t bits = xEventGroupWaitBits(s_evgrp, WIFI_CONNECTED_BIT,
+	                                       pdFALSE, pdFALSE,
+	                                       pdMS_TO_TICKS(BMT_WIFI_INIT_TIMEOUT_MS));
+	if (!(bits & WIFI_CONNECTED_BIT))
+	{
+		ESP_LOGW(TAG, "WiFi connect timeout %ds — boot continue, MQTT se retry khi WiFi len",
+		         BMT_WIFI_INIT_TIMEOUT_MS / 1000);
+	}
 }
