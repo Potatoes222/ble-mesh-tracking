@@ -25,6 +25,7 @@ static const char* TAG = "BMT_MESH";
 static uint16_t s_node_addr = 0x0000;
 static uint16_t s_net_idx = 0xFFFF;
 static uint16_t s_app_idx = 0xFFFF;
+static bool s_provisioned = false;
 static EventGroupHandle_t s_mesh_evgrp;
 static volatile bool s_reboot_after_reset = false;
 static const uint8_t s_health_test_ids[] = {ESP_BLE_MESH_HEALTH_STANDARD_TEST};
@@ -95,6 +96,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
 	case ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT:
 		s_net_idx = param->node_prov_complete.net_idx;
 		s_node_addr = param->node_prov_complete.addr;
+		s_provisioned = true;
 		ESP_LOGI(TAG, "Provision complete! addr=0x%04x net_idx=0x%04x",
 		         s_node_addr, s_net_idx);
 		xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
@@ -105,6 +107,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
 		s_node_addr = 0x0000;
 		s_net_idx = 0xFFFF;
 		s_app_idx = 0xFFFF;
+		s_provisioned = false;
 		xEventGroupClearBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 		if (s_reboot_after_reset)
 		{
@@ -186,7 +189,7 @@ esp_err_t bmt_mesh_init(void)
 	if (esp_ble_mesh_node_is_provisioned())
 	{
 		ESP_LOGI(TAG, "Already provisioned (restored from NVS)");
-		s_node_addr = 0x0001;
+		s_provisioned = true;
 		s_app_idx = 0x0000;
 		xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 	}
@@ -224,7 +227,7 @@ bool bmt_mesh_relay_enabled(void)
 
 esp_err_t bmt_mesh_report_ota_result(uint8_t status)
 {
-	if (s_node_addr == 0x0000 || s_app_idx == 0xFFFF)
+	if (!s_provisioned || s_app_idx == 0xFFFF)
 	{
 		ESP_LOGW(TAG, "[OTA] Chua provision, khong gui duoc bao cao ket qua OTA");
 		return ESP_ERR_INVALID_STATE;

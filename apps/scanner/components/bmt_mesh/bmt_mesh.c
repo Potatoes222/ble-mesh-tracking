@@ -30,6 +30,7 @@ static const char* TAG = "BMT_MESH";
 static uint16_t s_node_addr = 0x0000;
 static uint16_t s_net_idx = 0xFFFF;
 static uint16_t s_app_idx = 0xFFFF;
+static bool s_provisioned = false;
 static EventGroupHandle_t s_mesh_evgrp;
 static volatile bool s_reboot_after_reset = false;
 static uint8_t s_scan_uuid[16] = {
@@ -105,6 +106,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
 	case ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT:
 		s_net_idx = param->node_prov_complete.net_idx;
 		s_node_addr = param->node_prov_complete.addr;
+		s_provisioned = true;
 		ESP_LOGI(TAG, "Provisioned! addr=0x%04x", s_node_addr);
 		xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 		break;
@@ -112,6 +114,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
 		s_node_addr = 0x0000;
 		s_net_idx = 0xFFFF;
 		s_app_idx = 0xFFFF;
+		s_provisioned = false;
 		xEventGroupClearBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 		if (s_reboot_after_reset)
 		{
@@ -216,7 +219,7 @@ esp_err_t bmt_mesh_init(void)
 	if (esp_ble_mesh_node_is_provisioned())
 	{
 		ESP_LOGI(TAG, "Already provisioned (restored from NVS)");
-		s_node_addr = 0x00FF; /* sentinel: provisioned, addr thật do stack quản lý */
+		s_provisioned = true;
 		s_app_idx = 0x0000;
 		xEventGroupSetBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 		ESP_LOGI(TAG, "[MESH] NVS restore OK | scanner_id=0x%02X | app_idx=0x%04X",
@@ -251,7 +254,7 @@ const uint8_t* bmt_mesh_uuid(void)
 
 void bmt_mesh_publish_tags(void)
 {
-	if (s_node_addr == 0x0000)
+	if (!s_provisioned)
 		return;
 	if (s_app_idx == 0xFFFF)
 		return;
@@ -300,7 +303,7 @@ void bmt_mesh_publish_tags(void)
 
 esp_err_t bmt_mesh_report_ota_result(uint8_t status)
 {
-	if (s_node_addr == 0x0000 || s_app_idx == 0xFFFF)
+	if (!s_provisioned || s_app_idx == 0xFFFF)
 	{
 		ESP_LOGW(TAG, "[OTA] Chua provision, khong gui duoc bao cao ket qua OTA");
 		return ESP_ERR_INVALID_STATE;
