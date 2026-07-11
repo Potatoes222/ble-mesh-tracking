@@ -164,25 +164,27 @@ static void beacon_key_persist(const uint8_t* key)
 
 static esp_err_t beacon_key_import(const uint8_t* key)
 {
-	if (s_beacon_hmac_key_id != 0)
-	{
-		psa_destroy_key(s_beacon_hmac_key_id);
-		s_beacon_hmac_key_id = 0;
-	}
-
 	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
 	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
 	psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
 	psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
 	psa_set_key_bits(&attr, 8 * 16);
 
-	psa_status_t st = psa_import_key(&attr, key, 16, &s_beacon_hmac_key_id);
+	/* Import vao slot MOI truoc, chi swap sau khi import OK — rollback-safe:
+	 * neu import fail, key cu (s_beacon_hmac_key_id + raw) van con dung duoc. */
+	psa_key_id_t new_id = 0;
+	psa_status_t st = psa_import_key(&attr, key, 16, &new_id);
 	if (st != PSA_SUCCESS)
 	{
-		ESP_LOGE(TAG, "[SECURITY] psa_import_key failed: %d", (int)st);
+		ESP_LOGE(TAG, "[SECURITY] psa_import_key failed: %d — giu key cu", (int)st);
 		return ESP_FAIL;
 	}
+
+	psa_key_id_t old_id = s_beacon_hmac_key_id;
+	s_beacon_hmac_key_id = new_id;
 	memcpy(s_beacon_hmac_key_raw, key, 16);
+	if (old_id != 0)
+		psa_destroy_key(old_id);
 	return ESP_OK;
 }
 
@@ -230,8 +232,14 @@ static void beacon_key_rotate_and_push(void)
 {
 	uint8_t new_key[16];
 	esp_fill_random(new_key, sizeof(new_key));
+	/* Import truoc — neu fail, KHONG persist va KHONG push, giu key cu de tranh
+	 * NVS/PSA/scanner lech key nhau (boot lai gateway se dung key sai). */
+	if (beacon_key_import(new_key) != ESP_OK)
+	{
+		ESP_LOGE(TAG, "[SECURITY] Key rotate ABORTED — giu key cu, khong push");
+		return;
+	}
 	beacon_key_persist(new_key);
-	beacon_key_import(new_key);
 	ESP_LOGW(TAG, "[SECURITY] OTA-beacon key ROTATED (key_id=%" PRIu32 ") — pushing to all scanners...",
 	         (uint32_t)s_beacon_hmac_key_id);
 
