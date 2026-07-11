@@ -63,20 +63,22 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 			uint16_t cid = (uint16_t)adv_data[pos + 2] | ((uint16_t)adv_data[pos + 3] << 8);
 			if (cid == BMT_CID_ESPRESSIF && field_len >= (1 + 2 + 24))
 			{
-				bmt_tag_adv_payload_t* p =
-				    (bmt_tag_adv_payload_t*)(adv_data + pos + 4);
-				if (memcmp(p->uuid, BMT_SYSTEM_UUID_PREFIX, 4) != 0)
+				/* Copy vao buffer align — adv_data + pos + 4 co the o dia chi
+				 * le, doc uint16_t truc tiep se fault tren Xtensa/RISC-V. */
+				bmt_tag_adv_payload_t p;
+				memcpy(&p, adv_data + pos + 4, sizeof(p));
+				if (memcmp(p.uuid, BMT_SYSTEM_UUID_PREFIX, 4) != 0)
 					goto next_field;
-				if (!bmt_auth_verify_tag((uint8_t*)p,
-				                         sizeof(*p) - sizeof(p->mac16), p->mac16))
+				if (!bmt_auth_verify_tag((uint8_t*)&p,
+				                         sizeof(p) - sizeof(p.mac16), p.mac16))
 					goto next_field;
-				out->tag_type = (p->major == BMT_TAG_MAJOR_PERSON)
+				out->tag_type = (p.major == BMT_TAG_MAJOR_PERSON)
 				                    ? BMT_TAG_TYPE_PERSON
 				                    : BMT_TAG_TYPE_ASSET;
-				out->tag_id = p->minor;
-				out->tx_power = p->tx_power;
-				out->sequence = p->sequence;
-				out->mac16 = p->mac16;
+				out->tag_id = p.minor;
+				out->tx_power = p.tx_power;
+				out->sequence = p.sequence;
+				out->mac16 = p.mac16;
 				return true;
 			}
 			if (cid == BMT_CID_APPLE && field_len >= 26 && adv_data[pos + 4] == 0x02 && adv_data[pos + 5] == 0x15)

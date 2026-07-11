@@ -190,7 +190,8 @@ bool bmt_beacon_is_active(void)
 
 uint16_t bmt_beacon_last_mac16(void)
 {
-	const bmt_tag_adv_payload_t* p =
-	    (const bmt_tag_adv_payload_t*)(s_adv_raw + ADV_PAYLOAD_OFF);
-	return p->mac16;
+	/* Copy vao bien align — s_adv_raw + ADV_PAYLOAD_OFF co the o dia chi le. */
+	bmt_tag_adv_payload_t p;
+	memcpy(&p, s_adv_raw + ADV_PAYLOAD_OFF, sizeof(p));
+	return p.mac16;
 }
