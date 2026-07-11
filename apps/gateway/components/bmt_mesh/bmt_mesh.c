@@ -705,6 +705,7 @@ int bmt_mesh_wipe_all_provisioned(void)
 
 void bmt_mesh_print_keys(void)
 {
+#ifdef BMT_DEBUG_PRINT_KEYS
 	printf("NetKey: ");
 	for (int i = 0; i < 16; i++)
 	{
@@ -721,4 +722,7 @@ void bmt_mesh_print_keys(void)
 			printf(":");
 	}
 	printf("\n");
+#else
+	printf("NetKey/AppKey: [an — enable BMT_DEBUG_PRINT_KEYS de in ra hex]\n");
+#endif
 }
