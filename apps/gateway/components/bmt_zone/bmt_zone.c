@@ -79,11 +79,11 @@ const char* bmt_zone_name(uint8_t scanner_id)
 	switch (scanner_id)
 	{
 	case 0x01:
-		return "bedroom_1";
+		return "room_1";
 	case 0x02:
-		return "bedroom_2";
+		return "room_2";
 	case 0x03:
-		return "toilet";
+		return "room_3";
 	case BMT_ZONE_UNKNOWN:
 		return "out_of_range";
 	default:
