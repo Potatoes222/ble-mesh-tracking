@@ -89,8 +89,8 @@ The gateway uses the ThingsBoard Gateway MQTT API. All topics are relative to th
 
 Sources:
 
-- Topic constants and JSON building: [nodes/gateway/main/bmt_thingsboard.c](../nodes/gateway/main/bmt_thingsboard.c)
-- Client init and event handler: [nodes/gateway/main/bmt_mqtt.c](../nodes/gateway/main/bmt_mqtt.c)
+- Topic constants and JSON building: [apps/gateway/components/bmt_thingsboard/bmt_thingsboard.c](../apps/gateway/components/bmt_thingsboard/bmt_thingsboard.c)
+- Client init and event handler: [apps/gateway/components/bmt_mqtt/bmt_mqtt.c](../apps/gateway/components/bmt_mqtt/bmt_mqtt.c)
 
 ### IV. Device Model
 
@@ -129,7 +129,7 @@ Root folder: [tls/](../tls/)
 | `server.csr`, `server_ext.cnf`   | CSR + config used to sign the server cert                            |
 | `gen_certs.sh`                   | script to regenerate all of the above                                |
 
-The server cert is signed by the CA. The CA public part (`ca.pem`) is copied into the gateway project at [nodes/gateway/main/ca.pem](../nodes/gateway/main/ca.pem) and embedded into the firmware via `EMBED_TXTFILES` in [nodes/gateway/main/CMakeLists.txt](../nodes/gateway/main/CMakeLists.txt).
+The server cert is signed by the CA. The CA public part (`ca.pem`) is copied into the gateway project at [apps/gateway/components/bmt_mqtt/ca.pem](../apps/gateway/components/bmt_mqtt/ca.pem) and embedded into the firmware via `EMBED_TXTFILES` in [apps/gateway/components/bmt_mqtt/CMakeLists.txt](../apps/gateway/components/bmt_mqtt/CMakeLists.txt).
 
 Symbols exposed to code:
 
@@ -138,7 +138,7 @@ extern const uint8_t bmt_ca_pem_start[] asm("_binary_ca_pem_start");
 extern const uint8_t bmt_ca_pem_end[]   asm("_binary_ca_pem_end");
 ```
 
-Used to build `esp_mqtt_client_config_t` in [nodes/gateway/main/bmt_mqtt.c](../nodes/gateway/main/bmt_mqtt.c).
+Used to build `esp_mqtt_client_config_t` in [apps/gateway/components/bmt_mqtt/bmt_mqtt.c](../apps/gateway/components/bmt_mqtt/bmt_mqtt.c).
 
 #### 2. SAN vs IP Verification
 
@@ -155,7 +155,7 @@ cd tls
 ./gen_certs.sh
 ```
 
-It rebuilds `ca.*`, `server.*`, and updates the extension file. After running it, copy the new `ca.pem` into `nodes/gateway/main/ca.pem` and rebuild the gateway firmware.
+It rebuilds `ca.*`, `server.*`, and updates the extension file. After running it, copy the new `ca.pem` into `apps/gateway/components/bmt_mqtt/ca.pem` and rebuild the gateway firmware.
 
 <!--
 EVIDENCE: TB server config panel with SSL enabled + serial log of successful TLS handshake on the gateway
@@ -169,7 +169,7 @@ EVIDENCE: TB server config panel with SSL enabled + serial log of successful TLS
 
 ### VI. Access Token
 
-The gateway authenticates with an access token, not username / password. Get it from the TB UI on the `bmt_gateway` device page (Credentials tab) and paste it into `BMT_TB_GATEWAY_TOKEN` in [nodes/gateway/main/bmt_config.h](../nodes/gateway/main/bmt_config.h).
+The gateway authenticates with an access token, not username / password. Get it from the TB UI on the `bmt_gateway` device page (Credentials tab) and paste it into `BMT_TB_GATEWAY_TOKEN` in [apps/gateway/components/bmt_config/bmt_config.h](../apps/gateway/components/bmt_config/bmt_config.h).
 
 Tokens rotate with the device: if the gateway device is deleted and re-created in TB, get a new token.
 
