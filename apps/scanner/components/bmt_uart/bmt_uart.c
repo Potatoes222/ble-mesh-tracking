@@ -30,7 +30,7 @@ static void uart_cmd_task(void* arg)
 	printf("\n===== BMT SCAN NODE (modular) =====\n");
 	printf("Scanner ID : 0x%02X\n", bmt_scan_core_scanner_id());
 	printf("Node type  : 0x%02X (scanner)\n", BMT_NODE_TYPE);
-	/* [v6.6] In MAC ngay luc boot — de biet board nay la con nao khi dien
+	/* In MAC ngay luc boot — de biet board nay la con nao khi dien
 	 * ZONE_MAP tren ThingsBoard (room_1/2/3 -> MAC nao). */
 	{
 		const uint8_t* uuid = bmt_mesh_uuid();

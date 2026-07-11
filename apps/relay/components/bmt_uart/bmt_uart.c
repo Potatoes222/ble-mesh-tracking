@@ -13,7 +13,7 @@
 #include "bmt_config.h"
 #include "bmt_mesh.h"
 
-/* [v1.4] In health log định kỳ ra UART — chỉ phục vụ giám sát trực quan khi
+/* In health log định kỳ ra UART — chỉ phục vụ giám sát trực quan khi
  * cắm cáp debug tại chỗ, không ảnh hưởng logic forward/OTA/reset của Relay */
 #define BMT_RELAY_MONITOR_INTERVAL_MS 30000
 static void print_relay_mac(void)
@@ -54,7 +54,7 @@ static void uart_cmd_task(void* arg)
 		{
 		case 'r':
 		case 'R':
-			/* [v6.7-fix] bmt_mesh_local_reset() gio tu reboot dung luc reset
+			/* bmt_mesh_local_reset() gio tu reboot dung luc reset
 			 * mesh THUC SU xong (qua event), khong con doan mo delay o day. */
 			printf("\n[UART] Resetting mesh — se tu reboot khi xong...\n");
 			bmt_mesh_local_reset();
@@ -79,7 +79,7 @@ static void uart_cmd_task(void* arg)
 	}
 }
 
-/* [v1.4] Đợi provision xong mới bắt đầu đếm giờ + in health log mỗi
+/* Đợi provision xong mới bắt đầu đếm giờ + in health log mỗi
  * BMT_RELAY_MONITOR_INTERVAL_MS, phục vụ giám sát trực quan qua UART */
 static void relay_monitor_task(void* arg)
 {

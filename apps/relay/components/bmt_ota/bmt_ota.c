@@ -298,7 +298,7 @@ void bmt_ota_start_pending_report_task(void)
 	xTaskCreate(report_pending_task, "ota_rpt", 2048, NULL, 3, NULL);
 }
 
-/* [v6.0-auto-ota] Tự kiểm tra version định kỳ, không cần Gateway/UART trigger —
+/* Tự kiểm tra version định kỳ, không cần Gateway/UART trigger —
  * gọi lại đúng bmt_ota_trigger() nên an toàn nhờ guard s_ota_triggered sẵn có. */
 static void auto_check_task(void* arg)
 {

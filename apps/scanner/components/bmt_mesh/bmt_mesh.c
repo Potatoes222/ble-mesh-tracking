@@ -118,7 +118,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event,
 		xEventGroupClearBits(s_mesh_evgrp, BMT_PROV_COMPLETE_BIT);
 		if (s_reboot_after_reset)
 		{
-			/* [v6.7-fix] Reset mesh NVS THUC SU da xong (event nay la bang
+			/* Reset mesh NVS THUC SU da xong (event nay la bang
 			 * chung) — gio moi reboot an toan, khong con doan mo 500ms nua. */
 			ESP_LOGW(TAG, "[RESET] Local reset COMPLETE — rebooting now");
 			s_reboot_after_reset = false;
@@ -162,7 +162,7 @@ static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
 	uint32_t opcode = param->model_operation.opcode;
 	uint16_t src = param->model_operation.ctx->addr;
 
-	/* [v2.5] OTA_TRIGGER: nhận lệnh → nhờ bmt_ota spawn task bật WiFi
+	/* OTA_TRIGGER: nhận lệnh → nhờ bmt_ota spawn task bật WiFi
 	 * KHÔNG làm OTA trong callback (block BLE host task) */
 	if (opcode == BMT_OP_VND_OTA_TRIGGER)
 	{
@@ -172,7 +172,7 @@ static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
 	}
 	if (opcode == BMT_OP_VND_RESET_CMD)
 	{
-		/* [v6.7-fix] Dung chung bmt_mesh_local_reset() — tu reboot dung luc
+		/* Dung chung bmt_mesh_local_reset() — tu reboot dung luc
 		 * reset THUC SU xong qua event, khong con delay co dinh doan mo. */
 		ESP_LOGW(TAG, "[VND] RESET_CMD — resetting mesh, se tu reboot khi xong...");
 		vTaskDelay(pdMS_TO_TICKS(300));

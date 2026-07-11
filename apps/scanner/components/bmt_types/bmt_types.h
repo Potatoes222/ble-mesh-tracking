@@ -7,9 +7,9 @@
 #define BMT_VND_MODEL_ID 0x0000
 
 #define BMT_OP_VND_TAG_STATUS ESP_BLE_MESH_MODEL_OP_3(0x00, BMT_CID_ESP)
-#define BMT_OP_VND_OTA_TRIGGER ESP_BLE_MESH_MODEL_OP_3(0x06, BMT_CID_ESP) /* [v2.5] lệnh bật WiFi OTA */
+#define BMT_OP_VND_OTA_TRIGGER ESP_BLE_MESH_MODEL_OP_3(0x06, BMT_CID_ESP) /* lệnh bật WiFi OTA */
 #define BMT_OP_VND_RESET_CMD ESP_BLE_MESH_MODEL_OP_3(0x05, BMT_CID_ESP)
-#define BMT_OP_VND_OTA_RESULT ESP_BLE_MESH_MODEL_OP_3(0x07, BMT_CID_ESP)   /* [v2.7] báo cáo OTA thành công/thất bại về Gateway */
+#define BMT_OP_VND_OTA_RESULT ESP_BLE_MESH_MODEL_OP_3(0x07, BMT_CID_ESP)   /* báo cáo OTA thành công/thất bại về Gateway */
 #define BMT_OP_VND_OTA_KEY_PUSH ESP_BLE_MESH_MODEL_OP_3(0x08, BMT_CID_ESP) /* [SECURITY] key HMAC beacon moi tu Gateway, da duoc mesh AppKey ma hoa */
 
 #define BMT_NODE_TYPE 0x01 /* scanner (dùng để lọc target trong OTA-beacon) */

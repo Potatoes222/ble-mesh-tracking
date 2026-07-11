@@ -14,7 +14,7 @@ bool bmt_mqtt_is_connected(void);
 esp_mqtt_client_handle_t bmt_mqtt_get_client(void);
 void bmt_mqtt_enqueue_tag_report(const bmt_tag_report_t* report, const uint8_t* scanner_mac);
 
-/* [FIX-5] bmt_thingsboard.c gọi sau mỗi lần publish thành công, để thống kê
+/* bmt_thingsboard.c gọi sau mỗi lần publish thành công, để thống kê
  * mesh_received vs mqtt_published tách biệt (debug nhanh: mesh chết hay MQTT chết) */
 void bmt_mqtt_note_published(void);
 

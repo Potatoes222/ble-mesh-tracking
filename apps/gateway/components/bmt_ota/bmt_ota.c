@@ -229,7 +229,7 @@ static void beacon_hmac_key_init(void)
 	         (uint32_t)s_beacon_hmac_key_id);
 }
 
-/* [v6.4-security] Sinh key HMAC beacon MỚI (random) + lưu NVS + push cho toàn
+/* Sinh key HMAC beacon MỚI (random) + lưu NVS + push cho toàn
  * bộ Scanner đã provision qua mesh (vendor message đã được AppKey mã hóa). */
 static void beacon_key_rotate_and_push(void)
 {

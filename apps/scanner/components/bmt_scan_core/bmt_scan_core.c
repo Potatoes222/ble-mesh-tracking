@@ -15,7 +15,7 @@ static const char* TAG = "BMT_CORE";
 
 #define SCANNER_NVS_KEY_ID "scanner_id"
 
-/* [FIX-2] Scanner ID động — load từ NVS khi boot, set qua UART lệnh 'i'.
+/* Scanner ID động — load từ NVS khi boot, set qua UART lệnh 'i'.
  * Default 0x01 nếu NVS chưa có giá trị (lần đầu flash) */
 static uint8_t s_scanner_id = 0x01;
 

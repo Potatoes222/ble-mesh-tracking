@@ -39,7 +39,7 @@ static const char* TAG = "BMT_MESH";
 static uint16_t s_net_key_idx = 0x0000;
 static uint16_t s_app_key_idx = 0x0000;
 
-/* [v4.9-security] Sinh random lúc first-boot bởi bmt_mesh_generate_keys_if_needed(),
+/* Sinh random lúc first-boot bởi bmt_mesh_generate_keys_if_needed(),
  * sau đó mesh stack tự lưu vào NVS nội bộ — KHÔNG phải "const" vì được ghi runtime. */
 static uint8_t s_net_key[16];
 static uint8_t s_app_key[16];
@@ -470,7 +470,7 @@ static void cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
 	ESP_LOGI(TAG, "Config server event: %d", event);
 }
 
-/* [FIX-1] Increment s_mesh_received khi nhận TAG_STATUS từ scanner — counter
+/* Increment s_mesh_received khi nhận TAG_STATUS từ scanner — counter
  * ở tầng BLE Mesh, watchdog dùng để phân biệt "mesh chết" vs "chỉ MQTT chết" */
 static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
                           esp_ble_mesh_model_cb_param_t* param)
@@ -530,7 +530,7 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 		return;
 	}
 
-	/* [v5.0] Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
+	/* Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
 	 * trước đây không biết được kết quả thật. */
 	if (opcode == BMT_OP_VND_OTA_RESULT)
 	{

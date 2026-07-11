@@ -12,6 +12,6 @@ bool bmt_ota_is_triggered(void);
  * và reboot thành công", tự gửi báo cáo THÀNH CÔNG về Gateway */
 void bmt_ota_start_pending_report_task(void);
 
-/* [v6.0-auto-ota] Tự động định kỳ kiểm tra version trên server, tự OTA nếu
+/* Tự động định kỳ kiểm tra version trên server, tự OTA nếu
  * khác — không cần Gateway/UART trigger. Gọi 1 lần lúc boot. */
 void bmt_ota_start_auto_check(void);

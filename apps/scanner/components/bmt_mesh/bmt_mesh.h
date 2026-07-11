@@ -26,7 +26,7 @@ const uint8_t* bmt_mesh_uuid(void);
 /* Duyệt toàn bộ tag đang active trong bmt_tag_table, publish TAG_STATUS lên mesh */
 void bmt_mesh_publish_tags(void);
 
-/* [v2.7] Báo cáo kết quả OTA (0=thành công, khác 0=thất bại) về Gateway qua mesh */
+/* Báo cáo kết quả OTA (0=thành công, khác 0=thất bại) về Gateway qua mesh */
 esp_err_t bmt_mesh_report_ota_result(uint8_t status);
 
 /* Reset mesh provisioning (dùng cho lệnh UART 'r' và RESET_CMD nhận từ Gateway) */
