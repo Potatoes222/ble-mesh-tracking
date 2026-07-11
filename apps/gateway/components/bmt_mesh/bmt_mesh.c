@@ -325,7 +325,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 			int stale = -1;
 			for (int i = 0; i < bmt_node_table_capacity(); i++)
 			{
-				bmt_node_t* nn = bmt_node_table_get(i);
+				const bmt_node_t* nn = bmt_node_table_get(i);
 				if (nn && nn->used && memcmp(nn->uuid, uuid, 16) == 0)
 				{
 					stale = i;
@@ -475,11 +475,11 @@ static void cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
 static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
                           esp_ble_mesh_model_cb_param_t* param)
 {
-	if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param)
+	if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param || !param->model_operation.ctx)
 		return;
 	uint32_t opcode = param->model_operation.opcode;
 	uint16_t src = param->model_operation.ctx->addr;
-	uint8_t* data = param->model_operation.msg;
+	const uint8_t* data = param->model_operation.msg;
 	uint16_t len = param->model_operation.length;
 
 	if (opcode == BMT_OP_VND_TAG_STATUS)

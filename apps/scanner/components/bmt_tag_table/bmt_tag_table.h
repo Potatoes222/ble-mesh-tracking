@@ -37,7 +37,7 @@ void bmt_tag_table_reset(void);
 
 int bmt_tag_table_find(uint16_t tag_id);
 int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type, int8_t tx_power,
-                      int8_t rssi, uint8_t sequence, uint8_t* mac);
+                      int8_t rssi, uint8_t sequence, const uint8_t* mac);
 void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence);
 void bmt_tag_table_check_timeouts(void);
 void bmt_tag_table_print(uint8_t scanner_id);

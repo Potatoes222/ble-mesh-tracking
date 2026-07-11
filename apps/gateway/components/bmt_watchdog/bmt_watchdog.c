@@ -33,7 +33,7 @@ static void data_watchdog_task(void* arg)
 	bool has_scan = false;
 	for (int i = 0; i < bmt_node_table_capacity(); i++)
 	{
-		bmt_node_t* n = bmt_node_table_get(i);
+		const bmt_node_t* n = bmt_node_table_get(i);
 		if (n && n->used && n->is_scan && n->config_done)
 		{
 			has_scan = true;

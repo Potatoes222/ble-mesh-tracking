@@ -154,7 +154,7 @@ static void mesh_health_server_cb(esp_ble_mesh_health_server_cb_event_t event,
 static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
                                  esp_ble_mesh_model_cb_param_t* param)
 {
-	if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param)
+	if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || !param || !param->model_operation.ctx)
 		return;
 
 	uint32_t opcode = param->model_operation.opcode;

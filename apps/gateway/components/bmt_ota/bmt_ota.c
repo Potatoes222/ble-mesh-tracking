@@ -367,7 +367,7 @@ static void distribute_task(void* arg)
 	int node_count = 0;
 	for (int i = 0; i < bmt_node_table_capacity(); i++)
 	{
-		bmt_node_t* n = bmt_node_table_get(i);
+		const bmt_node_t* n = bmt_node_table_get(i);
 		if (!n || !n->used || !n->config_done)
 			continue;
 		if (is_scan && !n->is_scan)

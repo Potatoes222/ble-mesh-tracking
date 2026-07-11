@@ -58,7 +58,7 @@ int bmt_tag_table_find(uint16_t tag_id)
 
 int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type,
                       int8_t tx_power, int8_t rssi,
-                      uint8_t sequence, uint8_t* mac)
+                      uint8_t sequence, const uint8_t* mac)
 {
 	for (int i = 0; i < BMT_MAX_TAGS; i++)
 	{
