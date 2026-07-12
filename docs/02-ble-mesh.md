@@ -97,4 +97,4 @@ TTL 7 allows up to 7 hops. Our mesh is much smaller so this is generous.
 
 `CONFIG_BLE_MESH_SETTINGS=y` saves NetKey, AppKey, devkey, sequence numbers, and node list to NVS. Without it every reboot generates a fresh NetKey and the mesh dies. Sequence numbers matter too — nodes reject packets with a seq lower than expected as replays.
 
-Related docs: [08-operation.md](08-operation.md) for runtime, [04-algorithms.md](04-algorithms.md) for the math on top.
+Related docs: [07-operation.md](07-operation.md) for runtime, [03-algorithms.md](03-algorithms.md) for the math on top.

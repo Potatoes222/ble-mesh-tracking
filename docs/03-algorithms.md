@@ -152,4 +152,4 @@ Counter increments on `TAG_STATUS` AND ping ACKs, so "alive" is not tied only to
 | `BMT_TAG_OUT_OF_RANGE_MS` | gateway `bmt_zone.h` | OOR timeout. |
 | `BMT_WDG_TIMEOUT_MS` | gateway `bmt_watchdog.c` | Watchdog window. |
 
-Runtime behavior: [08-operation.md](08-operation.md). Protocol side: [03-ble-mesh.md](03-ble-mesh.md).
+Runtime behavior: [07-operation.md](07-operation.md). Protocol side: [02-ble-mesh.md](02-ble-mesh.md).

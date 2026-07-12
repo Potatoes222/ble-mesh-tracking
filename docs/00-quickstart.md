@@ -49,7 +49,7 @@ docker compose up -d
 
 Wait 1-2 minutes. Open `http://localhost:8080`, log in with `tenant@thingsboard.org` / `tenant`, change the password.
 
-Device profiles, rule chain, dashboard, and gateway token: see [05-thingsboard-setup.md](05-thingsboard-setup.md). Do these before flashing.
+Device profiles, rule chain, dashboard, and gateway token: see [04-thingsboard-setup.md](04-thingsboard-setup.md). Do these before flashing.
 
 ## 4. Set firmware config
 
@@ -87,7 +87,7 @@ Linux permission denied on `/dev/ttyUSB*`: `sudo usermod -aG dialout $USER`, the
 3. Open the gateway serial monitor at 115200: `idf.py -p <port> monitor`. Press `1` to see the node table.
 4. Open the Indoor Tracking dashboard in ThingsBoard.
 
-Full command list: [09-uart-commands.md](09-uart-commands.md). Test procedures: [10-testing.md](10-testing.md).
+Full command list: [08-uart-commands.md](08-uart-commands.md). Test procedures: [09-testing.md](09-testing.md).
 
 ## 7. OTA
 
@@ -95,7 +95,7 @@ Full command list: [09-uart-commands.md](09-uart-commands.md). Test procedures: 
 cd firmware && python -m http.server 8080
 ```
 
-On gateway UART: `u` starts OTA for scanners and relays, `g` for gateway self-update. Full procedure: [11-testing-ota.md](11-testing-ota.md).
+On gateway UART: `u` starts OTA for scanners and relays, `g` for gateway self-update. Full procedure: [10-testing-ota.md](10-testing-ota.md).
 
 ## Troubleshooting
 

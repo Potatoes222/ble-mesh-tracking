@@ -1,6 +1,6 @@
 # OTA testing
 
-Verify each OTA path. Assumes bring-up works ([10-testing.md](10-testing.md)).
+Verify each OTA path. Assumes bring-up works ([09-testing.md](09-testing.md)).
 
 Four things to verify independently:
 1. HTTP server serves the right file.
@@ -20,7 +20,7 @@ Confirm URLs reachable:
 curl -s -o /dev/null -w "%{http_code}\n" http://<host-ip>:8080/Scanner.bin
 ```
 
-Should print `200`. Fix firewall if not (see [07-http-tls.md](07-http-tls.md)).
+Should print `200`. Fix firewall if not (see [06-http-tls.md](06-http-tls.md)).
 
 Open serial monitors on every board.
 

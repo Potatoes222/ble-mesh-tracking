@@ -12,24 +12,24 @@ Room-level indoor tracking on ESP32 / ESP32-S3 with BLE Mesh and a self-hosted T
 
 Tags send BLE beacons. Scanners read signal strength. A relay forwards mesh packets. The gateway pushes raw data to ThingsBoard over MQTTS. A ThingsBoard rule chain turns RSSI into a room name.
 
-New to the project? Start with [docs/01-quickstart.md](docs/01-quickstart.md).
+New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
 
 ## Documentation
 
 | File | Description |
 |---|---|
-| [docs/01-quickstart.md](docs/01-quickstart.md) | Clone, install ESP-IDF, run Docker, build and flash, verify. Linux and Windows. |
-| [docs/02-architecture.md](docs/02-architecture.md) | System layout and how data moves between nodes. |
-| [docs/03-ble-mesh.md](docs/03-ble-mesh.md) | BLE Mesh parts used in this project. |
-| [docs/04-algorithms.md](docs/04-algorithms.md) | Kalman filter, HMAC, hysteresis, OTA compare, watchdog. |
-| [docs/05-thingsboard-setup.md](docs/05-thingsboard-setup.md) | ThingsBoard install, device profiles, rule chain, dashboard. |
-| [docs/06-thingsboard-mqtt.md](docs/06-thingsboard-mqtt.md) | MQTT topics, payload format, and RPC. |
-| [docs/07-http-tls.md](docs/07-http-tls.md) | HTTP OTA server and TLS cert flow. |
-| [docs/08-operation.md](docs/08-operation.md) | Runtime behavior and per-file source description. |
-| [docs/09-uart-commands.md](docs/09-uart-commands.md) | UART commands for each node. |
-| [docs/10-testing.md](docs/10-testing.md) | 9 manual tests and regression baseline. |
-| [docs/11-testing-ota.md](docs/11-testing-ota.md) | End-to-end OTA testing and fault injection. |
-| [docs/12-checklist.md](docs/12-checklist.md) | Pre-commit, pre-release, deployment checklists. |
+| [docs/00-quickstart.md](docs/00-quickstart.md) | Clone, install ESP-IDF, run Docker, build and flash, verify. Linux and Windows. |
+| [docs/01-architecture.md](docs/01-architecture.md) | System layout and how data moves between nodes. |
+| [docs/02-ble-mesh.md](docs/02-ble-mesh.md) | BLE Mesh parts used in this project. |
+| [docs/03-algorithms.md](docs/03-algorithms.md) | Kalman filter, HMAC, hysteresis, OTA compare, watchdog. |
+| [docs/04-thingsboard-setup.md](docs/04-thingsboard-setup.md) | ThingsBoard install, device profiles, rule chain, dashboard. |
+| [docs/05-thingsboard-mqtt.md](docs/05-thingsboard-mqtt.md) | MQTT topics, payload format, and RPC. |
+| [docs/06-http-tls.md](docs/06-http-tls.md) | HTTP OTA server and TLS cert flow. |
+| [docs/07-operation.md](docs/07-operation.md) | Runtime behavior and per-file source description. |
+| [docs/08-uart-commands.md](docs/08-uart-commands.md) | UART commands for each node. |
+| [docs/09-testing.md](docs/09-testing.md) | 9 manual tests and regression baseline. |
+| [docs/10-testing-ota.md](docs/10-testing-ota.md) | End-to-end OTA testing and fault injection. |
+| [docs/11-checklist.md](docs/11-checklist.md) | Pre-commit, pre-release, deployment checklists. |
 | [docs/99-changelog.md](docs/99-changelog.md) | Change log. |
 
 ## Hardware

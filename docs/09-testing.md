@@ -1,6 +1,6 @@
 # Testing guide
 
-Manual verification after a fresh flash. OTA test is separate: [11-testing-ota.md](11-testing-ota.md).
+Manual verification after a fresh flash. OTA test is separate: [10-testing-ota.md](10-testing-ota.md).
 
 Open serial monitors on every board (`idf.py -p <port> monitor`, 115200 baud, Ctrl+] to exit) and the Indoor Tracking dashboard.
 
@@ -38,7 +38,7 @@ Goal: hysteresis and debounce prevent zone flapping.
 2. Walk slowly toward scanner 2. RSSIs get close at midpoint.
 3. Expect: no per-second zone flip. Switch commits only when new zone beats current by >=8 dBm for 2 telemetry frames in a row.
 
-If it flaps: raise `HYSTERESIS_DBM` (see [04-algorithms.md](04-algorithms.md)).
+If it flaps: raise `HYSTERESIS_DBM` (see [03-algorithms.md](03-algorithms.md)).
 
 ## Test 4: Out-of-range
 
@@ -85,7 +85,7 @@ Scanner tracks up to `BMT_MAX_TAGS = 20`.
 
 ## Test 9: OTA smoke
 
-Full procedure: [11-testing-ota.md](11-testing-ota.md). Quick smoke:
+Full procedure: [10-testing-ota.md](10-testing-ota.md). Quick smoke:
 
 1. `cd firmware && python -m http.server 8080`.
 2. On gateway UART: `u`.

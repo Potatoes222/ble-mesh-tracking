@@ -19,9 +19,9 @@ Before `git commit`:
 
 - [ ] No emoji or icon characters. Sanity check: `grep -Pn "[\x{1F300}-\x{1FAFF}]" docs/ README.md` returns nothing.
 - [ ] No AI-style phrasing (`In this section we will explore how...`, `robust and elegant solution...`).
-- [ ] Links to other docs use the numbered filenames (`02-architecture.md`, not `architecture.md`).
+- [ ] Links to other docs use the numbered filenames (`01-architecture.md`, not `architecture.md`).
 - [ ] Any new algorithm has a code pointer (file + function).
-- [ ] Any UART command mentioned exists in [09-uart-commands.md](09-uart-commands.md).
+- [ ] Any UART command mentioned exists in [08-uart-commands.md](08-uart-commands.md).
 - [ ] Any config define mentioned exists in `bmt_config.h` of the app it belongs to.
 
 ## Pre-flash config (before shipping to a customer)
@@ -42,10 +42,10 @@ Before `git commit`:
 Before tagging a release:
 
 - [ ] All items in Pre-commit code and Pre-commit docs pass.
-- [ ] Test 1 (bring-up) from [10-testing.md](10-testing.md) passes.
+- [ ] Test 1 (bring-up) from [09-testing.md](09-testing.md) passes.
 - [ ] Test 3 (walking) passes.
 - [ ] Test 6 (gateway persistence) passes.
-- [ ] Test 9 smoke from [10-testing.md](10-testing.md) or full flow in [11-testing-ota.md](11-testing-ota.md) passes.
+- [ ] Test 9 smoke from [09-testing.md](09-testing.md) or full flow in [10-testing-ota.md](10-testing-ota.md) passes.
 - [ ] Changelog entry in [99-changelog.md](99-changelog.md) describes what changed and why.
 - [ ] Tag the commit with the same date the build produces (`YYYYMMDD`).
 
@@ -54,7 +54,7 @@ Before tagging a release:
 At the customer site, in order:
 
 - [ ] ThingsBoard container running: `docker compose ps` shows `Up`.
-- [ ] Certs regenerated for this deployment (see [07-http-tls.md](07-http-tls.md#regenerate-the-certs)).
+- [ ] Certs regenerated for this deployment (see [06-http-tls.md](06-http-tls.md#regenerate-the-certs)).
 - [ ] Firmware flashed with real credentials (see Pre-flash above).
 - [ ] Gateway UART shows `MQTT connected to ThingsBoard` within 30 seconds of boot.
 - [ ] Relay powered on and provisioned (`[RLY_CFG] Relay 0x00xx fully configured`).
@@ -69,5 +69,5 @@ At the customer site, in order:
 - [ ] Reproduce locally with the failing tag/scanner/relay layout.
 - [ ] Add a note in [99-changelog.md](99-changelog.md) describing the symptom.
 - [ ] Fix the root cause, not the symptom. Adding another `if` to paper over a race is a symptom fix.
-- [ ] Add or update a test in [10-testing.md](10-testing.md) so the same regression is caught next time.
+- [ ] Add or update a test in [09-testing.md](09-testing.md) so the same regression is caught next time.
 - [ ] OTA the fix to every node in the field. Verify via ThingsBoard `ota_result` attribute.

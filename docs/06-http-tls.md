@@ -100,4 +100,4 @@ openssl s_client -connect <host-ip>:8883 -showcerts
 
 If CN and issuer look right there, the problem is on the gateway side (wrong embedded `ca.pem` or wrong `BMT_TB_CN`).
 
-Related: [05-thingsboard-setup.md](05-thingsboard-setup.md), [06-thingsboard-mqtt.md](06-thingsboard-mqtt.md), [11-testing-ota.md](11-testing-ota.md).
+Related: [04-thingsboard-setup.md](04-thingsboard-setup.md), [05-thingsboard-mqtt.md](05-thingsboard-mqtt.md), [10-testing-ota.md](10-testing-ota.md).
