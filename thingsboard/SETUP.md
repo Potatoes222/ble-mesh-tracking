@@ -1,98 +1,87 @@
-# ThingsBoard CE — Setup cho BMT (local, MQTTS)
+# ThingsBoard CE setup for BMT (self-hosted, MQTTS)
 
-Thư mục này chứa mọi thứ cần để tự host ThingsBoard CE bằng Docker, thay cho
-ThingsBoard Cloud. Lấy từ repo gốc `caotrongphuoc/ble-mesh-tracking` (branch
-`main`) + cert TLS tự sinh riêng cho máy này.
+Local README for the `thingsboard/` directory. Full step-by-step guide with troubleshooting is in [../docs/04-thingsboard-setup.md](../docs/04-thingsboard-setup.md).
 
-## Nội dung thư mục
+## Folder contents
 
 ```
-docker-compose.yml   — ThingsBoard CE 3.7.0 + PostgreSQL
-indoor_tracking.json — dashboard export, sẵn sàng import (5 widget)
-tls/                 — CA + server cert TLS (đã sinh, SAN=bmt-tb.local)
-docs/thingsboard-mqtt.md — tài liệu gốc, đầy đủ chi tiết MQTT/TLS/device profile
+docker-compose.yml  — ThingsBoard CE 3.7 + PostgreSQL
+dashboard/          — dashboard export, ready to import (6 widgets, includes OTA panel)
+rulechain/          — rule chain exports (zone hysteresis + OTA attribute persist)
+tls/                — CA + server cert (dev bundle, SAN = bmt-tb.local)
 ```
 
-## Các bước còn lại (phải làm thủ công trên UI, tôi không tự động hóa được)
+## Manual UI steps
 
-### 1. Cài Docker Desktop (nếu chưa có)
+### 1. Install Docker
 
-Tải tại https://www.docker.com/products/docker-desktop — cài xong khởi động
-lại máy nếu được yêu cầu, mở Docker Desktop cho chạy nền.
+Docker Desktop on Windows / macOS. Native `docker` + `docker-compose-plugin` on Linux.
 
-### 2. Chạy ThingsBoard
+### 2. Start ThingsBoard
 
-```bash
-cd g:/Thesis/thingsboard
+```
+cd thingsboard
 docker compose up -d
 ```
 
-Đợi 1-2 phút cho lần đầu (TB tự khởi tạo database). Kiểm tra:
+Wait 1-2 minutes on the first run (database init). Check with `docker compose ps`.
 
-```bash
-docker compose ps
-```
+### 3. Log in
 
-### 3. Đăng nhập TB UI
+Open `http://localhost:8080`, log in as `tenant@thingsboard.org` / `tenant`, change the password.
 
-Mở `http://localhost:8080`, đăng nhập `tenant@thingsboard.org` / `tenant`.
+### 4. Create two device profiles
 
-### 4. Tạo 2 Device Profile (BẮT BUỘC trước khi Gateway kết nối)
+Menu Device profiles > `+`. Names must match exactly:
 
-Menu **Device profiles** → **+** → tạo lần lượt, **tên phải khớp chính xác**:
 - `ble_tag`
 - `ble_mesh_node`
 
-(Rule chain để mặc định — firmware đã tự tính `zone` tại chỗ rồi gửi lên,
-không cần rule chain xử lý gì thêm.)
+### 5. Import rule chains
 
-### 5. Tạo device Gateway + lấy Access Token
+Menu Rule chains > `+ Import`:
 
-Menu **Devices** → **+ Add device** → đặt tên `bmt_gateway`, bật **Is
-gateway**. Sau khi tạo xong, vào device đó → tab **Credentials** → copy
-**Access token**.
+- `rulechain/ble_tag_zone_detection.json` — set as default rule chain for the `ble_tag` profile.
+- `rulechain/ble_mesh_node.json` — set as default rule chain for the `ble_mesh_node` profile (persists `ota_last_result` and `ota_last_time` on each node).
 
-Dán token này vào `Gateway/main/bmt_config.h`, thay giá trị placeholder:
+### 6. Create the gateway device and copy the token
+
+Menu Devices > `+ Add device`. Name it `bmt_gateway`, enable `Is gateway`. In the Credentials tab, copy the Access Token.
+
+Paste it into `apps/gateway/components/bmt_config/bmt_config.h`:
 
 ```c
-#define BMT_TB_GATEWAY_TOKEN "<token vừa copy>"
+#define BMT_TB_GATEWAY_TOKEN "<paste token here>"
 ```
 
-### 6. Kiểm tra IP
+Also update `BMT_TB_IP` in the same file to the IP of the machine running Docker.
 
-`Gateway/main/bmt_config.h` đang set `BMT_TB_IP "192.168.2.23"` (trùng máy
-chạy OTA server). Nếu máy chạy `docker compose up -d` là máy khác/IP khác,
-sửa lại giá trị này cho đúng.
+### 7. Import the dashboard
 
-### 7. Import dashboard
+Menu Dashboards > `+ Import dashboard` > pick `dashboard/indoor_tracking.json`.
 
-Menu **Dashboards** → **+** → **Import dashboard** → chọn file
-`indoor_tracking.json`. TB sẽ hỏi map 2 Entity Alias:
-- **"Tag Device"** → chọn filter theo **Device profile = ble_tag**
-- **"All Mesh Devices"** → chọn filter theo **Device profile = ble_mesh_node**
+Map the entity aliases:
 
-### 8. Build + flash lại Gateway
+- `Tag Device` — filter by `Device profile = ble_tag`.
+- `All Mesh Devices` — filter by `Device profile` includes `ble_tag` and `ble_mesh_node`.
+- `Mesh Nodes` — filter by `Device profile = ble_mesh_node` (used by the OTA table).
 
-Sau khi đã điền token thật (bước 5), build lại `Gateway` và flash — Gateway
-sẽ tự kết nối MQTTS (port 8883) và auto-provision sub-device kèm đúng
-profile (`type` field, xem `bmt_thingsboard.c`).
+### 8. Rebuild and flash the gateway
 
-## Muốn tạo lại cert (đổi hostname, hết hạn, v.v.)
+After step 6, rebuild `apps/gateway` and flash. The gateway connects over MQTTS on port 8883 and auto-registers sub-devices under the right profile.
 
-```bash
+## Regenerate certs
+
+```
 cd tls
 bash gen_certs.sh
-cp ca.pem ../../Gateway/main/ca.pem
+cp ca.pem ../../apps/gateway/components/bmt_mqtt/ca.pem
 ```
 
-Rồi build lại Gateway (EMBED_TXTFILES sẽ tự nhúng `ca.pem` mới vào firmware).
+Rebuild the gateway. `EMBED_TXTFILES` bundles the new `ca.pem` into the firmware.
 
-## Xác nhận nhanh sau khi chạy
+## Quick check after everything is up
 
-- Serial log Gateway in ra: `MQTTS -> mqtts://<ip>:8883 (verify CN=bmt-tb.local)`
-  rồi `MQTT connected to ThingsBoard` — nếu TLS handshake fail sẽ thấy lỗi
-  mbedTLS ở đây thay vì "connected".
-- TB UI → **Devices**: thấy `bmt_gateway` Online, và các sub-device
-  (`bmt_node_0x...`, `bmt_tag_0x...`) tự xuất hiện khi có scanner/relay/tag
-  hoạt động.
-- Dashboard "Indoor Tracking" hiển thị dữ liệu tag/zone theo thời gian thực.
+- Gateway serial log prints `MQTTS -> mqtts://<ip>:8883 (verify CN=bmt-tb.local)` then `MQTT connected to ThingsBoard`. TLS handshake errors show up here as mbedTLS messages.
+- TB UI Devices tab shows `bmt_gateway` online. Sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) appear as scanners, relays, and tags come online.
+- Indoor Tracking dashboard updates in real time. The OTA Status table lists each mesh node with online state and last OTA result.
