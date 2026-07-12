@@ -1,0 +1,91 @@
+{
+  "ruleChain": {
+    "name": "ble_mesh_node_ota",
+    "type": "CORE",
+    "firstRuleNodeId": null,
+    "root": false,
+    "debugMode": false,
+    "configuration": null,
+    "additionalInfo": null
+  },
+  "metadata": {
+    "firstNodeIndex": 0,
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode",
+        "name": "Save telemetry",
+        "debugMode": false,
+        "singletonMode": false,
+        "configurationVersion": 0,
+        "configuration": {
+          "defaultTTL": 0,
+          "skipLatestPersistence": false,
+          "useServerTs": false
+        },
+        "additionalInfo": {
+          "description": "Save every incoming telemetry point (default routing for ble_mesh_node)",
+          "layoutX": 260,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Has ota_result?",
+        "debugMode": false,
+        "singletonMode": false,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "return msg.ota_result !== undefined;",
+          "tbelScript": ""
+        },
+        "additionalInfo": {
+          "description": "Only continue if this telemetry frame is an OTA result",
+          "layoutX": 520,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Build OTA attrs",
+        "debugMode": false,
+        "singletonMode": false,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "JS",
+          "jsScript": "var attrs = { ota_last_result: msg.ota_result, ota_last_time: Date.now() };\nreturn { msg: attrs, metadata: metadata, msgType: \"POST_ATTRIBUTES_REQUEST\" };",
+          "tbelScript": ""
+        },
+        "additionalInfo": {
+          "description": "Convert ota_result telemetry into server-scope attributes for the dashboard",
+          "layoutX": 780,
+          "layoutY": 150
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "Save OTA attrs",
+        "debugMode": false,
+        "singletonMode": false,
+        "configurationVersion": 2,
+        "configuration": {
+          "scope": "SERVER_SCOPE",
+          "notifyDevice": false,
+          "sendAttributesUpdatedNotification": false,
+          "updateAttributesOnlyOnValueChange": false
+        },
+        "additionalInfo": {
+          "description": "Persist ota_last_result and ota_last_time on the node device",
+          "layoutX": 1040,
+          "layoutY": 150
+        }
+      }
+    ],
+    "connections": [
+      { "fromIndex": 0, "toIndex": 1, "type": "Success" },
+      { "fromIndex": 1, "toIndex": 2, "type": "True" },
+      { "fromIndex": 2, "toIndex": 3, "type": "Success" }
+    ],
+    "ruleChainConnections": null
+  }
+}
