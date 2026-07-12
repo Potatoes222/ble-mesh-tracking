@@ -832,6 +832,120 @@
         "row": 0,
         "col": 0,
         "id": "1ded79cb-805b-6d2b-2f86-9ffe661e4727"
+      },
+      "7e7fffbd-eb0a-4244-b3c8-47a510f61177": {
+        "typeFullFqn": "system.cards.entities_table",
+        "type": "latest",
+        "sizeX": 24,
+        "sizeY": 5,
+        "id": "7e7fffbd-eb0a-4244-b3c8-47a510f61177",
+        "row": 12,
+        "col": 0,
+        "config": {
+          "title": "OTA Status",
+          "showTitle": true,
+          "titleStyle": {
+            "fontSize": "16px",
+            "fontWeight": 500
+          },
+          "titleColor": "rgba(0, 0, 0, 0.87)",
+          "backgroundColor": "rgb(255, 255, 255)",
+          "color": "rgba(0, 0, 0, 0.87)",
+          "padding": "8px",
+          "showTitleIcon": false,
+          "titleIcon": "",
+          "iconColor": "rgba(0, 0, 0, 0.87)",
+          "titleFont": {
+            "family": "Roboto",
+            "size": 16,
+            "style": "normal",
+            "weight": "500"
+          },
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "useDashboardTimewindow": true,
+          "displayTimewindow": true,
+          "showLegend": false,
+          "configMode": "basic",
+          "actions": {},
+          "timewindow": {
+            "realtime": {
+              "timewindowMs": 60000
+            }
+          },
+          "settings": {
+            "enableSearch": true,
+            "enableSelectColumnDisplay": true,
+            "enableStickyHeader": true,
+            "enableStickyAction": true,
+            "displayEntityName": false,
+            "displayEntityLabel": false,
+            "displayEntityType": false,
+            "displayPagination": true,
+            "defaultPageSize": 20,
+            "defaultSortOrder": "-ota_last_time",
+            "reserveSpaceForHiddenAction": true
+          },
+          "datasources": [
+            {
+              "type": "entity",
+              "name": "",
+              "entityAliasId": "167908d5-8d6a-4c37-932e-0034c7b8f03a",
+              "filterId": null,
+              "dataKeys": [
+                {
+                  "name": "name",
+                  "type": "entityField",
+                  "label": "Node",
+                  "color": "#2196f3",
+                  "settings": {}
+                },
+                {
+                  "name": "active",
+                  "type": "attribute",
+                  "label": "Online",
+                  "color": "#4caf50",
+                  "settings": {
+                    "customTitle": "",
+                    "columnWidth": "0px",
+                    "useCellContentFunction": true,
+                    "cellContentFunction": "return value === true || value === \"true\"\n  ? '<span style=\"color:#2e7d32;font-weight:600;\">ONLINE</span>'\n  : '<span style=\"color:#c62828;font-weight:600;\">OFFLINE</span>';",
+                    "defaultColumnVisibility": "visible",
+                    "columnSelectionToDisplay": "enabled"
+                  }
+                },
+                {
+                  "name": "ota_last_result",
+                  "type": "attribute",
+                  "label": "Last OTA",
+                  "color": "#ff9800",
+                  "settings": {
+                    "customTitle": "",
+                    "columnWidth": "0px",
+                    "useCellContentFunction": true,
+                    "cellContentFunction": "if (!value) return '<span style=\"color:#999;\">—</span>';\nif (value === 'SUCCESS') return '<span style=\"color:#2e7d32;font-weight:600;\">SUCCESS</span>';\nif (value === 'FAILED') return '<span style=\"color:#c62828;font-weight:600;\">FAILED</span>';\nreturn value;",
+                    "defaultColumnVisibility": "visible",
+                    "columnSelectionToDisplay": "enabled"
+                  }
+                },
+                {
+                  "name": "ota_last_time",
+                  "type": "attribute",
+                  "label": "Last OTA time",
+                  "color": "#9c27b0",
+                  "settings": {
+                    "customTitle": "",
+                    "columnWidth": "0px",
+                    "useCellContentFunction": true,
+                    "cellContentFunction": "if (!value) return '<span style=\"color:#999;\">never</span>';\nvar diff = Date.now() - parseInt(value);\nvar sec = Math.floor(diff/1000);\nif (sec < 60) return sec + 's ago';\nif (sec < 3600) return Math.floor(sec/60) + 'm ago';\nif (sec < 86400) return Math.floor(sec/3600) + 'h ago';\nreturn Math.floor(sec/86400) + 'd ago';",
+                    "defaultColumnVisibility": "visible",
+                    "columnSelectionToDisplay": "enabled"
+                  }
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     "states": {
@@ -870,6 +984,12 @@
                 "sizeY": 4,
                 "row": 4,
                 "col": 0
+              },
+              "7e7fffbd-eb0a-4244-b3c8-47a510f61177": {
+                "sizeX": 24,
+                "sizeY": 5,
+                "row": 12,
+                "col": 0
               }
             },
             "gridSettings": {
@@ -905,6 +1025,18 @@
           "deviceTypes": [
             "default",
             "ble_tag",
+            "ble_mesh_node"
+          ],
+          "deviceNameFilter": ""
+        }
+      },
+      "167908d5-8d6a-4c37-932e-0034c7b8f03a": {
+        "id": "167908d5-8d6a-4c37-932e-0034c7b8f03a",
+        "alias": "Mesh Nodes",
+        "filter": {
+          "type": "deviceType",
+          "resolveMultiple": true,
+          "deviceTypes": [
             "ble_mesh_node"
           ],
           "deviceNameFilter": ""
