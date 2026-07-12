@@ -30,7 +30,7 @@ New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
 | [docs/09-testing.md](docs/09-testing.md) | 9 manual tests and regression baseline. |
 | [docs/10-testing-ota.md](docs/10-testing-ota.md) | End-to-end OTA testing and fault injection. |
 | [docs/11-checklist.md](docs/11-checklist.md) | Pre-commit, pre-release, deployment checklists. |
-| [docs/99-changelog.md](docs/99-changelog.md) | Change log. |
+| [docs/12-changelog.md](docs/12-changelog.md) | Change log. |
 
 ## Hardware
 
