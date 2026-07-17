@@ -10,6 +10,7 @@
 #include "ble_mesh_example_init.h"
 
 #include "bmt_config.h"
+#include "bmt_factory_reset.h"
 #include "bmt_mesh.h"
 #include "bmt_mqtt.h"
 #include "bmt_node_table.h"
@@ -38,7 +39,7 @@ static void wdt_feed_task(void* arg)
 void app_main(void)
 {
 	esp_err_t err;
-	ESP_LOGI(TAG, "=== BMT Gateway v5.0-modular-nimble Starting ===");
+	ESP_LOGI(TAG, "=== BMT Gateway v5.0 Starting ===");
 
 	err = nvs_flash_init();
 	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -51,6 +52,8 @@ void app_main(void)
 		err = nvs_flash_init();
 	}
 	ESP_ERROR_CHECK(err);
+
+	bmt_factory_reset_init();
 
 	bmt_node_table_load();
 	bmt_zone_init();

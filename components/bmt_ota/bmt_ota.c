@@ -26,6 +26,13 @@ static const char* TAG = "BMT_OTA";
 #define BMT_OTA_DEFAULT_WIFI_TIMEOUT_MS 30000
 #define BMT_OTA_DEFAULT_AUTO_CHECK_MS (3 * 60 * 1000)
 
+/* [SECURITY] Khong doi theo app (Scanner/Relay dung chung 1 OTA server) nen
+ * de thang o day thay vi them field vao bmt_ota_config_t. Cert CA nhung
+ * chung — cung 1 server voi MQTTS ben Gateway. */
+#define BMT_OTA_SERVER_CN "bmt-tb.local"
+extern const uint8_t bmt_ota_ca_pem_start[] asm("_binary_ota_ca_pem_start");
+extern const uint8_t bmt_ota_ca_pem_end[] asm("_binary_ota_ca_pem_end");
+
 static bmt_ota_config_t s_cfg;
 static bool s_inited = false;
 
@@ -179,6 +186,9 @@ static void ota_wifi_task(void* arg)
 		    .url = s_cfg.url,
 		    .timeout_ms = 120000,
 		    .keep_alive_enable = true,
+		    .cert_pem = (const char*)bmt_ota_ca_pem_start,
+		    .cert_len = (size_t)(bmt_ota_ca_pem_end - bmt_ota_ca_pem_start),
+		    .common_name = BMT_OTA_SERVER_CN,
 		};
 		esp_https_ota_config_t ota_cfg = {.http_config = &http_cfg};
 		esp_https_ota_handle_t ota_handle = NULL;

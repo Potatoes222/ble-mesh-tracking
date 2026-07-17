@@ -4,6 +4,8 @@
 
 The gateway runs in AUTO mode. It finds unprovisioned nodes by their UUID prefix (`SCAN` or `RELAY`). It provisions each one with Static OOB authentication. Then it adds the AppKey, binds the vendor model, and pushes the current HMAC beacon key.
 
+This flow is event-driven and handles one node at a time. Power on and provision nodes one at a time — wait for a node to reach "fully configured" before powering the next one. Powering several unprovisioned nodes together can cause some of them to miss `APP_KEY_ADD`/`MODEL_APP_BIND` and get stuck without full config.
+
 NetKey and AppKey are random. They live in NVS.
 
 Protocol details in [02-ble-mesh.md](02-ble-mesh.md).
@@ -31,11 +33,11 @@ Watchdog exercise procedure: [09-testing.md](09-testing.md) test 7.
 
 ## OTA and beacon security
 
-- OTA for scanners and relays runs over mesh. Each node downloads its `.bin` from the LAN HTTP server and reports `OTA_RESULT` back.
+- OTA for scanners and relays runs over mesh. Each node downloads its `.bin` from the LAN HTTPS server and reports `OTA_RESULT` back.
 - The gateway checks its own firmware by SHA256. If it is the same, it skips OTA.
 - The HMAC beacon key rotates every 24 hours. The gateway makes a new random key, stores it in NVS, and pushes it to every scanner over mesh. Fake beacons fail HMAC and get dropped.
 
-HTTP OTA server and TLS setup: [06-http-tls.md](06-http-tls.md). Full OTA test procedure: [10-testing-ota.md](10-testing-ota.md). Key rotation math: [03-algorithms.md](03-algorithms.md).
+HTTPS OTA server and TLS setup: [06-http-tls.md](06-http-tls.md). Full OTA test procedure: [10-testing-ota.md](10-testing-ota.md). Key rotation math: [03-algorithms.md](03-algorithms.md).
 
 ## ThingsBoard rule chain
 
@@ -70,6 +72,7 @@ Each app has one `main/main.c` and a set of components under `components/bmt_*/`
 - `bmt_ota` — gateway self-OTA, mesh OTA for scanner and relay, HMAC OTA beacon, 24h key rotation.
 - `bmt_watchdog` — data watchdog and full-mesh reset.
 - `bmt_uart` — UART command menu (see [08-uart-commands.md](08-uart-commands.md)).
+- `bmt_factory_reset` — holds BOOT button (GPIO0) 10s, erases NVS, reboots. Does not touch firmware.
 
 ### `apps/scanner/`
 
@@ -83,6 +86,7 @@ Each app has one `main/main.c` and a set of components under `components/bmt_*/`
 - `bmt_mesh` — mesh node. UUID contains the chip MAC. Handles `RESET_CMD`, `OTA_TRIGGER`, `OTA_KEY_PUSH`.
 - `bmt_ota` — WiFi OTA started by a mesh trigger.
 - `bmt_uart` — UART commands `r`, `1`, `i`.
+- `bmt_factory_reset` — same as gateway.
 
 ### `apps/relay/`
 
@@ -92,6 +96,7 @@ Each app has one `main/main.c` and a set of components under `components/bmt_*/`
 - `bmt_mesh` — mesh node with Relay feature on. Forwards at the Network Layer. Also binds AppKey to handle `RESET_CMD` and `OTA_TRIGGER`.
 - `bmt_ota` — same as scanner.
 - `bmt_uart` — UART commands `r`, `1`, plus a 30-second health log.
+- `bmt_factory_reset` — same as gateway.
 
 ### `apps/tag/`
 
@@ -103,7 +108,7 @@ Each app has one `main/main.c` and a set of components under `components/bmt_*/`
 
 ### `thingsboard/`
 
-- `docker-compose.yml` — ThingsBoard CE 3.7 and PostgreSQL. Ports 8080 (UI) and 8883 (MQTTS). Certs from `tls/`.
+- `docker-compose.yml` — ThingsBoard CE 3.7 and PostgreSQL. Ports 8080 (UI) and 8883 (MQTTS). Also runs `ota-fileserver` (`nginx`), port 8443, serving `firmware/` over HTTPS — config in `ota-nginx.conf`. Certs from `tls/`.
 - `rulechain/` — rule chain exports. Main one is `ble_tag_zone_detection.json`.
 - `dashboard/indoor_tracking.json` — the dashboard.
 - `tls/` — dev CA and server certs. `gen_certs.sh` makes new ones.

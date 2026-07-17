@@ -4,6 +4,7 @@
 #include <inttypes.h>
 
 #include "driver/uart.h"
+#include "esp_app_desc.h"
 #include "esp_mac.h"
 #include "esp_system.h"
 
@@ -12,6 +13,15 @@
 
 #include "bmt_config.h"
 #include "bmt_mesh.h"
+
+/* [ADD] In version/compile-time — thay vi phai cuon log cu len tim dong
+ * "Compile time:" luc boot. Uptime da co san o RELAY HEALTH dinh ky, chi
+ * them vao lenh '1' de xem duoc bat cu luc nao khong can doi 30s. */
+static void print_version(void)
+{
+	const esp_app_desc_t* desc = esp_app_get_description();
+	printf("Version   : %s (build %s %s)\n", desc->version, desc->date, desc->time);
+}
 
 /* In health log định kỳ ra UART — chỉ phục vụ giám sát trực quan khi
  * cắm cáp debug tại chỗ, không ảnh hưởng logic forward/OTA/reset của Relay */
@@ -69,6 +79,12 @@ static void uart_cmd_task(void* arg)
 			printf("Net idx   : 0x%04X\n", bmt_mesh_net_idx());
 			printf("App idx   : 0x%04X\n", bmt_mesh_app_idx());
 			printf("Relay     : %s\n", bmt_mesh_relay_enabled() ? "ENABLED" : "DISABLED");
+			{
+				uint32_t uptime_s = xTaskGetTickCount() * portTICK_PERIOD_MS / 1000;
+				printf("Uptime    : %02" PRIu32 "h %02" PRIu32 "m %02" PRIu32 "s\n",
+				       uptime_s / 3600, (uptime_s % 3600) / 60, uptime_s % 60);
+			}
+			print_version();
 			printf("========================\n");
 			break;
 
@@ -112,6 +128,7 @@ static void relay_monitor_task(void* arg)
 		printf("Node addr : 0x%04X\n", bmt_mesh_node_addr());
 		printf("Uptime    : %02" PRIu32 "h %02" PRIu32 "m %02" PRIu32 "s\n", h, m, s);
 		printf("Free heap : %lu bytes\n", (unsigned long)esp_get_free_heap_size());
+		print_version();
 		printf("========================\n");
 	}
 }

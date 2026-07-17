@@ -8,9 +8,11 @@ Open serial monitors on every board (`idf.py -p <port> monitor`, 115200 baud, Ct
 
 Goal: gateway provisions every node, telemetry reaches ThingsBoard.
 
+Provisioning is event-driven and handles one node at a time — power on nodes one at a time, waiting for each to reach "fully configured" before powering the next. Powering multiple unprovisioned nodes together can cause some of them to miss `APP_KEY_ADD`/`MODEL_APP_BIND` and never finish config.
+
 1. Erase and flash the gateway. Boot log ends with `MQTT connected to ThingsBoard`.
 2. Power on the relay. Gateway log: `Found unprovisioned [RELAY]` -> `Provision complete addr=0x00xx` -> `[CFG] APP_KEY_ADD ACK` -> `[CFG] MODEL_APP_BIND ACK` -> `[RLY_CFG] Relay 0x00xx fully configured`.
-3. Same for each scanner (`[SCAN]` prefix).
+3. Same for each scanner (`[SCAN]` prefix), one at a time.
 4. Power on the tag. Its log: `ADV OK seq=0` and increments every 500 ms.
 5. Scanner log shows `Tag 0x0001 | PERSON | RSSI=...`.
 6. Gateway log shows `[VND] src=0x00xx MAC=... tag=0x0001 rssi=...`.
@@ -87,7 +89,7 @@ Scanner tracks up to `BMT_MAX_TAGS = 20`.
 
 Full procedure: [10-testing-ota.md](10-testing-ota.md). Quick smoke:
 
-1. `cd firmware && python -m http.server 8080`.
+1. `cd thingsboard && docker compose up -d ota-fileserver`.
 2. On gateway UART: `u`.
 3. Scanner and relay reboot within about 90 s each.
 4. Gateway logs `Node 0x00xx (...) OTA THANH CONG` for each.

@@ -15,6 +15,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "bmt_config.h"
@@ -48,9 +49,20 @@ static volatile uint32_t s_mesh_received = 0;
 
 #define BMT_CFG_ACK_BIT BIT0
 #define BMT_CFG_ACK_TIMEOUT_MS 10000
+#define BMT_CFG_RETRY 3
 static EventGroupHandle_t s_cfg_ack_evgrp = NULL;
 static volatile uint16_t s_cfg_wait_addr = 0;
 static volatile uint32_t s_cfg_wait_opcode = 0;
+
+/* [FIX-provision] Config client (s_cfg_client / s_root_models[1]) la TAI NGUYEN
+ * DUNG CHUNG — chi xu ly 1 giao dich tai 1 thoi diem, va bien cho-ACK
+ * (s_cfg_wait_addr/opcode + event group) cung dung chung. Khi reset nhieu node
+ * cung luc, moi node provision xong lai spawn 1 config task chay ~15s CHONG LEN
+ * nhau -> task B ghi de s_cfg_wait_addr=B trong khi task A dang cho ACK cua A
+ * -> ACK cua A ve nhung addr khong khop -> A timeout -> abort. Day la ly do
+ * "co node duoc config, node khong". Mutex nay serialize: moi luc chi 1 config
+ * task chay, dung ban chat single-transaction cua config client. */
+static SemaphoreHandle_t s_cfg_mutex = NULL;
 
 static bool wait_cfg_ack(uint16_t addr, uint32_t opcode)
 {
@@ -65,6 +77,52 @@ static bool wait_cfg_ack(uint16_t addr, uint32_t opcode)
 	s_cfg_wait_addr = 0;
 	s_cfg_wait_opcode = 0;
 	return (bits & BMT_CFG_ACK_BIT) != 0;
+}
+
+/* Gui 1 buoc config + cho ACK, thu lai toi da BMT_CFG_RETRY lan. APP_KEY_ADD va
+ * MODEL_APP_BIND deu idempotent (gui lai cung gia tri -> node tra SUCCESS) nen
+ * retry an toan. Tra ve true neu co ACK. */
+static bool cfg_send_retry(const char* step, uint16_t addr, uint32_t opcode,
+                           esp_ble_mesh_client_common_param_t* c,
+                           esp_ble_mesh_cfg_client_set_state_t* s)
+{
+	for (int a = 1; a <= BMT_CFG_RETRY; a++)
+	{
+		esp_err_t e = esp_ble_mesh_config_client_set_state(c, s);
+		if (e != ESP_OK)
+		{
+			ESP_LOGW(TAG, "%s send fail 0x%04x [%d/%d]: %s", step, addr, a, BMT_CFG_RETRY, esp_err_to_name(e));
+			vTaskDelay(pdMS_TO_TICKS(800));
+			continue;
+		}
+		if (wait_cfg_ack(addr, opcode))
+		{
+			ESP_LOGI(TAG, "%s ACK 0x%04x (lan %d)", step, addr, a);
+			return true;
+		}
+		ESP_LOGW(TAG, "%s no ACK 0x%04x [%d/%d]", step, addr, a, BMT_CFG_RETRY);
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
+	return false;
+}
+
+/* [FIX-provision] Config that bai sau retry -> XOA entry khoi bang + provisioner.
+ * Neu de nguyen (config_done=false) se thanh "zombie": nhanh re-provision o
+ * mesh_prov_cb co guard "if(!config_done) break" -> node nay khi reset & beacon
+ * unprovisioned lai se bi BO QUA vinh vien (deadlock). Xoa han de lan beacon sau
+ * duoc provision sach. */
+static void cfg_abort_cleanup(uint16_t addr)
+{
+	ESP_LOGE(TAG, "[CFG] Config 0x%04x THAT BAI sau %d lan — xoa entry (tranh zombie chan re-provision)",
+	         addr, BMT_CFG_RETRY);
+	int idx = bmt_node_table_find(addr);
+	if (idx >= 0)
+	{
+		bmt_node_t* n = bmt_node_table_get(idx);
+		esp_ble_mesh_provisioner_delete_node_with_uuid(n->uuid);
+		memset(n, 0, sizeof(*n));
+		bmt_node_table_save();
+	}
 }
 static const uint8_t BMT_MESH_STATIC_OOB_VAL[16] = {
     0x8E, 0x2F, 0x71, 0xC4, 0x3A, 0x95, 0xD6, 0x0B,
@@ -129,67 +187,52 @@ void bmt_mesh_generate_keys_if_needed(void)
 static void scan_config_task(void* arg)
 {
 	uint16_t addr = (uint16_t)(uint32_t)arg;
+	if (s_cfg_mutex)
+		xSemaphoreTake(s_cfg_mutex, portMAX_DELAY); /* serialize: 1 config task/luc */
 	ESP_LOGI(TAG, "[SCN_CFG] Configuring scan node 0x%04x...", addr);
 	vTaskDelay(pdMS_TO_TICKS(2000));
 
+	esp_ble_mesh_client_common_param_t c = {0};
+	esp_ble_mesh_cfg_client_set_state_t s = {0};
+	c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
+	c.model = &s_root_models[1];
+	c.ctx.net_idx = s_net_key_idx;
+	c.ctx.app_idx = 0xFFFF;
+	c.ctx.addr = addr;
+	c.ctx.send_ttl = 7;
+	c.msg_timeout = 8000;
+	s.app_key_add.net_idx = s_net_key_idx;
+	s.app_key_add.app_idx = s_app_key_idx;
+	memcpy(s.app_key_add.app_key, s_app_key, 16);
+	if (!cfg_send_retry("[SCN_CFG] Step1 APP_KEY_ADD", addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD, &c, &s))
 	{
-		esp_ble_mesh_client_common_param_t c = {0};
-		esp_ble_mesh_cfg_client_set_state_t s = {0};
-		c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
-		c.model = &s_root_models[1];
-		c.ctx.net_idx = s_net_key_idx;
-		c.ctx.app_idx = 0xFFFF;
-		c.ctx.addr = addr;
-		c.ctx.send_ttl = 7;
-		c.msg_timeout = 8000;
-		s.app_key_add.net_idx = s_net_key_idx;
-		s.app_key_add.app_idx = s_app_key_idx;
-		memcpy(s.app_key_add.app_key, s_app_key, 16);
-		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		if (e != ESP_OK)
-		{
-			ESP_LOGE(TAG, "[SCN_CFG] Step1 APP_KEY_ADD send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
-			vTaskDelete(NULL);
-			return;
-		}
-		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD))
-		{
-			ESP_LOGE(TAG, "[SCN_CFG] Step1 APP_KEY_ADD no ACK from 0x%04x in %ds — abort",
-			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
-			vTaskDelete(NULL);
-			return;
-		}
-		ESP_LOGI(TAG, "[SCN_CFG] Step1 APP_KEY_ADD ACK from 0x%04x", addr);
+		cfg_abort_cleanup(addr);
+		if (s_cfg_mutex)
+			xSemaphoreGive(s_cfg_mutex);
+		vTaskDelete(NULL);
+		return;
 	}
+
+	memset(&c, 0, sizeof(c));
+	memset(&s, 0, sizeof(s));
+	c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
+	c.model = &s_root_models[1];
+	c.ctx.net_idx = s_net_key_idx;
+	c.ctx.app_idx = 0xFFFF;
+	c.ctx.addr = addr;
+	c.ctx.send_ttl = 7;
+	c.msg_timeout = 5000;
+	s.model_app_bind.element_addr = addr;
+	s.model_app_bind.model_app_idx = s_app_key_idx;
+	s.model_app_bind.model_id = BMT_VND_MODEL_ID;
+	s.model_app_bind.company_id = BMT_CID_ESP;
+	if (!cfg_send_retry("[SCN_CFG] Step2 MODEL_APP_BIND", addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND, &c, &s))
 	{
-		esp_ble_mesh_client_common_param_t c = {0};
-		esp_ble_mesh_cfg_client_set_state_t s = {0};
-		c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
-		c.model = &s_root_models[1];
-		c.ctx.net_idx = s_net_key_idx;
-		c.ctx.app_idx = 0xFFFF;
-		c.ctx.addr = addr;
-		c.ctx.send_ttl = 7;
-		c.msg_timeout = 5000;
-		s.model_app_bind.element_addr = addr;
-		s.model_app_bind.model_app_idx = s_app_key_idx;
-		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
-		s.model_app_bind.company_id = BMT_CID_ESP;
-		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		if (e != ESP_OK)
-		{
-			ESP_LOGE(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
-			vTaskDelete(NULL);
-			return;
-		}
-		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND))
-		{
-			ESP_LOGE(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND no ACK from 0x%04x in %ds — abort",
-			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
-			vTaskDelete(NULL);
-			return;
-		}
-		ESP_LOGI(TAG, "[SCN_CFG] Step2 MODEL_APP_BIND ACK from 0x%04x", addr);
+		cfg_abort_cleanup(addr);
+		if (s_cfg_mutex)
+			xSemaphoreGive(s_cfg_mutex);
+		vTaskDelete(NULL);
+		return;
 	}
 
 	int idx = bmt_node_table_find(addr);
@@ -203,72 +246,59 @@ static void scan_config_task(void* arg)
 	bmt_ota_push_beacon_key_to_node(addr);
 
 	bmt_node_table_print();
+	if (s_cfg_mutex)
+		xSemaphoreGive(s_cfg_mutex);
 	vTaskDelete(NULL);
 }
 static void relay_config_task(void* arg)
 {
 	uint16_t addr = (uint16_t)(uint32_t)arg;
+	if (s_cfg_mutex)
+		xSemaphoreTake(s_cfg_mutex, portMAX_DELAY); /* serialize: 1 config task/luc */
 	ESP_LOGI(TAG, "[RLY_CFG] Configuring relay node 0x%04x...", addr);
 	vTaskDelay(pdMS_TO_TICKS(2000));
 
+	esp_ble_mesh_client_common_param_t c = {0};
+	esp_ble_mesh_cfg_client_set_state_t s = {0};
+	c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
+	c.model = &s_root_models[1];
+	c.ctx.net_idx = s_net_key_idx;
+	c.ctx.app_idx = 0xFFFF;
+	c.ctx.addr = addr;
+	c.ctx.send_ttl = 7;
+	c.msg_timeout = 8000;
+	s.app_key_add.net_idx = s_net_key_idx;
+	s.app_key_add.app_idx = s_app_key_idx;
+	memcpy(s.app_key_add.app_key, s_app_key, 16);
+	if (!cfg_send_retry("[RLY_CFG] Step1 APP_KEY_ADD", addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD, &c, &s))
 	{
-		esp_ble_mesh_client_common_param_t c = {0};
-		esp_ble_mesh_cfg_client_set_state_t s = {0};
-		c.opcode = ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD;
-		c.model = &s_root_models[1];
-		c.ctx.net_idx = s_net_key_idx;
-		c.ctx.app_idx = 0xFFFF;
-		c.ctx.addr = addr;
-		c.ctx.send_ttl = 7;
-		c.msg_timeout = 8000;
-		s.app_key_add.net_idx = s_net_key_idx;
-		s.app_key_add.app_idx = s_app_key_idx;
-		memcpy(s.app_key_add.app_key, s_app_key, 16);
-		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		if (e != ESP_OK)
-		{
-			ESP_LOGE(TAG, "[RLY_CFG] Step1 APP_KEY_ADD send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
-			vTaskDelete(NULL);
-			return;
-		}
-		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD))
-		{
-			ESP_LOGE(TAG, "[RLY_CFG] Step1 APP_KEY_ADD no ACK from 0x%04x in %ds — abort",
-			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
-			vTaskDelete(NULL);
-			return;
-		}
-		ESP_LOGI(TAG, "[RLY_CFG] Step1 APP_KEY_ADD ACK from 0x%04x", addr);
+		cfg_abort_cleanup(addr);
+		if (s_cfg_mutex)
+			xSemaphoreGive(s_cfg_mutex);
+		vTaskDelete(NULL);
+		return;
 	}
+
+	memset(&c, 0, sizeof(c));
+	memset(&s, 0, sizeof(s));
+	c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
+	c.model = &s_root_models[1];
+	c.ctx.net_idx = s_net_key_idx;
+	c.ctx.app_idx = 0xFFFF;
+	c.ctx.addr = addr;
+	c.ctx.send_ttl = 7;
+	c.msg_timeout = 5000;
+	s.model_app_bind.element_addr = addr;
+	s.model_app_bind.model_app_idx = s_app_key_idx;
+	s.model_app_bind.model_id = BMT_VND_MODEL_ID;
+	s.model_app_bind.company_id = BMT_CID_ESP;
+	if (!cfg_send_retry("[RLY_CFG] Step2 MODEL_APP_BIND", addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND, &c, &s))
 	{
-		esp_ble_mesh_client_common_param_t c = {0};
-		esp_ble_mesh_cfg_client_set_state_t s = {0};
-		c.opcode = ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND;
-		c.model = &s_root_models[1];
-		c.ctx.net_idx = s_net_key_idx;
-		c.ctx.app_idx = 0xFFFF;
-		c.ctx.addr = addr;
-		c.ctx.send_ttl = 7;
-		c.msg_timeout = 5000;
-		s.model_app_bind.element_addr = addr;
-		s.model_app_bind.model_app_idx = s_app_key_idx;
-		s.model_app_bind.model_id = BMT_VND_MODEL_ID;
-		s.model_app_bind.company_id = BMT_CID_ESP;
-		esp_err_t e = esp_ble_mesh_config_client_set_state(&c, &s);
-		if (e != ESP_OK)
-		{
-			ESP_LOGE(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND send FAILED to 0x%04x: %s — abort", addr, esp_err_to_name(e));
-			vTaskDelete(NULL);
-			return;
-		}
-		if (!wait_cfg_ack(addr, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND))
-		{
-			ESP_LOGE(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND no ACK from 0x%04x in %ds — abort",
-			         addr, BMT_CFG_ACK_TIMEOUT_MS / 1000);
-			vTaskDelete(NULL);
-			return;
-		}
-		ESP_LOGI(TAG, "[RLY_CFG] Step2 MODEL_APP_BIND ACK from 0x%04x", addr);
+		cfg_abort_cleanup(addr);
+		if (s_cfg_mutex)
+			xSemaphoreGive(s_cfg_mutex);
+		vTaskDelete(NULL);
+		return;
 	}
 
 	int idx = bmt_node_table_find(addr);
@@ -279,6 +309,8 @@ static void relay_config_task(void* arg)
 	}
 	ESP_LOGI(TAG, "[RLY_CFG] Relay 0x%04x fully configured — RESET_CMD enabled!", addr);
 	bmt_node_table_print();
+	if (s_cfg_mutex)
+		xSemaphoreGive(s_cfg_mutex);
 	vTaskDelete(NULL);
 }
 static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t* param)
@@ -433,9 +465,9 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 			if (param->error_code == 0)
 			{
 				if (n && n->is_scan)
-					bmt_tb_pub_node_status(addr, BMT_ROLE_SCAN, true);
+					bmt_tb_pub_node_status(addr, n->mac, BMT_ROLE_SCAN, true);
 				if (n && n->is_relay)
-					bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+					bmt_tb_pub_node_status(addr, n->mac, BMT_ROLE_RELAY, true);
 			}
 		}
 	}
@@ -443,6 +475,13 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 		ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
 	if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT)
 	{
+		/* [FIX-provision] Bao hieu cho node_ping_task (dang giu s_cfg_mutex cho
+		 * DEFAULT_TTL_GET nay) biet round-trip da xong, cung 1 co che voi
+		 * SET_STATE_EVT o tren — de mutex duoc nha ngay khi co ACK thay vi
+		 * phai cho het 10s timeout moi nha. */
+		if (param->error_code == 0 && addr == s_cfg_wait_addr &&
+		    param->params->opcode == s_cfg_wait_opcode && s_cfg_ack_evgrp)
+			xEventGroupSetBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT);
 		if (param->error_code != 0)
 		{
 			ESP_LOGW(TAG, "[PING] 0x%04x FAILED (err=%d) — khong tinh ACK",
@@ -457,7 +496,7 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 			{
 				n->online = true;
 				ESP_LOGI(TAG, "Relay 0x%04x ONLINE (ping)", addr);
-				bmt_tb_pub_node_status(addr, BMT_ROLE_RELAY, true);
+				bmt_tb_pub_node_status(addr, n->mac, BMT_ROLE_RELAY, true);
 			}
 		}
 	}
@@ -509,7 +548,7 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 			{
 				scan_node->last_seen_ms = now;
 				scan_node->online = true;
-				bmt_tb_pub_node_status(src, BMT_ROLE_SCAN, true);
+				bmt_tb_pub_node_status(src, scan_node->mac, BMT_ROLE_SCAN, true);
 			}
 		}
 
@@ -576,16 +615,29 @@ static void node_ping_task(void* arg)
 			common.ctx.addr = n->addr;
 			common.ctx.send_ttl = 7;
 			common.msg_timeout = 5000;
+			/* [FIX-provision] Config client la tai nguyen DUNG CHUNG voi
+			 * scan_config_task/relay_config_task — khoa mutex XUYEN SUOT ca
+			 * round-trip (gui + cho ACK/timeout qua wait_cfg_ack), khong phai
+			 * chi luc gui, vi request con "bay" tren mesh sau khi ham gui tra
+			 * ve — nha mutex som se van dam transaction voi task khac dang
+			 * gui. Thieu buoc nay gay "[CFG] TIMEOUT opcode=0x800c" (chinh la
+			 * DEFAULT_TTL_GET nay) va keo dai hang doi provision vo ich. */
+			if (s_cfg_mutex)
+				xSemaphoreTake(s_cfg_mutex, portMAX_DELAY);
 			esp_err_t pe = esp_ble_mesh_config_client_get_state(&common, &get);
 			if (pe != ESP_OK)
 				ESP_LOGW(TAG, "[PING] send fail to 0x%04x: %s", n->addr, esp_err_to_name(pe));
+			else
+				wait_cfg_ack(n->addr, ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET); /* cho het round-trip roi moi nha mutex */
+			if (s_cfg_mutex)
+				xSemaphoreGive(s_cfg_mutex);
 			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS)
 			{
 				if (n->online)
 				{
 					n->online = false;
 					ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-					bmt_tb_pub_node_status(n->addr, BMT_ROLE_RELAY, false);
+					bmt_tb_pub_node_status(n->addr, n->mac, BMT_ROLE_RELAY, false);
 				}
 			}
 			vTaskDelay(pdMS_TO_TICKS(500));
@@ -597,6 +649,7 @@ esp_err_t bmt_mesh_init(void)
 {
 	esp_err_t err;
 	s_cfg_ack_evgrp = xEventGroupCreate();
+	s_cfg_mutex = xSemaphoreCreateMutex();
 	esp_ble_mesh_register_prov_callback(mesh_prov_cb);
 	esp_ble_mesh_register_config_client_callback(cfg_client_cb);
 	esp_ble_mesh_register_config_server_callback(cfg_server_cb);

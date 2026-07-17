@@ -49,12 +49,25 @@ void bmt_tb_pub_gateway_online(void)
 	ESP_LOGI("BMT_TB", "TB Gateway ONLINE");
 }
 
-void bmt_tb_pub_node_status(uint16_t addr, const char* role, bool online)
+void bmt_tb_pub_gateway_ota_result(bool success)
+{
+	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
+		return;
+	const char* json = success ? "{\"ota_result\":\"SUCCESS\"}" : "{\"ota_result\":\"FAILED\"}";
+	esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/devices/me/telemetry", json, 0, 1, 0);
+	ESP_LOGI("BMT_TB", "TB Gateway OTA result: %s", success ? "SUCCESS" : "FAILED");
+}
+
+void bmt_tb_pub_node_status(uint16_t addr, const uint8_t* mac, const char* role, bool online)
 {
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
 		return;
 	char dev[32], json[192];
-	snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, addr);
+	if (mac)
+		snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT,
+		         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	else
+		snprintf(dev, sizeof(dev), "bmt_node_addr%04x", addr); /* fallback hiem gap: chua tra ra MAC */
 	if (online)
 	{
 		tb_connect_device(dev, BMT_PROFILE_NODE);
@@ -145,10 +158,13 @@ void bmt_tb_pub_ota_result(uint16_t addr, uint8_t status)
 {
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
 		return;
-	if (bmt_node_table_find(addr) < 0)
+	int idx = bmt_node_table_find(addr);
+	if (idx < 0)
 		return;
+	const bmt_node_t* n = bmt_node_table_get(idx);
 	char dev[32], json[128];
-	snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT, addr);
+	snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT,
+	         n->mac[0], n->mac[1], n->mac[2], n->mac[3], n->mac[4], n->mac[5]);
 	snprintf(json, sizeof(json), "{\"%s\":[{\"ota_result\":\"%s\"}]}",
 	         dev, status == 0 ? "SUCCESS" : "FAILED");
 	esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/telemetry", json, 0, 1, 0);

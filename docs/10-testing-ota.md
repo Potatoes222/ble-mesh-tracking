@@ -3,7 +3,7 @@
 Verify each OTA path. Assumes bring-up works ([09-testing.md](09-testing.md)).
 
 Four things to verify independently:
-1. HTTP server serves the right file.
+1. HTTPS server serves the right file.
 2. Version compare prevents downgrade.
 3. SHA256 check skips identical binaries.
 4. Beacon HMAC key rotation works.
@@ -11,13 +11,13 @@ Four things to verify independently:
 ## Setup
 
 ```
-cd firmware && python -m http.server 8080
+cd thingsboard && docker compose up -d ota-fileserver
 ```
 
 Confirm URLs reachable:
 
 ```
-curl -s -o /dev/null -w "%{http_code}\n" http://<host-ip>:8080/Scanner.bin
+curl -sk -o /dev/null -w "%{http_code}\n" https://<host-ip>:8443/Scanner.bin
 ```
 
 Should print `200`. Fix firewall if not (see [06-http-tls.md](06-http-tls.md)).
@@ -106,7 +106,7 @@ Gateway: `[RPC] Received: ...` -> `[RPC] OTA Scanner triggered`. Same for `ota_r
 
 ## Fast smoke test
 
-1. `cd firmware && python -m http.server 8080`.
+1. `cd thingsboard && docker compose up -d ota-fileserver`.
 2. Rebuild gateway (`idf.py build`) — copies new `.bin`.
 3. UART `g`. Either "not newer, skip" (just built) or flash + reboot (older running). Both mean the path works.
 

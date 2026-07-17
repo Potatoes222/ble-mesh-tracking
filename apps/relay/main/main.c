@@ -7,6 +7,7 @@
 #include "esp_bt_main.h"
 
 #include "bmt_config.h"
+#include "bmt_factory_reset.h"
 #include "bmt_mesh.h"
 #include "bmt_ota.h"
 #include "bmt_uart.h"
@@ -51,7 +52,7 @@ static esp_err_t bluetooth_init(void)
 
 void app_main(void)
 {
-	ESP_LOGI(TAG, "=== BMT Relay v2.0-modular Starting ===");
+	ESP_LOGI(TAG, "=== BMT Relay v2.0 Starting ===");
 	ESP_LOGI(TAG, "Relay ID: 0x%02X", BMT_RELAY_UUID[15]);
 
 	esp_err_t err = nvs_flash_init();
@@ -62,6 +63,8 @@ void app_main(void)
 		err = nvs_flash_init();
 	}
 	ESP_ERROR_CHECK(err);
+
+	bmt_factory_reset_init();
 
 	err = bluetooth_init();
 	if (err != ESP_OK)

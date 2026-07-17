@@ -76,6 +76,7 @@ int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type,
 			s_tags[i].last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
 			s_tags[i].last_logged_rssi = rssi;
 			s_tags[i].last_log_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+			s_tags[i].locked_epoch = -1;
 			if (mac)
 				memcpy(s_tags[i].mac, mac, 6);
 			kalman_init(&s_kalman[i], (float)rssi);
@@ -89,6 +90,13 @@ int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type,
 	}
 	ESP_LOGW(TAG, "Tag table full!");
 	return -1;
+}
+
+void bmt_tag_table_set_epoch(int idx, int32_t epoch)
+{
+	if (idx < 0 || idx >= BMT_MAX_TAGS || !s_tags[idx].active)
+		return;
+	s_tags[idx].locked_epoch = epoch;
 }
 
 void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence)
@@ -187,11 +195,11 @@ void bmt_tag_table_print(uint8_t scanner_id)
 		               ? (float)t->total_missed / tot * 100.0f
 		               : 0.0f;
 		printf("Tag 0x%04X | %s | RSSI=%d | Filt=%.1f | Dist=%.2fm"
-		       " | Loss=%.1f%% | %lus ago\n",
+		       " | Loss=%.1f%% | Epoch=%ld | %lus ago\n",
 		       t->tag_id,
 		       t->tag_type == BMT_TAG_TYPE_PERSON ? "PERSON" : "ASSET",
 		       t->rssi_raw, t->rssi_filtered, t->distance, lr,
-		       (unsigned long)age);
+		       (long)t->locked_epoch, (unsigned long)age);
 	}
 	if (!has_tag)
 		printf("  No tags in range\n");

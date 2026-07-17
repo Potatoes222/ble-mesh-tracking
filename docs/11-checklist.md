@@ -36,6 +36,7 @@ Before `git commit`:
 - [ ] `BMT_MESH_STATIC_OOB_VAL` regenerated (not the dev default). Same value in gateway AND scanner AND relay.
 - [ ] `CONFIG_BLE_MESH_SETTINGS=y` in gateway `sdkconfig`.
 - [ ] Firmware `PROJECT_VER` shows the deployment build time. Sanity: it must be later than every previously flashed version.
+- [ ] `secure_boot_keys/bmt_fleet_rsa3072.pem` generated yourself and backed up outside the repo before the first `erase-flash`. See [13-secure-boot.md](13-secure-boot.md) — the eFuse burn on first boot is permanent per board.
 
 ## Pre-release
 
@@ -62,7 +63,7 @@ At the customer site, in order:
 - [ ] Tag(s) powered on and visible on the dashboard.
 - [ ] `ZONE_MAP` in the ThingsBoard rule chain updated with the actual scanner MACs (read them off UART with command `1`).
 - [ ] A full walking test in every room shows the correct zone assignment.
-- [ ] HTTP OTA server running on a workstation for future updates: `cd firmware && python -m http.server 8080`.
+- [ ] HTTPS OTA server running for future updates: `cd thingsboard && docker compose up -d ota-fileserver`.
 
 ## After a bug is found in production
 
