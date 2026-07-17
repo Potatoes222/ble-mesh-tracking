@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-18
+
+Security hardening on top of the 2026-07-09 rewrite. Scope: `apps/gateway`, `apps/relay`, `apps/scanner`, `apps/tag`, shared `components/bmt_ota`, and `thingsboard/`. Does not touch `apps/beacon` (separate board, still experimental).
+
+### Security
+
+16. Secure Boot V2 (RSA-3072) on all four apps. Bootloader and app image are signed at build time (`CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=y`); an unsigned or tampered image will not boot. One key file signs the whole fleet (`secure_boot_keys/bmt_fleet_rsa3072.pem`, gitignored, never committed) — see [13-secure-boot.md](13-secure-boot.md).
+17. Flash Encryption (AES-128, Development mode) on the same four apps. Added an `nvs_key` partition (`encrypted` flag) to every `partitions.csv` so NVS content — mesh keys, HMAC key, WiFi/ThingsBoard credentials — is encrypted at rest, not just in transit.
+18. OTA fileserver moved from plain HTTP (`python -m http.server 8080`) to HTTPS on port 8443: an `nginx` container (`ota-fileserver` in `thingsboard/docker-compose.yml`) now serves `firmware/`, reusing the same TLS cert/key pair as MQTTS. `bmt_ota.c` (gateway self-update, and shared `components/bmt_ota` used by relay/scanner) sets `cert_pem`/`common_name` on `esp_http_client_config_t` to verify the server before downloading a `.bin`. Rationale and old HTTP tradeoff: [06-http-tls.md](06-http-tls.md).
+
+### Reliability
+
+19. New `bmt_factory_reset` component on gateway, relay, and scanner: holding the BOOT button (GPIO0) for 10 seconds erases NVS (node table, NetKey/AppKey, all other config) and reboots. Does not touch firmware.
+20. Gateway publishes OTA result (`bmt_tb_pub_gateway_ota_result`) to ThingsBoard before rebooting on self-update success, and on failure. `ota_result` now reflects gateway self-update, not just node OTA.
+21. Device identifier for mesh nodes changed from mesh address (`bmt_node_0x%04x`, changes on every re-provision) to MAC-based (`bmt_node_%02x%02x%02x%02x%02x%02x`, fixed per physical device). Fixes ThingsBoard accumulating a new device entry every time a node resets or re-provisions.
+
 ## 2026-07-09
 
 Diff from the old `main` branch (2026-06-28). The old branch had one big `main.c`, computed the zone on the gateway, and set scanner IDs by hand.

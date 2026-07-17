@@ -1,8 +1,10 @@
 #include "bmt_uart.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 
 #include "driver/uart.h"
+#include "esp_app_desc.h"
 #include "esp_system.h"
 
 #include "freertos/FreeRTOS.h"
@@ -12,6 +14,18 @@
 #include "bmt_mesh.h"
 #include "bmt_ota.h"
 #include "bmt_scan_core.h"
+
+/* [ADD] In version/compile-time + uptime tai cho — thay vi phai cuon log cu
+ * len tim dong "Compile time:" luc boot (kho khi log da dai hang ngan dong),
+ * gio go '1' bat cu luc nao la thay ngay dang chay ban nao, chay bao lau. */
+static void print_version_uptime(void)
+{
+	const esp_app_desc_t* desc = esp_app_get_description();
+	uint32_t uptime_s = xTaskGetTickCount() * portTICK_PERIOD_MS / 1000;
+	printf("Version    : %s (build %s %s)\n", desc->version, desc->date, desc->time);
+	printf("Uptime     : %02" PRIu32 "h %02" PRIu32 "m %02" PRIu32 "s\n",
+	       uptime_s / 3600, (uptime_s % 3600) / 60, uptime_s % 60);
+}
 
 static void uart_cmd_task(void* arg)
 {
@@ -108,6 +122,7 @@ static void uart_cmd_task(void* arg)
 			printf("App idx    : 0x%04X\n", bmt_mesh_app_idx());
 			printf("OTA state  : %s\n", bmt_ota_is_triggered() ? "WiFi OTA running" : "IDLE");
 			printf("Heap free  : %lu bytes\n", (unsigned long)esp_get_free_heap_size());
+			print_version_uptime();
 			printf("==========================\n");
 			break;
 

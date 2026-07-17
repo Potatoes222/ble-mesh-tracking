@@ -69,7 +69,7 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				memcpy(&p, adv_data + pos + 4, sizeof(p));
 				if (memcmp(p.uuid, BMT_SYSTEM_UUID_PREFIX, 4) != 0)
 					goto next_field;
-				if (!bmt_auth_verify_tag((uint8_t*)&p,
+				if (!bmt_auth_verify_tag(p.minor, (uint8_t*)&p,
 				                         sizeof(p) - sizeof(p.mac16), p.mac16))
 					goto next_field;
 				out->tag_type = (p.major == BMT_TAG_MAJOR_PERSON)
@@ -178,11 +178,14 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 
 		int idx = bmt_tag_table_find(payload.tag_id);
 		if (idx < 0)
-			bmt_tag_table_add(payload.tag_id, payload.tag_type,
-			                  payload.tx_power, param->scan_rst.rssi,
-			                  payload.sequence, param->scan_rst.bda);
+			idx = bmt_tag_table_add(payload.tag_id, payload.tag_type,
+			                        payload.tx_power, param->scan_rst.rssi,
+			                        payload.sequence, param->scan_rst.bda);
 		else
 			bmt_tag_table_update(idx, param->scan_rst.rssi, payload.sequence);
+
+		if (idx >= 0)
+			bmt_tag_table_set_epoch(idx, bmt_auth_get_locked_epoch(payload.tag_id));
 
 		s_has_new_data = true;
 		break;

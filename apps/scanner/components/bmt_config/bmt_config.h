@@ -1,5 +1,5 @@
 #pragma once
 #define BMT_WIFI_SSID "YOUR_WIFI_SSID"
 #define BMT_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define BMT_OTA_SCANNER_URL "http://192.168.2.23:8080/Scanner.bin"
+#define BMT_OTA_SCANNER_URL "https://192.168.2.23:8443/Scanner.bin"
 #define BMT_OTA_WIFI_TIMEOUT_MS 30000

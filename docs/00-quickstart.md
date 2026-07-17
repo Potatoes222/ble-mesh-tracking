@@ -60,7 +60,7 @@ Edit `apps/*/components/bmt_config/bmt_config.h`:
 | `BMT_WIFI_SSID` / `BMT_WIFI_PASS` | gateway, scanner, relay | Your WiFi. |
 | `BMT_TB_IP` | gateway | Docker host IP. |
 | `BMT_TB_GATEWAY_TOKEN` | gateway | Token from step 3. |
-| `BMT_OTA_*_URL` | gateway, scanner, relay | `http://<host-ip>:8080/<name>.bin`. |
+| `BMT_OTA_*_URL` | gateway, scanner, relay | `https://<host-ip>:8443/<name>.bin`. |
 
 If you regenerated TLS certs, copy `thingsboard/tls/ca.pem` over `apps/gateway/components/bmt_mqtt/ca.pem`.
 
@@ -68,13 +68,16 @@ If you regenerated TLS certs, copy `thingsboard/tls/ca.pem` over `apps/gateway/c
 
 Find the serial ports first: Linux `ls /dev/ttyUSB*`, Windows Device Manager under "Ports (COM & LPT)".
 
+All four apps have Secure Boot V2 and Flash Encryption on. **Every board needs `erase-flash` on its first flash**, not just the gateway — that first boot is what burns the signing/encryption eFuses, and it is permanent per chip. Read [13-secure-boot.md](13-secure-boot.md) before you flash real hardware, and generate your own `secure_boot_keys/bmt_fleet_rsa3072.pem` first (not committed to the repo).
+
 ```
-# Gateway needs erase-flash the first time (custom partition table)
 cd apps/gateway && idf.py -p <port> erase-flash flash
-cd apps/scanner && idf.py -p <port> flash
-cd apps/relay   && idf.py -p <port> flash
-cd apps/tag     && idf.py -p <port> flash
+cd apps/scanner && idf.py -p <port> erase-flash flash
+cd apps/relay   && idf.py -p <port> erase-flash flash
+cd apps/tag     && idf.py -p <port> erase-flash flash
 ```
+
+After that first flash, plain `idf.py -p <port> flash` is enough for the same board — it stays signed/encrypted with the same key.
 
 Each build copies its `.bin` into `firmware/`. Override with `idf.py -DBMT_OTA_DIR=/some/dir build`.
 
@@ -82,17 +85,20 @@ Linux permission denied on `/dev/ttyUSB*`: `sudo usermod -aG dialout $USER`, the
 
 ## 6. Run
 
-1. Power up the tag, scanners, relay, and gateway. Order does not matter.
-2. Gateway is in AUTO mode and provisions everything on its own.
-3. Open the gateway serial monitor at 115200: `idf.py -p <port> monitor`. Press `1` to see the node table.
-4. Open the Indoor Tracking dashboard in ThingsBoard.
+1. Power up the gateway first. Gateway is in AUTO mode and provisions each node on its own.
+2. Power up the relay, wait for it to fully provision, **then** power up scanners **one at a time**, waiting for each to finish before powering the next. Provisioning is event-driven: the gateway handles one node's provision/config sequence (`APP_KEY_ADD` -> `MODEL_APP_BIND`) at a time, and powering multiple unprovisioned nodes together can cause some of them to miss their config step and never reach "fully configured".
+3. Open the gateway serial monitor at 115200: `idf.py -p <port> monitor`. Press `1` to see the node table — confirm every node shows `Config done: YES` before moving to the next one.
+4. Power up the tag(s) last. Tags do not provision (they only beacon), so order relative to them does not matter.
+5. Open the Indoor Tracking dashboard in ThingsBoard.
+
+If a node never reaches "fully configured", power-cycle just that node — it will send a fresh unprovisioned beacon and the gateway re-provisions it (see [07-operation.md](07-operation.md#self-healing)).
 
 Full command list: [08-uart-commands.md](08-uart-commands.md). Test procedures: [09-testing.md](09-testing.md).
 
 ## 7. OTA
 
 ```
-cd firmware && python -m http.server 8080
+cd thingsboard && docker compose up -d ota-fileserver
 ```
 
 On gateway UART: `u` starts OTA for scanners and relays, `g` for gateway self-update. Full procedure: [10-testing-ota.md](10-testing-ota.md).

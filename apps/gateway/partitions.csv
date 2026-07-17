@@ -1,4 +1,4 @@
-# Name,    Type,  SubType,  Offset,  Size
+# Name,    Type,  SubType,  Offset,  Size,  Flags
 nvs,       data,  nvs,      ,        64K
 phy_init,  data,  phy,      ,        4K
 factory,   app,   factory,  ,        2M
@@ -6,3 +6,4 @@ ota_0,     app,   ota_0,    ,        2M
 ota_1,     app,   ota_1,    ,        2M
 otadata,   data,  ota,      ,        8K
 storage, data, spiffs,      ,        0x400000
+nvs_key,   data,  nvs_keys, ,        0x1000, encrypted

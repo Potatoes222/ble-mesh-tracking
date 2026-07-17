@@ -22,9 +22,17 @@
 #include "bmt_config.h"
 #include "bmt_mesh.h"
 #include "bmt_node_table.h"
+#include "bmt_thingsboard.h"
 #include "bmt_types.h"
 
 static const char* TAG = "BMT_OTA";
+
+/* [SECURITY] Cert CA nhung vao firmware de verify HTTPS OTA server — dung
+ * chung 1 CA voi MQTTS (cung 1 server vat ly). Truoc day OTA qua HTTP thuan,
+ * ai chung LAN cung tai .bin ve doc plaintext secret (WiFi pass, TB token...)
+ * ma khong can dung toi vat ly board — day la fix cho lo hong do. */
+extern const uint8_t bmt_ota_ca_pem_start[] asm("_binary_ota_ca_pem_start");
+extern const uint8_t bmt_ota_ca_pem_end[] asm("_binary_ota_ca_pem_end");
 
 #define BMT_OTA_HTTP_TIMEOUT_MS 15000
 #define BMT_OTA_NODE_GAP_MS 90000        /* 90s mỗi node: đủ download ~840KB + reboot */
@@ -48,6 +56,9 @@ static void self_update_task(void* arg)
 	esp_http_client_config_t http_cfg = {
 	    .url = BMT_OTA_GATEWAY_URL,
 	    .timeout_ms = BMT_OTA_HTTP_TIMEOUT_MS,
+	    .cert_pem = (const char*)bmt_ota_ca_pem_start,
+	    .cert_len = (size_t)(bmt_ota_ca_pem_end - bmt_ota_ca_pem_start),
+	    .common_name = BMT_OTA_SERVER_CN,
 	};
 	esp_https_ota_config_t ota_cfg = {.http_config = &http_cfg};
 	esp_https_ota_handle_t ota_handle = NULL;
@@ -117,11 +128,19 @@ static void self_update_task(void* arg)
 	if (err == ESP_OK)
 	{
 		printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
+		/* [ADD] Bao cao thanh cong TRUOC khi reboot — publish xong con 1000ms
+		 * delay o duoi lam thoi gian cho MQTT flush qua TCP (ket noi da san
+		 * co san, chi la 1 goi nho nen thuong xong trong vai chuc ms). */
+		bmt_tb_pub_gateway_ota_result(true);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 		esp_restart();
 	}
 
 self_update_fail:
+	/* [ADD] Bao cao THAT BAI — CHI khi da thuc su thu OTA (khong phai 2 nhanh
+	 * "skip vi giong het/khong moi hon" o tren, vi do khong phai loi, tranh
+	 * spam FAILED moi 3 phut khi khong co ban moi de cap nhat). */
+	bmt_tb_pub_gateway_ota_result(false);
 	printf("[OTA] Gateway self-update FAILED: %s\n", esp_err_to_name(err));
 	atomic_store(&s_running, false);
 	vTaskDelete(NULL);

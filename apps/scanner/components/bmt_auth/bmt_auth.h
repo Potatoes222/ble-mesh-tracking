@@ -7,8 +7,16 @@
 /* Gọi 1 lần lúc boot, TRƯỚC khi bmt_scan bắt đầu nhận/verify bất kỳ ADV nào */
 void bmt_auth_init(void);
 
-/* Verify payload Tag ADV — dùng BMT_TAG_HMAC_KEY */
-bool bmt_auth_verify_tag(const uint8_t* data, int len, uint16_t received_mac);
+/* Verify payload Tag ADV — dùng epoch key derive từ BMT_TAG_MASTER_KEY, tự
+ * đoán + windowed resync (xem giải thích đầy đủ trong bmt_auth.c). tag_id
+ * lấy từ p.minor trong payload, dùng để tra state đồng bộ epoch riêng của
+ * từng tag. */
+bool bmt_auth_verify_tag(uint16_t tag_id, const uint8_t* data, int len, uint16_t received_mac);
+
+/* Epoch hiện Scanner đang "lock" cho tag này (dùng cho hiển thị/debug) —
+ * trả về -1 nếu chưa từng lock (chưa thấy tag hoặc mới add xong chưa verify
+ * lần nào thành công). */
+int32_t bmt_auth_get_locked_epoch(uint16_t tag_id);
 
 /* Tính HMAC cho payload OTA-beacon — dùng key hiện tại (NVS nếu đã nhận rotate
  * từ Gateway, mặc định hardcode nếu chưa từng nhận), so sánh thủ công ở caller */

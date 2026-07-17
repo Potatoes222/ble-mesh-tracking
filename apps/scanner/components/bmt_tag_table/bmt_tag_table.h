@@ -31,6 +31,7 @@ typedef struct
 	uint8_t mac[6];
 	int8_t last_logged_rssi;
 	uint32_t last_log_ms;
+	int32_t locked_epoch; /* [SECURITY] epoch key Scanner dang lock cho tag nay, -1 = chua lock. Chi de hien thi/debug. */
 } bmt_scan_tag_info_t;
 
 void bmt_tag_table_reset(void);
@@ -39,6 +40,9 @@ int bmt_tag_table_find(uint16_t tag_id);
 int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type, int8_t tx_power,
                       int8_t rssi, uint8_t sequence, const uint8_t* mac);
 void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence);
+/* Ghi lai epoch key hien Scanner dang lock cho tag o idx nay — goi tu
+ * bmt_scan.c ngay sau khi verify HMAC thanh cong (chi de hien thi/debug). */
+void bmt_tag_table_set_epoch(int idx, int32_t epoch);
 void bmt_tag_table_check_timeouts(void);
 void bmt_tag_table_print(uint8_t scanner_id);
 
