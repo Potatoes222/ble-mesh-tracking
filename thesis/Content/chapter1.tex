@@ -1,0 +1,57 @@
+\chapter{GIỚI THIỆU}
+\label{Chapter1}
+
+\section{Bối cảnh và động lực thực hiện}
+% - Nhu cầu định vị trong nhà: bệnh viện, nhà dưỡng lão, kho, nhà máy.
+% - Vì sao GPS không dùng được trong nhà.
+% - Các giải pháp thay thế: WiFi RTT, UWB, BLE, camera.
+% - Lý do chọn BLE (giá, pin, phổ biến).
+% - Lý do chọn BLE Mesh thay vì BLE point-to-point (vùng phủ, forwarding, self-healing).
+
+\section{Mục tiêu nghiên cứu}
+% - Xây dựng đầy đủ 4 loại node embedded: Tag, Scanner, Relay, Gateway.
+% - Pipeline server-side xử lý RSSI thay vì xử lý trên firmware.
+% - Bảo mật lớp beacon (chống giả mạo) và lớp truyền (TLS).
+% - OTA cho toàn bộ node.
+
+\section{Phạm vi}
+% - Định vị mức phòng (room-level), không phải tọa độ (x,y).
+% - 3-5 phòng, môi trường thí nghiệm.
+% - 1-N tag di động, 3 scanner cố định, 1 relay, 1 gateway.
+
+\section{Các công cụ và board mạch phát triển}
+
+\subsection{Framework ESP-IDF v6.0.1}
+% - Vì sao chọn ESP-IDF.
+% - Component-based build system.
+
+\subsection{Phần cứng}
+% - Board ESP32-S3 dùng cho Gateway (WiFi + BLE đồng thời, flash 16 MB).
+% - Board ESP32 dùng cho Tag/Scanner/Relay.
+
+\subsection{ThingsBoard CE 3.7}
+% - Docker + PostgreSQL.
+% - Gateway API, rule chain engine.
+
+\subsection{Công cụ phụ trợ}
+% - VS Code + ESP-IDF extension.
+% - clang-format.
+% - Git, GitHub Actions.
+
+\section{Cấu trúc của khóa luận}
+
+Khóa luận được bố cục thành sáu chương:
+
+\begin{itemize}
+    \item \textbf{Chương 1 -- Giới thiệu:} Bối cảnh, mục tiêu, phạm vi, công cụ.
+
+    \item \textbf{Chương 2 -- Tổng quan nghiên cứu:} Các phương pháp định vị trong nhà hiện có, giải pháp thương mại, khoảng trống nghiên cứu.
+
+    \item \textbf{Chương 3 -- Cơ sở lý thuyết:} BLE Advertising và RSSI, BLE Mesh, xử lý tín hiệu (Kalman, path-loss), thuật toán zone (hysteresis, debounce), bảo mật (HMAC, TLS), OTA, giao thức ThingsBoard.
+
+    \item \textbf{Chương 4 -- Triển khai hệ thống:} Kiến trúc tổng thể và firmware của Tag, Scanner, Relay, Gateway; cấu hình server ThingsBoard; bảo mật end-to-end; cơ chế OTA.
+
+    \item \textbf{Chương 5 -- Kết quả thực nghiệm:} Thiết lập thí nghiệm, các kịch bản test (bring-up, độ chính xác, chống nhiễu, self-healing, OTA, bảo mật), đánh giá tổng quan.
+
+    \item \textbf{Chương 6 -- Kết luận:} Đóng góp, hạn chế, hướng phát triển.
+\end{itemize}

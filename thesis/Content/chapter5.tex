@@ -1,0 +1,97 @@
+\chapter{KẾT QUẢ THỰC NGHIỆM}
+\label{Chapter5}
+
+\section{Thiết lập thí nghiệm}
+
+\subsection{Bố trí phòng}
+% - Bản vẽ mặt bằng (chèn hình).
+% - Vị trí đặt 3 scanner, gateway, relay.
+% - Kích thước phòng, vật cản.
+
+\subsection{Danh sách phần cứng}
+% - Chi tiết board (revision, RAM, flash).
+% - Anten mặc định của module.
+% - Nguồn cấp.
+
+\subsection{Cấu hình phần mềm}
+% - Version firmware.
+% - Tham số hyperparameter (Kalman q/r, hysteresis, debounce, path-loss n).
+% - Version ESP-IDF, ThingsBoard.
+
+\section{Test 1: Bring-up}
+% - Thứ tự provisioning từng node.
+% - Log gateway giai đoạn boot.
+% - Thời gian đến khi tag đầu tiên xuất hiện trên dashboard.
+% - Kết quả bảng.
+
+\section{Test 2: Độ chính xác định vị theo phòng}
+% - Route đi bộ định trước qua các phòng.
+% - Ground truth ghi bằng tay.
+% - Confusion matrix.
+% - Accuracy tổng thể (\%).
+
+\section{Test 3: Chống nhiễu (walking test hysteresis)}
+% - Đứng tại biên 2 phòng, đo tỉ lệ flap.
+% - So sánh HYSTERESIS\_DBM = 5 / 8 / 12.
+% - Biểu đồ tỉ lệ flap theo ngưỡng.
+
+\section{Test 4: Self-healing}
+
+\subsection{Rút nguồn gateway}
+% - Đo thời gian từ khi cấp lại nguồn đến khi tag lại được cập nhật.
+% - Xác nhận NetKey/AppKey/node table được restore.
+
+\subsection{Rút nguồn scanner}
+% - Đo thời gian re-provision.
+% - Verify UUID cũ trong node table được xóa.
+
+\subsection{Rút relay}
+% - Đo thời gian watchdog fire.
+% - Xác nhận wipe + full re-provision.
+
+\section{Test 5: OTA}
+
+\subsection{Thời gian OTA 1 node}
+% - Broadcast beacon (scanner song song).
+% - Unicast mesh (relay tuần tự).
+
+\subsection{SHA256 skip}
+% - Verify chạy lại OTA cùng file $\rightarrow$ skip trong <1 s.
+
+\subsection{Downgrade protection}
+% - Cố tình serve file cũ hơn $\rightarrow$ node reject.
+
+\subsection{Fault injection}
+% - HTTP 404: node báo FAIL.
+% - WiFi timeout: node timeout 30 s.
+% - Concurrent OTA: bị chặn bởi atomic CAS.
+
+\section{Test 6: Bảo mật beacon}
+
+\subsection{Giả beacon bằng phone}
+% - Dùng nRF Connect broadcast manufacturer data.
+% - Verify scanner reject vì HMAC sai.
+
+\subsection{Replay attack}
+% - Capture ADV bằng btmon, replay bằng phone.
+% - Verify scanner reject vì sequence out-of-range.
+
+\subsection{Tỉ lệ false-negative HMAC}
+% - Đo tỉ lệ tag hợp lệ bị reject nhầm.
+% - Verify tỉ lệ rất thấp (RF noise).
+
+\section{Đánh giá tổng}
+
+\subsection{Ưu điểm}
+% - End-to-end mã nguồn mở.
+% - Kiến trúc phân tầng dễ mở rộng.
+% - Bảo mật 2 lớp.
+% - OTA cả hệ thống.
+
+\subsection{Hạn chế}
+% - Chỉ level phòng, không tọa độ.
+% - RSSI biến động theo môi trường.
+% - Chưa test scale > 10 tag.
+
+\subsection{So sánh với giải pháp thương mại}
+% - Bảng so sánh cost, license, accuracy, extensibility.

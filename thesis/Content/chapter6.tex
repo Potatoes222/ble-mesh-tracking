@@ -1,0 +1,34 @@
+\chapter{KẾT LUẬN}
+\label{Chapter6}
+
+\section{Tóm tắt đóng góp}
+% - Hệ thống end-to-end mã nguồn mở, dùng lại được cho các đề tài tiếp theo.
+% - Kiến trúc phân tầng: firmware chỉ chuyển dữ liệu thô, server-side rule chain xử lý.
+% - Bảo mật ở cả 2 lớp: HMAC-16 chống giả mạo beacon và MQTTS chống nghe lén.
+% - Cơ chế OTA cho toàn hệ thống, không cần tháo lắp phần cứng.
+% - Thuật toán hysteresis + leaky-bucket debounce chống flapping zone hiệu quả trong thí nghiệm.
+
+\section{Hạn chế}
+% - Chỉ định vị level phòng, không cho ra tọa độ (x,y).
+% - Chỉ chạy trong 1 LAN, chưa xử lý đa site.
+% - Chưa test scale > 10 tag đồng thời.
+% - Chưa đo tiêu thụ pin dài hạn của tag.
+% - Chưa test hiệu năng khi có nhiễu WiFi 2.4 GHz nặng.
+
+\section{Hướng phát triển}
+
+\subsection{Định vị tọa độ (x,y)}
+% - Trilateration từ 3+ RSSI.
+% - Kalman 2D hoặc particle filter.
+
+\subsection{Học máy hiệu chỉnh path-loss}
+% - Train mô hình theo môi trường cụ thể.
+% - Adaptive n theo thời gian.
+
+\subsection{Fleet management}
+% - Quản lý hàng trăm gateway ở nhiều site.
+% - Đồng bộ config qua cloud.
+
+\subsection{Chống nhiễu 2.4 GHz}
+% - Coexistence với WiFi.
+% - Bluetooth 5 LE Coded PHY cho vùng phủ xa.

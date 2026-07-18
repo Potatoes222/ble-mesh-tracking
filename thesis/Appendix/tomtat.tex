@@ -1,0 +1,23 @@
+\chapter*{TÓM TẮT}
+\label{tomtat}
+\addcontentsline{toc}{chapter}{TÓM TẮT}
+
+Định vị trong nhà không thể dùng GPS. Nhu cầu theo dõi vị trí người và tài sản trong bệnh viện, nhà máy, nhà dưỡng lão đang tăng. Bluetooth Low Energy (BLE) beacon là lựa chọn phổ biến nhờ chi phí thấp và tuổi thọ pin cao, nhưng một scanner đơn lẻ không phủ được không gian rộng.
+
+Khóa luận này xây dựng một hệ thống định vị mức phòng cho môi trường trong nhà, kết hợp nhiều scanner qua giao thức BLE Mesh và tách phần xử lý tín hiệu ra khỏi firmware. Tag phát BLE beacon kèm chữ ký HMAC-16 chống giả mạo. Các scanner đo RSSI, lọc Kalman, gửi dữ liệu thô qua mesh về gateway. Gateway đẩy dữ liệu lên ThingsBoard CE (tự host bằng Docker) qua MQTTS. Rule chain trên server xử lý hysteresis 8 dBm và debounce leaky-bucket để quyết định phòng. Hệ thống hỗ trợ cập nhật firmware từ xa qua HTTP, key rotation 24h cho beacon và tự phục hồi sau mất nguồn.
+
+Thí nghiệm với 6 node cho thấy hệ thống chuyển đổi zone dưới 5 giây khi tag di chuyển giữa các phòng, không có hiện tượng flapping tại biên. Kiến trúc phân tầng edge–gateway–server cho phép tinh chỉnh thuật toán trên server mà không cần flash lại firmware, giảm đáng kể chi phí bảo trì trong triển khai thực tế.
+
+\textbf{Từ khóa} --- BLE Mesh, RSSI, indoor tracking, ESP32, ThingsBoard, HMAC, Kalman filter.
+
+\begin{center}
+    \textbf{ABSTRACT}
+\end{center}
+
+Indoor positioning cannot use GPS. Demand for tracking people and assets in hospitals, factories, and elderly care homes is growing. Bluetooth Low Energy (BLE) beacons are a popular choice for their low cost and long battery life, but a single scanner cannot cover a wide space.
+
+This thesis builds a room-level indoor positioning system that combines multiple scanners over BLE Mesh and moves signal processing off the firmware. Tags broadcast BLE beacons with a 16-bit HMAC to prevent spoofing. Scanners measure RSSI, apply a Kalman filter, and forward the raw data through the mesh to a gateway. The gateway pushes data over MQTTS to a self-hosted ThingsBoard CE instance running on Docker. A server-side rule chain applies 8 dBm hysteresis and leaky-bucket debounce to decide the room. The system supports remote firmware updates over HTTP, 24-hour rotation of the beacon HMAC key, and self-healing after power loss.
+
+Experiments with six nodes show that zone changes complete in under five seconds when a tag moves between rooms, with no flapping at boundaries. The edge–gateway–server layered architecture lets us tune the algorithm on the server without reflashing firmware, sharply lowering maintenance cost in real deployments.
+
+\textbf{Keywords} --- BLE Mesh, RSSI, indoor tracking, ESP32, ThingsBoard, HMAC, Kalman filter.

@@ -1,0 +1,37 @@
+\chapter{TỔNG QUAN NGHIÊN CỨU}
+\label{Chapter2}
+
+\section{Các phương pháp định vị trong nhà}
+
+\subsection{Fingerprinting với WiFi RSSI}
+% - Nguyên lý: xây database RSSI theo lưới, lookup runtime.
+% - Ưu: dùng lại hạ tầng WiFi có sẵn.
+% - Nhược: cần calibrate mỗi lần đổi bố trí AP.
+
+\subsection{BLE beacon với 1 scanner}
+% - iBeacon, Eddystone.
+% - Vùng phủ hẹp, phụ thuộc calibrate tx_power.
+
+\subsection{UWB}
+% - DecaWave DWM1001, Apple U1.
+% - Độ chính xác cm, giá cao.
+
+\subsection{Hybrid}
+% - Kết hợp nhiều nguồn (BLE + IMU + WiFi).
+% - Phức tạp triển khai.
+
+\section{So sánh giải pháp thương mại}
+% - Estimote, Kontakt.io, Aruba Meridian.
+% - Bảng so sánh: chi phí per-node, license, mô hình dữ liệu, mở nguồn hay không.
+
+\section{Các nghiên cứu học thuật liên quan}
+% - Kalman filter cho BLE RSSI (trích dẫn bài báo).
+% - Path-loss model calibration ~\cite{...}.
+% - BLE Mesh cho IoT (Bluetooth SIG whitepaper).
+% - Chống replay và giả mạo beacon.
+
+\section{Khoảng trống nghiên cứu}
+% - Ít giải pháp mã nguồn mở tự host end-to-end.
+% - Bảo mật beacon thường bị bỏ qua trong prototype.
+% - OTA hàng loạt hiếm được đề cập.
+% - Kiến trúc phân tầng edge–server ít được nghiên cứu bài bản.

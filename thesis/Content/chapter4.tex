@@ -1,0 +1,132 @@
+\chapter{TRIỂN KHAI HỆ THỐNG}
+\label{Chapter4}
+
+\section{Kiến trúc tổng thể}
+% - Sơ đồ 4 tầng: Tag $\rightarrow$ Scanner $\rightarrow$ Relay $\rightarrow$ Gateway $\rightarrow$ ThingsBoard.
+% - Nguyên tắc phân tầng: firmware chỉ chuyển dữ liệu thô, xử lý ở server.
+% - Chèn hình sơ đồ.
+
+\section{Firmware Tag}
+
+\subsection{Cấu trúc gói ADV 24 byte}
+% - UUID(16) + major(2) + minor(2) + tx_power(1) + sequence(1) + HMAC-16(2).
+% - CID Espressif 0x02E5.
+
+\subsection{Tính HMAC qua PSA Crypto API}
+% - Import key 1 lần, tính lại mỗi 500 ms.
+
+\subsection{Timer 500 ms và sequence++}
+% - Vì sao 500 ms (loss rate vs pin).
+% - Sequence wrap around.
+
+\section{Firmware Scanner}
+
+\subsection{Radio time-sharing}
+% - Chia radio giữa GAP scan và mesh publish.
+% - Duty cycle scan\_interval / scan\_window.
+
+\subsection{Tag table và Kalman filter}
+% - BMT\_MAX\_TAGS = 20.
+% - Init Kalman lần đầu, update mỗi RSSI mới.
+
+\subsection{Anti-replay và timeout}
+% - Reject sequence lùi $\geq 10$ hoặc tiến $> 30$.
+% - Timeout tag 5 s.
+
+\subsection{Gửi TAG\_STATUS qua vendor model}
+% - Publish tới địa chỉ gateway 0x0001.
+% - TTL = 7.
+
+\section{Firmware Relay}
+
+\subsection{Relay feature enabled}
+% - Forward ở Network Layer, không cần AppKey.
+
+\subsection{Xử lý vendor message ở Access Layer}
+% - Vẫn bind AppKey để nhận RESET\_CMD và OTA\_TRIGGER.
+
+\section{Firmware Gateway}
+
+\subsection{Provisioner AUTO mode}
+% - Phát hiện UUID prefix ``SCAN'' hoặc ``RELAY''.
+% - Provision tự động, không cần bấm tay.
+
+\subsection{Config task chờ ACK}
+% - APP\_KEY\_ADD và MODEL\_APP\_BIND.
+% - Chỉ set config\_done sau khi cả 2 ACK về.
+
+\subsection{Node table persist NVS}
+% - Cấu trúc bmt\_node\_t.
+% - Save/load qua nvs\_set\_blob / nvs\_get\_blob.
+
+\subsection{MQTT worker và hàng đợi tag report}
+% - Vì sao tách worker: tránh block BLE host task.
+% - QueueHandle\_t 64 slot.
+
+\subsection{Data watchdog}
+% - Stabilize 15 s + polling 30 s.
+% - Broadcast RESET\_CMD 5 lần, wipe khi ít nhất 1 gửi thành công.
+
+\subsection{Key rotation 24h}
+% - Rollback-safe: import trước, persist sau.
+
+\section{Server-side ThingsBoard}
+
+\subsection{Docker compose}
+% - ThingsBoard CE 3.7 + PostgreSQL.
+% - Mount TLS cert.
+
+\subsection{Device profile}
+% - ble\_tag và ble\_mesh\_node.
+
+\subsection{Rule chain ble\_tag\_zone\_detection}
+% - 6 node: Parse, Fetch state, Apply hysteresis, Build attrs, Save attrs, Save timeseries.
+% - JS logic hysteresis + debounce.
+
+\subsection{Rule chain ble\_mesh\_node\_ota}
+% - Save telemetry + filter ota\_result + save attribute.
+
+\subsection{Dashboard Indoor Tracking}
+% - 6 widget: chart zone, status card, floor plan, entities table tag, OTA status table.
+
+\section{Bảo mật end-to-end}
+
+\subsection{Static OOB provisioning}
+% - 16-byte pre-shared value.
+
+\subsection{HMAC-16 beacon và rotate}
+% - Tag key hardcode chung tag/scanner.
+% - OTA-beacon key rotate qua mesh.
+
+\subsection{MQTTS self-signed CA và CN verify}
+% - Cert layout trong thingsboard/tls/.
+% - Embed ca.pem vào firmware.
+
+\section{Cơ chế OTA}
+
+\subsection{HTTP server}
+% - python -m http.server 8080 từ firmware/.
+% - Vì sao plain HTTP đủ an toàn (SHA256 + version + HMAC bảo vệ).
+
+\subsection{Broadcast beacon cho scanner}
+% - NimBLE ble\_gap\_adv với HMAC.
+% - Fallback unicast mesh nếu beacon fail.
+
+\subsection{Unicast mesh cho relay}
+% - Trigger 5 lần với gap 500 ms.
+
+\subsection{Auto-check định kỳ}
+% - 3 phút / lần trên gateway, scanner, relay.
+
+\section{Cấu trúc source code}
+
+\subsection{apps/*}
+% - gateway, scanner, relay, tag là 4 ESP-IDF projects độc lập.
+% - Mỗi module trong components/bmt\_*/.
+
+\subsection{Shared component bmt\_ota}
+% - Đặt ở components/ repo root.
+% - Dùng chung cho scanner và relay qua EXTRA\_COMPONENT\_DIRS.
+
+\subsection{thingsboard/}
+% - docker-compose, rulechain/, dashboard/, tls/.

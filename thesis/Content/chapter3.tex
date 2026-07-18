@@ -1,0 +1,103 @@
+\chapter{CƠ SỞ LÝ THUYẾT}
+\label{Chapter3}
+
+\section{BLE Advertising và RSSI}
+% - Cấu trúc gói ADV theo Bluetooth Core Spec.
+% - Manufacturer Specific Data (0xFF field).
+% - RSSI: định nghĩa, đơn vị dBm.
+% - Ảnh hưởng của môi trường lên RSSI.
+
+\section{BLE Mesh}
+
+\subsection{Provisioner và Node}
+% - Vai trò của Provisioner.
+% - Vai trò của Node (Relay/Friend/Low-Power/Proxy).
+
+\subsection{NetKey, AppKey và các Layer}
+% - Network Layer, Access Layer.
+% - Cách encrypt và authenticate mỗi layer.
+
+\subsection{Provisioning và Static OOB}
+% - Các bước trong quy trình provisioning.
+% - Vì sao Static OOB đủ cho tình huống này.
+
+\subsection{Vendor Model và Opcode}
+% - Model ID, Company ID.
+% - Cách định nghĩa opcode 3-byte.
+
+\subsection{Relay feature}
+% - Forwarding ở Network Layer, không cần AppKey.
+% - TTL và chống loop.
+
+\section{Xử lý tín hiệu RSSI}
+
+\subsection{Kalman filter 1D}
+% - Công thức: p, k, x, r, q.
+% - Vì sao chọn 1D thay vì 2D hoặc particle filter.
+% - Tuning q, r.
+
+\subsection{Path-loss log-distance model}
+% - Công thức: $d = 10^{(P_0 - P_r) / (10 n)}$.
+% - Ý nghĩa hệ số n (indoor 2.5-3.5).
+
+\subsection{Anti-replay theo sequence number}
+% - Vì sao dùng sequence 1 byte.
+% - Ngưỡng jump forward và backward.
+
+\section{Quyết định zone}
+
+\subsection{Best-scanner selection}
+% - Chọn scanner có RSSI mạnh nhất.
+% - Cửa sổ tươi (fresh window).
+
+\subsection{Hysteresis}
+% - Vì sao cần: chống flap.
+% - Ngưỡng dBm.
+
+\subsection{Leaky-bucket debounce}
+% - Đếm consecutive-agreement.
+% - Leaky part: giảm 1 thay vì reset 0.
+
+\section{Bảo mật}
+
+\subsection{HMAC-SHA256 và HMAC-16 truncated}
+% - Định nghĩa HMAC.
+% - Vì sao truncate 16 bit là đủ cho ADV.
+
+\subsection{Key rotation}
+% - Chu kỳ 24h.
+% - Cơ chế phân phối key qua mesh (đã encrypt AppKey).
+
+\subsection{MQTTS/TLS}
+% - Handshake TLS 1.2.
+% - CN verify vs SAN verify.
+
+\section{Cập nhật firmware qua mạng (OTA)}
+
+\subsection{esp\_https\_ota và dual-slot partition}
+% - Cấu trúc partition table cho OTA.
+% - Vai trò của OTA data partition.
+
+\subsection{SHA256 skip và version compare}
+% - Cấu trúc app descriptor.
+% - Version format YYYYMMDDHHMMSS.
+
+\subsection{Cơ chế trigger OTA}
+% - Broadcast beacon HMAC cho scanner.
+% - Unicast mesh cho relay.
+% - Self-check định kỳ.
+
+\section{Giao thức ThingsBoard Gateway API}
+
+\subsection{Kiến trúc Gateway/Sub-device}
+% - 1 gateway đại diện cho nhiều sub-device.
+% - Auto-provision.
+
+\subsection{Các topic MQTT}
+% - v1/gateway/telemetry.
+% - v1/gateway/attributes.
+% - v1/devices/me/rpc/request.
+
+\subsection{Rule chain engine}
+% - Kiến trúc node-based.
+% - Các loại node: Transform, Filter, Save Timeseries, Save Attributes.
