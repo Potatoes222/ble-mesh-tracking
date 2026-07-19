@@ -14,8 +14,8 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 
 - **Background**: Định vị trong nhà không thể dùng GPS. Nhu cầu theo dõi người/tài sản trong bệnh viện, nhà máy, nhà dưỡng lão đang tăng. BLE beacon rẻ, phổ biến nhưng single-scanner phủ sóng hẹp.
 - **Purpose**: Xây dựng hệ thống định vị theo phòng dùng nhiều scanner nối với nhau qua BLE Mesh, thu thập RSSI, xử lý ở tầng server để chống nhiễu.
-- **Method**: Firmware ESP32 (Tag/Scanner/Relay/Gateway), giao thức BLE Mesh vendor model, cầu nối MQTTS lên ThingsBoard CE (Docker), rule chain hysteresis + debounce leaky-bucket, HMAC-16 chống giả mạo, key rotation 24h, OTA qua HTTP.
-- **Results**: Hệ thống 6 node hoạt động ổn định, tag chuyển phòng trong <5s không flapping, tự phục hồi sau mất nguồn.
+- **Method**: Bốn firmware Tag/Scanner/Relay/Gateway trên ESP32/ESP32-S3, giao thức BLE Mesh vendor model, cầu nối MQTTS lên ThingsBoard CE (Docker), rule chain hysteresis 8 dBm + debounce leaky-bucket 2 lần xác nhận, HMAC-16 chống giả mạo, khóa Tag dẫn xuất theo epoch 1h, khóa OTA-beacon xoay 24h, OTA qua HTTPS.
+- **Results**: Source code hiện đã triển khai pipeline end-to-end, lọc RSSI, quyết định zone phía server, bảo mật beacon, watchdog tự phục hồi và OTA. Các chỉ số thực nghiệm như thời gian chuyển phòng, flapping và độ chính xác cần được đo theo các bài test ở Chương 5 trước khi đưa ra kết luận định lượng.
 - **Evaluation**: Kiến trúc phân tầng (edge–gateway–server) tách xử lý ra khỏi firmware, dễ tinh chỉnh không cần re-flash.
 
 **Từ khoá**: BLE Mesh, RSSI, indoor tracking, ESP32, ThingsBoard, HMAC, Kalman filter.
@@ -41,7 +41,7 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 
 ### 1.4 Các công cụ và board mạch phát triển
 - Framework ESP-IDF v6.0.1.
-- Board ESP32-S3 (Gateway) và ESP32 (Tag/Scanner/Relay).
+- Board ESP32-S3 (Gateway/Tag/Relay) và ESP32 (Scanner), theo `CONFIG_IDF_TARGET` hiện tại của từng project.
 - ThingsBoard CE 3.7 + PostgreSQL trên Docker.
 - Công cụ phụ trợ: VS Code + ESP-IDF extension, clang-format, Git.
 
@@ -91,11 +91,11 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 ### 3.4 Quyết định zone
 - 3.4.1 Chọn scanner mạnh nhất trong cửa sổ tươi.
 - 3.4.2 Hysteresis 8 dBm.
-- 3.4.3 Leaky-bucket debounce.
+- 3.4.3 Leaky-bucket debounce với 2 lần xác nhận; logic hiện nằm trong `ble_tag_zone_detection_metadata_latest.json`.
 
 ### 3.5 Bảo mật
 - 3.5.1 HMAC-SHA256 và HMAC-16 truncated.
-- 3.5.2 Key rotation.
+- 3.5.2 Hai cơ chế khóa độc lập: Tag derive khóa theo epoch cục bộ 1h; Gateway xoay khóa HMAC của OTA-beacon mỗi 24h và push cho Scanner qua mesh.
 - 3.5.3 MQTTS/TLS + CN verify.
 
 ### 3.6 OTA
@@ -140,17 +140,17 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 ### 4.6 Server-side ThingsBoard
 - 4.6.1 Docker compose + PostgreSQL.
 - 4.6.2 Device profile `ble_tag`, `ble_mesh_node`.
-- 4.6.3 Rule chain `ble_tag_zone_detection` (hysteresis + debounce).
+- 4.6.3 Rule chain `ble_tag_zone_detection` (hysteresis 8 dBm + debounce leaky-bucket 2 lần trong bản metadata latest; cần đồng bộ lại file export portable trước khi import mới).
 - 4.6.4 Rule chain `ble_mesh_node_ota` (persist ota_result).
 - 4.6.5 Dashboard Indoor Tracking (6 widget).
 
 ### 4.7 Bảo mật end-to-end
 - 4.7.1 Static OOB provisioning.
-- 4.7.2 HMAC-16 beacon + rotate.
+- 4.7.2 HMAC-16 cho Tag beacon với khóa epoch 1h; HMAC-16 cho OTA-beacon với khóa xoay 24h.
 - 4.7.3 MQTTS self-signed CA + CN verify.
 
 ### 4.8 OTA
-- 4.8.1 HTTP server (Python).
+- 4.8.1 Nginx HTTPS server trên Docker, port 8443, dùng CA/CN verification.
 - 4.8.2 Beacon broadcast cho scanner (NimBLE + HMAC).
 - 4.8.3 Unicast mesh cho relay.
 - 4.8.4 Auto-check định kỳ 3 phút.
