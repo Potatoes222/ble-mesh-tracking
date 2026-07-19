@@ -1,8 +1,4 @@
-# Outline khoá luận
-
-Outline cho báo cáo khoá luận tốt nghiệp dựa trên project này, theo template ĐHKHTN VNU-HCM Khoa Điện tử - Viễn thông (https://github.com/anhnguyen-kelly23/Thesis_Template_latex).
-
-Skeleton LaTeX đã export sẵn dưới thư mục `thesis/` ở repo root.
+# OUTLINE KHÓA LUẬN
 
 ## Đề tài đề xuất
 
@@ -10,12 +6,12 @@ Hệ thống định vị trong nhà theo phòng dựa trên BLE Mesh và ESP32,
 
 EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrated with ThingsBoard for data pipeline*.
 
-## TÓM TẮT (`Appendix/tomtat.tex`)
+## TÓM TẮT
 
 - **Background**: Định vị trong nhà không thể dùng GPS. Nhu cầu theo dõi người/tài sản trong bệnh viện, nhà máy, nhà dưỡng lão đang tăng. BLE beacon rẻ, phổ biến nhưng single-scanner phủ sóng hẹp.
 - **Purpose**: Xây dựng hệ thống định vị theo phòng dùng nhiều scanner nối với nhau qua BLE Mesh, thu thập RSSI, xử lý ở tầng server để chống nhiễu.
 - **Method**: Bốn firmware Tag/Scanner/Relay/Gateway trên ESP32/ESP32-S3, giao thức BLE Mesh vendor model, cầu nối MQTTS lên ThingsBoard CE (Docker), rule chain hysteresis 8 dBm + debounce leaky-bucket 2 lần xác nhận, HMAC-16 chống giả mạo, khóa Tag dẫn xuất theo epoch 1h, khóa OTA-beacon xoay 24h, OTA qua HTTPS.
-- **Results**: Source code hiện đã triển khai pipeline end-to-end, lọc RSSI, quyết định zone phía server, bảo mật beacon, watchdog tự phục hồi và OTA. Các chỉ số thực nghiệm như thời gian chuyển phòng, flapping và độ chính xác cần được đo theo các bài test ở Chương 5 trước khi đưa ra kết luận định lượng.
+- **Results**: Hệ thống đã triển khai pipeline end-to-end, lọc RSSI, quyết định zone phía server, bảo mật beacon, watchdog tự phục hồi và OTA. Chương 5 đánh giá định lượng thời gian chuyển phòng, độ ổn định tại biên phòng và độ chính xác định vị.
 - **Evaluation**: Kiến trúc phân tầng (edge–gateway–server) tách xử lý ra khỏi firmware, dễ tinh chỉnh không cần re-flash.
 
 **Từ khoá**: BLE Mesh, RSSI, indoor tracking, ESP32, ThingsBoard, HMAC, Kalman filter.
@@ -41,12 +37,17 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 
 ### 1.4 Các công cụ và board mạch phát triển
 - Framework ESP-IDF v6.0.1.
-- Board ESP32-S3 (Gateway/Tag/Relay) và ESP32 (Scanner), theo `CONFIG_IDF_TARGET` hiện tại của từng project.
+- Board ESP32-S3 cho Gateway, Tag và Relay; board ESP32 cho Scanner.
 - ThingsBoard CE 3.7 + PostgreSQL trên Docker.
 - Công cụ phụ trợ: VS Code + ESP-IDF extension, clang-format, Git.
 
 ### 1.5 Cấu trúc khoá luận
-(Bullet 6 chương theo template.)
+- Chương 1 trình bày bối cảnh, mục tiêu, phạm vi và cấu trúc của đề tài.
+- Chương 2 tổng quan các phương pháp định vị trong nhà và những nghiên cứu liên quan.
+- Chương 3 trình bày cơ sở lý thuyết về BLE, BLE Mesh, xử lý RSSI, bảo mật và OTA.
+- Chương 4 mô tả kiến trúc và quá trình triển khai hệ thống.
+- Chương 5 trình bày thiết lập, kết quả và đánh giá thực nghiệm.
+- Chương 6 tổng kết đóng góp, hạn chế và hướng phát triển.
 
 ## CHƯƠNG 2 — TỔNG QUAN NGHIÊN CỨU
 
@@ -91,7 +92,7 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 ### 3.4 Quyết định zone
 - 3.4.1 Chọn scanner mạnh nhất trong cửa sổ tươi.
 - 3.4.2 Hysteresis 8 dBm.
-- 3.4.3 Leaky-bucket debounce với 2 lần xác nhận; logic hiện nằm trong `ble_tag_zone_detection_metadata_latest.json`.
+- 3.4.3 Leaky-bucket debounce với 2 lần xác nhận.
 
 ### 3.5 Bảo mật
 - 3.5.1 HMAC-SHA256 và HMAC-16 truncated.
@@ -140,7 +141,7 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 ### 4.6 Server-side ThingsBoard
 - 4.6.1 Docker compose + PostgreSQL.
 - 4.6.2 Device profile `ble_tag`, `ble_mesh_node`.
-- 4.6.3 Rule chain `ble_tag_zone_detection` (hysteresis 8 dBm + debounce leaky-bucket 2 lần trong bản metadata latest; cần đồng bộ lại file export portable trước khi import mới).
+- 4.6.3 Rule chain `ble_tag_zone_detection` với hysteresis 8 dBm và debounce leaky-bucket 2 lần xác nhận.
 - 4.6.4 Rule chain `ble_mesh_node_ota` (persist ota_result).
 - 4.6.5 Dashboard Indoor Tracking (6 widget).
 

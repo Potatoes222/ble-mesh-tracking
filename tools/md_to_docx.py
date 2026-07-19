@@ -22,8 +22,7 @@ def run(text: str, *, bold: bool = False, italic: bool = False, code: bool = Fal
     if italic:
         props.append("<w:i/>")
     if code:
-        props.extend(("<w:rFonts w:ascii=\"Courier New\" w:hAnsi=\"Courier New\"/>",
-                      "<w:shd w:fill=\"EDEDED\"/>"))
+        props.append("<w:rFonts w:ascii=\"Courier New\" w:hAnsi=\"Courier New\"/>")
     rpr = f"<w:rPr>{''.join(props)}</w:rPr>" if props else ""
     preserve = ' xml:space="preserve"' if text[:1].isspace() or text[-1:].isspace() else ""
     return f"<w:r>{rpr}<w:t{preserve}>{escape(text)}</w:t></w:r>"
@@ -56,9 +55,10 @@ def paragraph(text: str, style: str | None = None, bullet: bool = False) -> str:
     if style:
         ppr.append(f'<w:pStyle w:val="{style}"/>')
     if bullet:
-        ppr.append('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>')
+        ppr.append('<w:ind w:left="720" w:hanging="360"/>')
     props = f"<w:pPr>{''.join(ppr)}</w:pPr>" if ppr else ""
-    return f"<w:p>{props}{inline(text)}</w:p>"
+    marker = "<w:r><w:t>•</w:t><w:tab/></w:r>" if bullet else ""
+    return f"<w:p>{props}{marker}{inline(text)}</w:p>"
 
 
 def document(markdown: str) -> str:
@@ -106,11 +106,11 @@ DOC_RELS = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 STYLES = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="26"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="360" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:pPrDefault></w:docDefaults>
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="26"/><w:lang w:val="vi-VN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="300" w:lineRule="auto"/><w:jc w:val="left"/></w:pPr></w:pPrDefault></w:docDefaults>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="240" w:after="240"/><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
-  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="300" w:after="120"/></w:pPr><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style>
-  <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="220" w:after="80"/></w:pPr><w:rPr><w:b/><w:sz w:val="27"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="280" w:after="100"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="27"/></w:rPr></w:style>
 </w:styles>'''
 
 NUMBERING = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
