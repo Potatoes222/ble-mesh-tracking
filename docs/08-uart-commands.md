@@ -9,6 +9,7 @@ All nodes use 115200 baud.
 | `1`  | Node table.                                   |
 | `2`  | Tag and zone view.                            |
 | `3`  | MQTT and mesh stats.                          |
+| `4`  | Show status / help menu (reprints command list). |
 | `s`  | Scan for unprovisioned nodes (MANUAL mode).   |
 | `p`  | Provision the scanned list.                   |
 | `a`  | Switch to AUTO mode.                          |
@@ -27,9 +28,10 @@ All nodes use 115200 baud.
 
 ## Scanner extras
 
-| Key  | Action                          |
-|------|---------------------------------|
-| `i`  | Change the legacy scanner id.   |
+| Key  | Action                                         |
+|------|------------------------------------------------|
+| `i`  | Change the legacy scanner id.                  |
+| `o`  | Manually trigger WiFi OTA (self-update, bypasses the mesh beacon path — useful when the gateway is not available). |
 
 ## Tag
 
