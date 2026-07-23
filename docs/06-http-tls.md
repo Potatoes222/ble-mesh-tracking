@@ -64,7 +64,12 @@ MQTT to ThingsBoard uses TLS on port 8883. Protects the gateway token and preven
 | `server_ext.cnf` | OpenSSL extension file with SAN. |
 | `gen_certs.sh` | Regenerates everything. |
 
-Gateway embeds `ca.pem` via `EMBED_TXTFILES "ca.pem"` in `apps/gateway/components/bmt_mqtt/CMakeLists.txt`.
+Two firmware locations embed the CA cert via `EMBED_TXTFILES` — both are copies of the same `thingsboard/tls/ca.pem`:
+
+- `apps/gateway/components/bmt_mqtt/ca.pem` — for MQTTS to ThingsBoard. Symbols `bmt_ca_pem_start/end`.
+- `components/bmt_ota/ota_ca.pem` — for the shared OTA client used by gateway/scanner/relay. Symbols `bmt_ota_ca_pem_start/end`.
+
+Both must be refreshed together after any cert regeneration.
 
 ### CN verification (not full SAN)
 
@@ -81,9 +86,10 @@ Why CN and not SAN: the gateway has no DNS resolution, only IP. CN mode fits tha
 cd thingsboard/tls
 bash gen_certs.sh
 cp ca.pem ../../apps/gateway/components/bmt_mqtt/ca.pem
+cp ca.pem ../../components/bmt_ota/ota_ca.pem
 ```
 
-Rebuild and flash the gateway. Then restart the broker:
+Rebuild and flash gateway, scanner and relay. Then restart the containers (both MQTTS and OTA nginx pick up the new server cert automatically since they mount from `thingsboard/tls/`):
 
 ```
 cd thingsboard
@@ -92,18 +98,20 @@ docker compose restart
 
 ### Debug a failing handshake
 
-Watch gateway serial log at boot:
+Watch gateway serial log at boot for MQTTS, and at OTA time on gateway/scanner/relay for the OTA client:
 
-- `MQTT connected to ThingsBoard` — good.
-- `mbedtls: X509 - Certificate verification failed` — `ca.pem` in firmware does not match server's cert. Most common cause: regenerated certs but forgot to reflash gateway.
-- `mbedtls: X509 - The CRT/CRL/CSR verification failed` — CN mismatch. Check `BMT_TB_CN` against actual server cert CN.
+- `MQTT connected to ThingsBoard` — MQTTS good.
+- `[OTA] esp_https_ota_begin FAILED` — OTA handshake or HTTP error. Look one line above for the mbedtls reason.
+- `mbedtls: X509 - Certificate verification failed` — embedded CA does not match server's cert. Common cause: regenerated certs but forgot to update one of the two embedded `ca.pem` files (or forgot to reflash).
+- `mbedtls: X509 - The CRT/CRL/CSR verification failed` — CN mismatch. Check `BMT_TB_CN` / `BMT_OTA_SERVER_CN` against actual server cert CN.
 
 Rule out server side from another machine:
 
 ```
-openssl s_client -connect <host-ip>:8883 -showcerts
+openssl s_client -connect <host-ip>:8443 -showcerts     # OTA nginx
+openssl s_client -connect <host-ip>:8883 -showcerts     # ThingsBoard MQTTS
 ```
 
-If CN and issuer look right there, the problem is on the gateway side (wrong embedded `ca.pem` or wrong `BMT_TB_CN`).
+If both return the correct CN and issuer, the problem is on the firmware side (wrong embedded `ca.pem` or wrong CN define).
 
-Related: [04-thingsboard-setup.md](04-thingsboard-setup.md), [05-thingsboard-mqtt.md](05-thingsboard-mqtt.md), [10-testing-ota.md](10-testing-ota.md), [13-secure-boot.md](13-secure-boot.md).
+Related: [04-thingsboard-setup.md](04-thingsboard-setup.md), [05-thingsboard-mqtt.md](05-thingsboard-mqtt.md), [10-testing-ota.md](10-testing-ota.md).
