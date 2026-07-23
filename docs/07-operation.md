@@ -28,6 +28,7 @@ Numbers behind the filters (Kalman, path loss, anti-replay, HMAC-16) are in [03-
 - The data watchdog waits 15 seconds after boot. After that, if the node table is not empty but no real mesh traffic arrives for 30 seconds, it broadcasts `RESET_CMD` five times and re-provisions. If all five sends fail, it does not wipe.
 - A node reboots and sends an unprovisioned beacon again. The gateway drops the old entry and re-provisions it.
 - The gateway pings the relay every 20 seconds. Only ACKs with `error_code == 0` count as "mesh alive".
+- Manual escape hatch: hold the BOOT button (GPIO0) on any provisioned node for 10 seconds. `bmt_factory_reset` erases all NVS (mesh keys, node table, auth state) and reboots. The node comes back unprovisioned; the gateway re-provisions on the next beacon. Firmware image is untouched.
 
 Watchdog exercise procedure: [09-testing.md](09-testing.md) test 7.
 
@@ -35,9 +36,12 @@ Watchdog exercise procedure: [09-testing.md](09-testing.md) test 7.
 
 - OTA for scanners and relays runs over mesh. Each node downloads its `.bin` from the LAN HTTPS server and reports `OTA_RESULT` back.
 - The gateway checks its own firmware by SHA256. If it is the same, it skips OTA.
-- The HMAC beacon key rotates every 24 hours. The gateway makes a new random key, stores it in NVS, and pushes it to every scanner over mesh. Fake beacons fail HMAC and get dropped.
+- **Two independent HMAC key schedules**:
+  - **Tag beacon key** — derived TOTP-style from a shared master key plus an epoch counter that ticks every 1 hour. Tag and scanner recompute the current epoch key from the same master, so an ADV captured in one epoch cannot be replayed in the next. Tag epoch is a local counter from `esp_timer_get_time()` (no RTC needed); the scanner tracks a `locked_epoch` and tolerates a narrow drift window around it.
+  - **OTA-beacon key** — plain rotating key. The gateway makes a new random 16-byte key every 24 hours, stores it in NVS, and pushes it to every scanner over mesh (encrypted by the mesh AppKey). Only scanners holding the current key accept an OTA-beacon.
+- Fake beacons that do not know the current key fail HMAC and get dropped.
 
-HTTPS OTA server and TLS setup: [06-http-tls.md](06-http-tls.md). Full OTA test procedure: [10-testing-ota.md](10-testing-ota.md). Key rotation math: [03-algorithms.md](03-algorithms.md).
+HTTPS OTA server and TLS setup: [06-http-tls.md](06-http-tls.md). Full OTA test procedure: [10-testing-ota.md](10-testing-ota.md). Key derivation and rotation math: [03-algorithms.md](03-algorithms.md).
 
 ## ThingsBoard rule chain
 
