@@ -62,7 +62,7 @@ Edit `apps/*/components/bmt_config/bmt_config.h`:
 | `BMT_TB_GATEWAY_TOKEN` | gateway | Token from step 3. |
 | `BMT_OTA_*_URL` | gateway, scanner, relay | `https://<host-ip>:8443/<name>.bin`. |
 
-If you regenerated TLS certs, copy `thingsboard/tls/ca.pem` over `apps/gateway/components/bmt_mqtt/ca.pem`.
+If you regenerated TLS certs, copy `thingsboard/tls/ca.pem` over BOTH `apps/gateway/components/bmt_mqtt/ca.pem` (MQTTS trust) AND `components/bmt_ota/ota_ca.pem` (shared OTA client trust). Both firmware locations embed the same CA. See [06-http-tls.md](06-http-tls.md).
 
 ## 5. Build and flash
 
@@ -96,6 +96,8 @@ If a node never reaches "fully configured", power-cycle just that node — it wi
 Full command list: [08-uart-commands.md](08-uart-commands.md). Test procedures: [09-testing.md](09-testing.md).
 
 ## 7. OTA
+
+The nginx OTA fileserver comes up automatically with `docker compose up -d` in step 3 (it is one of the services in the stack). It serves `firmware/` over HTTPS on port `8443` using the same TLS cert as MQTTS. To restart just it:
 
 ```
 cd thingsboard && docker compose up -d ota-fileserver
