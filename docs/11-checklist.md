@@ -29,10 +29,11 @@ Before `git commit`:
 - [ ] `BMT_WIFI_SSID` and `BMT_WIFI_PASS` set to real credentials, not placeholders.
 - [ ] `BMT_TB_IP` matches the customer's ThingsBoard host IP.
 - [ ] `BMT_TB_GATEWAY_TOKEN` matches the token from ThingsBoard UI. Not the demo token.
-- [ ] `BMT_OTA_GATEWAY_URL`, `BMT_OTA_SCANNER_URL`, `BMT_OTA_RELAY_URL` reachable from the deployed LAN.
-- [ ] `apps/gateway/components/bmt_mqtt/ca.pem` matches `thingsboard/tls/ca.pem` on the server.
-- [ ] `BMT_TB_CN` matches the CN inside the server cert (`openssl x509 -in server.pem -text | grep CN`).
-- [ ] `BMT_TAG_HMAC_KEY` regenerated (not the dev default). Same value in tag AND scanner.
+- [ ] `BMT_OTA_GATEWAY_URL`, `BMT_OTA_SCANNER_URL`, `BMT_OTA_RELAY_URL` all start with `https://` and are reachable on port 8443 from the deployed LAN.
+- [ ] `apps/gateway/components/bmt_mqtt/ca.pem` matches `thingsboard/tls/ca.pem` on the server (`diff` returns nothing).
+- [ ] `components/bmt_ota/ota_ca.pem` matches `thingsboard/tls/ca.pem` on the server too — same CA, different embed location.
+- [ ] `BMT_TB_CN` and `BMT_OTA_SERVER_CN` both match the CN inside the server cert (`openssl x509 -in server.pem -text | grep CN`).
+- [ ] `BMT_TAG_MASTER_KEY` regenerated (not the dev default). Same value in tag AND scanner (both derive the epoch key from it — see [03-algorithms.md](03-algorithms.md#4a-tag-key-totp-style-epoch-derivation)).
 - [ ] `BMT_MESH_STATIC_OOB_VAL` regenerated (not the dev default). Same value in gateway AND scanner AND relay.
 - [ ] `CONFIG_BLE_MESH_SETTINGS=y` in gateway `sdkconfig`.
 - [ ] Firmware `PROJECT_VER` shows the deployment build time. Sanity: it must be later than every previously flashed version.
