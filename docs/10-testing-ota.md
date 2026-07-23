@@ -10,6 +10,8 @@ Four things to verify independently:
 
 ## Setup
 
+The nginx OTA fileserver starts automatically as part of the ThingsBoard stack (`docker compose up -d`). If it is not up already:
+
 ```
 cd thingsboard && docker compose up -d ota-fileserver
 ```
@@ -20,7 +22,7 @@ Confirm URLs reachable:
 curl -sk -o /dev/null -w "%{http_code}\n" https://<host-ip>:8443/Scanner.bin
 ```
 
-Should print `200`. Fix firewall if not (see [06-http-tls.md](06-http-tls.md)).
+Should print `200`. `-k` skips CA verification for this manual check (the firmware itself verifies against embedded `ota_ca.pem`). Fix firewall if not `200` (see [06-http-tls.md](06-http-tls.md)).
 
 Open serial monitors on every board.
 
@@ -90,7 +92,9 @@ Natural test: wait 24 h. Force test:
 
 ## Test 8: Fault injection
 
-**HTTP 404.** Delete `firmware/Scanner.bin`. Trigger. Scanner: `esp_https_ota_begin FAILED`. Sends `OTA_RESULT status=1`. Returns to BLE scan.
+**404 not found.** Delete `firmware/Scanner.bin`. Trigger. Scanner: `esp_https_ota_begin FAILED`. Sends `OTA_RESULT status=1`. Returns to BLE scan.
+
+**TLS handshake fail.** Corrupt `components/bmt_ota/ota_ca.pem` (e.g. replace the last few bytes with garbage), rebuild + flash one scanner, trigger. Scanner: `esp_https_ota_begin FAILED` preceded by `mbedtls: X509 - Certificate verification failed`. Confirms the OTA client actually verifies the server cert against the embedded CA, not just any HTTPS server on that port. Restore the file afterwards.
 
 **Wrong WiFi password.** Break `BMT_WIFI_PASS` in scanner config and reflash. Trigger. Scanner: `WiFi connect timeout` after 30 s. Fails, no reboot.
 
