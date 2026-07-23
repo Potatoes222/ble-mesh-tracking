@@ -46,30 +46,49 @@ The forward jump limit stops replay of an ADV captured hours ago.
 
 ## 4. HMAC-16 for beacon authentication
 
-Where: `apps/tag/components/bmt_auth/bmt_auth.c` (build), scanner counterpart (verify).
+Where: `apps/tag/components/bmt_auth/bmt_auth.c` (build), `apps/scanner/components/bmt_auth/bmt_auth.c` (verify).
 
 Tag ADVs include a 2-byte HMAC over the payload. Steps:
 
 1. Build 24-byte payload with `mac16 = 0`.
-2. `HMAC-SHA256(key, payload_without_mac16)`.
+2. `HMAC-SHA256(epoch_key, payload_without_mac16)`.
 3. Take first 2 bytes.
 
-Why only 2 bytes: ADV field is small. Combined with anti-replay (above) it works well in practice.
+Why only 2 bytes: ADV field is small. Combined with anti-replay and epoch derivation, it works well in practice.
 
-Two separate keys: tag key (signs tag ADVs) and OTA-beacon key (signs the gateway's OTA-trigger beacon). If one leaks, the other still works.
+Two independent HMAC key schedules are used, one for tag beacons and one for the OTA-trigger beacon. If one leaks, the other still works.
 
-## 5. Key rotation for OTA beacon
+### 4a. Tag key: TOTP-style epoch derivation
+
+The tag key is **not** a single static value shared by all boards. Both Tag and Scanner hold a shared 16-byte **master key** (hardcoded, identical byte-for-byte on both firmware). The actual `epoch_key` used to sign every ADV is derived from the master:
+
+```
+epoch_counter = esp_timer_get_time() / 1_hour
+epoch_key     = HKDF(master_key, epoch_counter)
+```
+
+- The tag has no RTC. `esp_timer_get_time()` is a local monotonic uptime counter starting at 0 on every boot. Epochs are "hours since this tag was powered on", not wall-clock time.
+- The scanner cannot know the tag's local uptime. On first successful ADV it "locks" onto whatever epoch the tag currently claims (`locked_epoch`), and thereafter accepts a narrow window around `locked_epoch` (drift tolerance for tick rounding).
+- Result: an ADV captured in one epoch cannot be replayed in the next. An attacker who cannot compute HKDF (does not have `master_key`) cannot forge a valid epoch key either.
+
+Tuning: epoch length is 1 hour by default. Shorter epochs shrink the replay window at the cost of a bigger drift-tolerance ratio.
+
+### 4b. OTA-beacon key: plain rotation
 
 Where: `apps/gateway/components/bmt_ota/bmt_ota.c`, `beacon_key_rotate_and_push()`.
+
+The OTA-beacon key is a plain shared secret between gateway and all scanners. It rotates on wall-clock time on the gateway side:
 
 Every 24 hours:
 
 1. Generate fresh 16-byte key via `esp_fill_random()`.
 2. Import to PSA. If fails, abort and keep old key.
 3. Persist to NVS.
-4. Push to every scanner via `OTA_KEY_PUSH`.
+4. Push to every scanner via `OTA_KEY_PUSH` (encrypted by mesh AppKey).
 
 Scanners import to their PSA slot and save to NVS. An attacker replaying a valid OTA beacon >24 h later gets rejected.
+
+The OTA-beacon key does not use epoch derivation because the gateway has the whole mesh path to push a new one out, so plain rotate + push is simpler and gives the same guarantee.
 
 ## 6. Hysteresis for zone assignment
 
@@ -138,6 +157,19 @@ Protects against "mesh looks up but no data flows":
 - All 5 sends failed: retry loop (radio might have been busy).
 
 Counter increments on `TAG_STATUS` AND ping ACKs, so "alive" is not tied only to tag traffic.
+
+## 13. Factory reset button
+
+Where: `apps/{gateway,scanner,relay}/components/bmt_factory_reset/bmt_factory_reset.c`.
+
+Manual escape hatch for a mesh that got so stuck that watchdog cannot help (bad NVS, wrong keys, half-committed provision, etc.).
+
+- A background task polls the BOOT button (GPIO0) every 100 ms.
+- Any release before 10 s cumulative resets the counter.
+- Hold continuously for 10 s -> erase every NVS namespace this app uses (mesh keys, node table, auth epoch state, OTA pending flag) and reboot.
+- Firmware image itself is untouched: on reboot the node comes back unprovisioned. The gateway then re-provisions it as if it were a brand-new board.
+
+Only the three network-participant apps have this. Tag does not, because a tag has no NVS state to wipe (its keys are compile-time constants).
 
 ## Where to tune
 
