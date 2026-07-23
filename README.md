@@ -37,9 +37,9 @@ New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
 
 | Node | Board | What it does |
 |---|---|---|
-| Tag | ESP32 | Sends a BLE beacon every 500 ms. |
+| Tag | ESP32-S3 | Sends a BLE beacon every 500 ms. |
 | Scanner x3 | ESP32 | Reads tag RSSI and sends `TAG_STATUS` over mesh. |
-| Relay | ESP32 | Forwards mesh packets between far scanners and the gateway. |
+| Relay | ESP32-S3 | Forwards mesh packets between far scanners and the gateway. |
 | Gateway | ESP32-S3 | Provisions mesh, forwards data to ThingsBoard, runs OTA. |
 
 ## Firmware layout
@@ -61,7 +61,7 @@ Shared code (relay and scanner OTA) lives at repo root under `components/bmt_ota
 [Tag BLE Beacon]
       |  BLE ADV (HMAC-16, key rotates every 24h)
       v
-[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32]  --BLE Mesh-->  [Gateway ESP32-S3]
+[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32-S3]  --BLE Mesh-->  [Gateway ESP32-S3]
  reads RSSI                         forwards only                  provisioner + WiFi
                                                                         |  MQTTS
                                                                         v

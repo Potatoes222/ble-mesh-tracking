@@ -8,7 +8,7 @@ BMT is a room-level indoor tracking system. It uses BLE Mesh for the radio, ESP3
 [Tag BLE Beacon]
       |  BLE ADV (HMAC-16, key rotates every 24h)
       v
-[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32]  --BLE Mesh-->  [Gateway ESP32-S3]
+[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32-S3]  --BLE Mesh-->  [Gateway ESP32-S3]
  reads RSSI                         forwards only                  provisioner + WiFi
                                                                         |  MQTTS (TLS)
                                                                         v
@@ -29,7 +29,7 @@ BMT is a room-level indoor tracking system. It uses BLE Mesh for the radio, ESP3
 
 | Node | Board | Notes |
 |---|---|---|
-| Tag | ESP32 | Battery-powered beacon. |
+| Tag | ESP32-S3 | Battery-powered beacon. |
 | Scanner x3 | ESP32 | All scanners use the same board so they share one OTA build. |
-| Relay | ESP32 | Sits between far scanners and the gateway. |
+| Relay | ESP32-S3 | Sits between far scanners and the gateway. |
 | Gateway | ESP32-S3 | Runs WiFi and BLE at the same time. 16 MB flash. |
