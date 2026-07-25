@@ -104,10 +104,16 @@ EN: *Room-level Indoor Positioning System based on BLE Mesh with ESP32, integrat
 - 3.6.2 SHA256 skip, version compare YYYYMMDDHHMMSS.
 - 3.6.3 Trigger: mesh broadcast + WiFi OTA.
 
-### 3.7 Giao thức ThingsBoard Gateway API
-- 3.7.1 Kiến trúc Gateway/Sub-device.
-- 3.7.2 Topic: `v1/gateway/telemetry`, `v1/gateway/attributes`, `v1/devices/me/rpc/request`.
-- 3.7.3 Rule chain engine.
+### 3.7 MQTT, HTTP và TLS
+- 3.7.1 MQTT: mô hình publish/subscribe, broker, client, topic hierarchy, QoS 0/1/2, retained message, last-will. Vì sao chọn MQTT thay vì HTTP polling cho telemetry (kết nối bền, băng thông thấp).
+- 3.7.2 HTTP/HTTPS: request-response, verb (GET/POST), status code, chunked transfer encoding dùng cho OTA download. Vì sao dùng HTTPS cho OTA thay HTTP (chống lộ WiFi credential và token trong .bin khi bị sniff LAN).
+- 3.7.3 TLS: handshake, X.509 certificate, chain of trust, self-signed CA. So sánh CN verification và SAN verification, vì sao chọn CN cho firmware không có DNS resolver.
+- 3.7.4 Kết hợp: MQTT over TLS (MQTTS, port 8883) và HTTP over TLS (HTTPS, port 8443) đều dùng chung 1 self-signed CA và 1 server cert.
+
+### 3.8 Giao thức ThingsBoard Gateway API
+- 3.8.1 Kiến trúc Gateway/Sub-device.
+- 3.8.2 Topic: `v1/gateway/telemetry`, `v1/gateway/attributes`, `v1/devices/me/rpc/request`.
+- 3.8.3 Rule chain engine.
 
 ## CHƯƠNG 4 — TRIỂN KHAI HỆ THỐNG
 
