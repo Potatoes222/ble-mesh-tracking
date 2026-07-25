@@ -2,56 +2,127 @@
 \label{Chapter1}
 
 \section{Bối cảnh và động lực thực hiện}
-% - Nhu cầu định vị trong nhà: bệnh viện, nhà dưỡng lão, kho, nhà máy.
-% - Vì sao GPS không dùng được trong nhà.
-% - Các giải pháp thay thế: WiFi RTT, UWB, BLE, camera.
-% - Lý do chọn BLE (giá, pin, phổ biến).
-% - Lý do chọn BLE Mesh thay vì BLE point-to-point (vùng phủ, forwarding, self-healing).
+
+Định vị và theo dõi vị trí đối tượng trong không gian trong nhà (indoor localization) là một bài toán ngày càng quan trọng trong nhiều ứng dụng thực tế. Trong bệnh viện, hệ thống cần biết bệnh nhân đang ở phòng nào để giám sát tình trạng và phản ứng nhanh khi có sự cố. Trong nhà máy, việc theo dõi vị trí tài sản (thiết bị, xe nâng, dụng cụ) giúp tối ưu hoá quy trình và giảm thất thoát. Trong nhà dưỡng lão, biết vị trí người cao tuổi giúp phát hiện sớm các trường hợp té ngã hay đi lạc.
+
+Vấn đề cơ bản của bài toán này là hệ thống định vị vệ tinh toàn cầu (GPS) không hoạt động ổn định trong nhà. Tín hiệu GPS bị suy hao mạnh khi xuyên qua tường bê tông, mái nhà kim loại và các vật cản khác. Ngay cả khi thu được tín hiệu, sai số định vị trong nhà thường lên tới hàng chục mét, không đủ chính xác để xác định phòng cụ thể.
+
+Nhiều giải pháp thay thế đã được nghiên cứu và thương mại hoá:
+
+\begin{itemize}
+    \item \textbf{WiFi RTT (Round-Trip Time)}: đo thời gian phản hồi giữa thiết bị và điểm truy cập WiFi để tính khoảng cách. Ưu điểm là tận dụng hạ tầng WiFi có sẵn nhưng đòi hỏi phần cứng WiFi hỗ trợ IEEE 802.11mc, hiện còn hạn chế.
+    \item \textbf{UWB (Ultra-Wideband)}: dùng xung băng thông siêu rộng, cho độ chính xác đến centimet. Nhược điểm là chi phí cao (~50--100~USD/thẻ) và cần triển khai anchor riêng.
+    \item \textbf{BLE (Bluetooth Low Energy) beacon}: thẻ nhỏ phát tín hiệu quảng bá, thiết bị đọc đo cường độ tín hiệu (RSSI) để suy ra khoảng cách. Chi phí thấp (~2--5~USD/thẻ), tuổi thọ pin có thể kéo dài nhiều tháng đến vài năm.
+    \item \textbf{Camera + thị giác máy tính}: độ chính xác cao nhưng xâm phạm quyền riêng tư, chi phí xử lý và lưu trữ lớn.
+\end{itemize}
+
+Trong các phương án trên, BLE beacon là lựa chọn cân bằng giữa chi phí, tuổi thọ và tính khả thi triển khai. BLE cũng phổ biến trong smartphone, mở khả năng mở rộng cho các ứng dụng dùng điện thoại đóng vai trò thẻ hoặc đầu đọc.
+
+Tuy nhiên, mô hình BLE beacon truyền thống dùng một điểm quét đơn (single-scanner) có vùng phủ rất hẹp, thường chỉ 5--10~m trong nhà có tường ngăn. Để phủ được nhiều phòng, cần triển khai nhiều đầu quét và có cơ chế phối hợp dữ liệu giữa chúng. Đây là lý do đề tài này chọn hướng tiếp cận \textbf{BLE Mesh}: kết nối các đầu quét thành một mạng lưới, cho phép dữ liệu truyền qua nhiều node trước khi tới gateway, đồng thời hỗ trợ tự phục hồi (self-healing) khi một node mất kết nối.
 
 \section{Mục tiêu nghiên cứu}
-% - Xây dựng đầy đủ 4 loại node embedded: Tag, Scanner, Relay, Gateway.
-% - Pipeline server-side xử lý RSSI thay vì xử lý trên firmware.
-% - Bảo mật lớp beacon (chống giả mạo) và lớp truyền (TLS).
-% - OTA cho toàn bộ node.
+
+Đề tài đặt ra bốn mục tiêu cụ thể:
+
+\begin{enumerate}
+    \item Xây dựng đầy đủ bốn loại node embedded trên ESP32/ESP32-S3: \textbf{Tag} (thẻ phát beacon), \textbf{Scanner} (đầu quét), \textbf{Relay} (chuyển tiếp mesh) và \textbf{Gateway} (cầu nối tới server).
+    \item Tích hợp pipeline xử lý dữ liệu phía server (ThingsBoard) để phân tích cường độ tín hiệu và quyết định phòng, thay vì thực hiện thuật toán này trực tiếp trên firmware. Kiến trúc này cho phép điều chỉnh tham số mà không cần nạp lại firmware.
+    \item Bảo mật ở hai lớp độc lập:
+    \begin{itemize}
+        \item Lớp beacon: chống giả mạo bằng chữ ký HMAC-16 với khoá dẫn xuất theo epoch (TOTP-style), chống tấn công replay.
+        \item Lớp truyền dẫn: MQTTS (MQTT over TLS) cho kênh truyền dữ liệu telemetry giữa gateway và ThingsBoard; HTTPS cho tải firmware OTA.
+    \end{itemize}
+    \item Cơ chế cập nhật firmware từ xa (OTA) đồng loạt cho toàn bộ mạng, có xác thực chống downgrade và cơ chế fallback nếu cập nhật thất bại.
+\end{enumerate}
 
 \section{Phạm vi}
-% - Định vị mức phòng (room-level), không phải tọa độ (x,y).
-% - 3-5 phòng, môi trường thí nghiệm.
-% - 1-N tag di động, 3 scanner cố định, 1 relay, 1 gateway.
+
+Đề tài giới hạn phạm vi để đảm bảo tính khả thi và tập trung:
+
+\begin{itemize}
+    \item \textbf{Mức định vị}: xác định phòng đang chứa thẻ (\textit{room-level}), không xác định toạ độ (x, y) cụ thể trong phòng. Với độ chính xác cần thiết cho các ứng dụng đã nêu (theo dõi bệnh nhân, tài sản, người cao tuổi), thông tin phòng đã đủ.
+    \item \textbf{Quy mô thí nghiệm}: 3--5 phòng liền nhau trong một căn hộ hoặc tầng nhà. Không xử lý bài toán đa tầng hay đa toà nhà.
+    \item \textbf{Số lượng thiết bị}: 1--N thẻ di động, 3 đầu quét cố định (mỗi phòng một cái), 1 relay trung gian và 1 gateway. Kiến trúc mesh cho phép mở rộng số node nhưng đề tài không đánh giá scale trên 10 thẻ đồng thời.
+    \item \textbf{Môi trường}: trong nhà tiêu chuẩn có tường bê tông và tường thạch cao, có nguồn nhiễu WiFi 2.4~GHz ở mức thông thường. Không đánh giá trong môi trường công nghiệp có nhiễu điện từ mạnh.
+    \item \textbf{Không xét}: định vị ngoài trời, tracking chuyển động (velocity), phân tích quỹ đạo. Đây là hướng phát triển tiếp theo, không thuộc phạm vi khoá luận này.
+\end{itemize}
 
 \section{Các công cụ và board mạch phát triển}
 
 \subsection{Framework ESP-IDF v6.0.1}
-% - Vì sao chọn ESP-IDF.
-% - Component-based build system.
 
-\subsection{Phần cứng}
-% - Board ESP32-S3 dùng cho Gateway (WiFi + BLE đồng thời, flash 16 MB).
-% - Board ESP32 dùng cho Tag/Scanner/Relay.
-
-\subsection{ThingsBoard CE 3.7}
-% - Docker + PostgreSQL.
-% - Gateway API, rule chain engine.
-
-\subsection{Công cụ phụ trợ}
-% - VS Code + ESP-IDF extension.
-% - clang-format.
-% - Git, GitHub Actions.
-
-\section{Cấu trúc của khóa luận}
-
-Khóa luận được bố cục thành sáu chương:
+ESP-IDF là bộ công cụ phát triển chính thức của Espressif cho các chip ESP32, cung cấp:
 
 \begin{itemize}
-    \item \textbf{Chương 1 -- Giới thiệu:} Bối cảnh, mục tiêu, phạm vi, công cụ.
-
-    \item \textbf{Chương 2 -- Tổng quan nghiên cứu:} Các phương pháp định vị trong nhà hiện có, giải pháp thương mại, khoảng trống nghiên cứu.
-
-    \item \textbf{Chương 3 -- Cơ sở lý thuyết:} BLE Advertising và RSSI, BLE Mesh, xử lý tín hiệu (Kalman, path-loss), thuật toán zone (hysteresis, debounce), bảo mật (HMAC, TLS), OTA, giao thức ThingsBoard.
-
-    \item \textbf{Chương 4 -- Triển khai hệ thống:} Kiến trúc tổng thể và firmware của Tag, Scanner, Relay, Gateway; cấu hình server ThingsBoard; bảo mật end-to-end; cơ chế OTA.
-
-    \item \textbf{Chương 5 -- Kết quả thực nghiệm:} Thiết lập thí nghiệm, các kịch bản test (bring-up, độ chính xác, chống nhiễu, self-healing, OTA, bảo mật), đánh giá tổng quan.
-
-    \item \textbf{Chương 6 -- Kết luận:} Đóng góp, hạn chế, hướng phát triển.
+    \item Toolchain biên dịch (Xtensa GCC cho ESP32/ESP32-S3).
+    \item Hệ điều hành thời gian thực FreeRTOS làm nền.
+    \item Thư viện Bluetooth Low Energy đầy đủ, bao gồm cả BLE Mesh stack.
+    \item Thư viện WiFi STA/AP, TCP/IP (LwIP), TLS (mbedTLS).
+    \item Hệ thống build dựa trên CMake với cơ chế \textit{component} cho tổ chức mã nguồn.
 \end{itemize}
+
+Đề tài chọn phiên bản v6.0.1 vì đây là phiên bản LTS (long-term support) mới nhất tại thời điểm thực hiện, có API BLE Mesh ổn định.
+
+\subsection{Phần cứng}
+
+Bảng~\ref{tab:hardware} liệt kê phần cứng dùng trong đề tài.
+
+\begin{table}[htp]
+    \centering
+    \caption{Danh mục phần cứng.}
+    \label{tab:hardware}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Vai trò} & \textbf{Board} & \textbf{Ghi chú} \\
+        \hline
+        Gateway & ESP32-S3 & 16~MB flash, WiFi và BLE đồng thời. \\
+        Scanner ($\times$ 3) & ESP32 & Tất cả cùng loại board (chia sẻ chung 1 firmware OTA). \\
+        Relay & ESP32-S3 & Đặt giữa scanner xa và gateway. \\
+        Tag & ESP32-S3 & Chạy pin, phát beacon 500~ms/lần. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsection{ThingsBoard CE 3.7}
+
+ThingsBoard Community Edition là nền tảng IoT mã nguồn mở, cung cấp:
+
+\begin{itemize}
+    \item Broker MQTT tích hợp (Eclipse Paho) hỗ trợ TLS.
+    \item Cơ sở dữ liệu chuỗi thời gian (PostgreSQL hoặc Cassandra) để lưu telemetry.
+    \item Rule Chain Engine cho phép định nghĩa luồng xử lý dữ liệu bằng UI kéo-thả.
+    \item Dashboard tuỳ biến với hơn 50 loại widget.
+    \item REST API để tích hợp với hệ thống ngoài.
+\end{itemize}
+
+Đề tài tự host ThingsBoard bằng Docker Compose (thay vì dùng ThingsBoard Cloud) để có toàn quyền kiểm soát chứng chỉ TLS và cấu hình.
+
+\subsection{Công cụ phụ trợ}
+
+\begin{itemize}
+    \item \textbf{VS Code + ESP-IDF extension}: IDE chính, tích hợp build, flash và monitor serial.
+    \item \textbf{clang-format}: chuẩn hoá format mã nguồn C theo style Allman, tab-4.
+    \item \textbf{Git + GitHub}: quản lý phiên bản, lưu trữ và theo dõi thay đổi.
+    \item \textbf{Docker Desktop}: chạy ThingsBoard và nginx (OTA server) trong container.
+    \item \textbf{Python 3}: chạy các script tiện ích (kiểm tra JSON dashboard, tạo dữ liệu test).
+\end{itemize}
+
+\section{Cấu trúc của khoá luận}
+
+Khoá luận được chia thành sáu chương, trình bày tuần tự từ bối cảnh, lý thuyết đến triển khai và đánh giá:
+
+\begin{itemize}
+    \item \textbf{Chương 1 -- Giới thiệu:} Bối cảnh, động lực thực hiện, mục tiêu nghiên cứu, phạm vi, công cụ và cấu trúc khoá luận.
+
+    \item \textbf{Chương 2 -- Tổng quan nghiên cứu:} Các phương pháp định vị trong nhà hiện có (fingerprinting, BLE, UWB), so sánh giải pháp thương mại (Estimote, Kontakt.io, Aruba Meridian), các nghiên cứu học thuật liên quan và khoảng trống cần lấp.
+
+    \item \textbf{Chương 3 -- Cơ sở lý thuyết:} BLE Advertising và RSSI, giao thức BLE Mesh (provisioner, node, keys, opcode), thuật toán xử lý tín hiệu (Kalman filter, path-loss), thuật toán quyết định zone (hysteresis, leaky-bucket debounce), bảo mật (HMAC, key rotation), OTA, giao thức MQTT/HTTP/TLS và ThingsBoard Gateway API.
+
+    \item \textbf{Chương 4 -- Triển khai hệ thống:} Kiến trúc tổng thể; firmware của bốn loại node (Tag, Scanner, Relay, Gateway); cấu hình server ThingsBoard (Docker, rule chain, dashboard); bảo mật end-to-end; cơ chế OTA; cấu trúc mã nguồn.
+
+    \item \textbf{Chương 5 -- Kết quả thực nghiệm:} Thiết lập môi trường thí nghiệm, các kịch bản kiểm thử (bring-up, độ chính xác định vị, chống nhiễu tại biên phòng, self-healing, OTA, bảo mật beacon), đánh giá tổng.
+
+    \item \textbf{Chương 6 -- Kết luận:} Tóm tắt đóng góp chính của đề tài, hạn chế còn tồn tại và hướng phát triển tiếp theo.
+\end{itemize}
+
+Kèm theo phần chính là \textbf{Tóm tắt} (Việt + Anh), \textbf{Danh mục hình vẽ}, \textbf{Danh mục bảng}, \textbf{Danh mục viết tắt}, và \textbf{Tài liệu tham khảo} ở cuối tài liệu.
