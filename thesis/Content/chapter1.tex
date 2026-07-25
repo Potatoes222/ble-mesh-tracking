@@ -3,48 +3,48 @@
 
 \section{Bối cảnh và động lực thực hiện}
 
-Định vị và theo dõi vị trí đối tượng trong không gian trong nhà (indoor localization) là một bài toán ngày càng quan trọng trong nhiều ứng dụng thực tế. Trong bệnh viện, hệ thống cần biết bệnh nhân đang ở phòng nào để giám sát tình trạng và phản ứng nhanh khi có sự cố. Trong nhà máy, việc theo dõi vị trí tài sản (thiết bị, xe nâng, dụng cụ) giúp tối ưu hoá quy trình và giảm thất thoát. Trong nhà dưỡng lão, biết vị trí người cao tuổi giúp phát hiện sớm các trường hợp té ngã hay đi lạc.
+Bệnh viện muốn biết bệnh nhân đang ở phòng nào. Kho muốn theo dõi xe nâng, dụng cụ. Nhà dưỡng lão muốn phát hiện người cao tuổi té ngã hay đi lạc. Ba ví dụ trên đều cần định vị trong nhà.
 
-Vấn đề cơ bản của bài toán này là hệ thống định vị vệ tinh toàn cầu (GPS) không hoạt động ổn định trong nhà. Tín hiệu GPS bị suy hao mạnh khi xuyên qua tường bê tông, mái nhà kim loại và các vật cản khác. Ngay cả khi thu được tín hiệu, sai số định vị trong nhà thường lên tới hàng chục mét, không đủ chính xác để xác định phòng cụ thể.
+GPS không giải quyết được. Tín hiệu vệ tinh bị suy hao khi xuyên qua tường bê tông và mái kim loại; ngay cả khi thu được, sai số trong nhà lên tới hàng chục mét, không phân biệt được phòng.
 
-Nhiều giải pháp thay thế đã được nghiên cứu và thương mại hoá:
+Một số hướng thay thế đã được nghiên cứu và bán trên thị trường:
 
 \begin{itemize}
-    \item \textbf{WiFi RTT (Round-Trip Time)}: đo thời gian phản hồi giữa thiết bị và điểm truy cập WiFi để tính khoảng cách. Ưu điểm là tận dụng hạ tầng WiFi có sẵn nhưng đòi hỏi phần cứng WiFi hỗ trợ IEEE 802.11mc, hiện còn hạn chế.
-    \item \textbf{UWB (Ultra-Wideband)}: dùng xung băng thông siêu rộng, cho độ chính xác đến centimet. Nhược điểm là chi phí cao (~50--100~USD/thẻ) và cần triển khai anchor riêng.
-    \item \textbf{BLE (Bluetooth Low Energy) beacon}: thẻ nhỏ phát tín hiệu quảng bá, thiết bị đọc đo cường độ tín hiệu (RSSI) để suy ra khoảng cách. Chi phí thấp (~2--5~USD/thẻ), tuổi thọ pin có thể kéo dài nhiều tháng đến vài năm.
-    \item \textbf{Camera + thị giác máy tính}: độ chính xác cao nhưng xâm phạm quyền riêng tư, chi phí xử lý và lưu trữ lớn.
+    \item \textbf{WiFi RTT (Round-Trip Time)}: đo thời gian phản hồi giữa thiết bị và điểm truy cập WiFi để tính khoảng cách. Tận dụng được hạ tầng WiFi sẵn có nhưng đòi hỏi phần cứng hỗ trợ IEEE 802.11mc, hiện còn hạn chế.
+    \item \textbf{UWB (Ultra-Wideband)}: xung băng thông siêu rộng, độ chính xác cỡ centimet. Chi phí 50--100~USD mỗi thẻ và phải lắp thêm anchor riêng.
+    \item \textbf{BLE (Bluetooth Low Energy) beacon}: thẻ nhỏ phát quảng bá, đầu đọc lấy cường độ tín hiệu (RSSI) suy ra khoảng cách. Thẻ 2--5~USD, pin dùng vài tháng đến vài năm.
+    \item \textbf{Camera + thị giác máy tính}: chính xác cao nhưng xâm phạm quyền riêng tư và tốn tài nguyên xử lý.
 \end{itemize}
 
-Trong các phương án trên, BLE beacon là lựa chọn cân bằng giữa chi phí, tuổi thọ và tính khả thi triển khai. BLE cũng phổ biến trong smartphone, mở khả năng mở rộng cho các ứng dụng dùng điện thoại đóng vai trò thẻ hoặc đầu đọc.
+Trong bốn lựa chọn, BLE beacon cân bằng nhất giữa giá và độ khả thi. BLE cũng có sẵn trên smartphone, để ngỏ hướng dùng điện thoại làm thẻ hoặc đầu đọc.
 
-Tuy nhiên, mô hình BLE beacon truyền thống dùng một điểm quét đơn (single-scanner) có vùng phủ rất hẹp, thường chỉ 5--10~m trong nhà có tường ngăn. Để phủ được nhiều phòng, cần triển khai nhiều đầu quét và có cơ chế phối hợp dữ liệu giữa chúng. Đây là lý do đề tài này chọn hướng tiếp cận \textbf{BLE Mesh}: kết nối các đầu quét thành một mạng lưới, cho phép dữ liệu truyền qua nhiều node trước khi tới gateway, đồng thời hỗ trợ tự phục hồi (self-healing) khi một node mất kết nối.
+Điểm yếu của BLE beacon truyền thống là một scanner đơn chỉ phủ 5--10~m trong nhà có tường. Muốn phủ nhiều phòng, phải triển khai nhiều scanner và có cách phối hợp dữ liệu giữa chúng. Đề tài chọn \textbf{BLE Mesh}: các scanner nối thành mạng lưới, gói tin đi qua nhiều hop tới gateway, và tự phục hồi khi một node rớt.
 
 \section{Mục tiêu nghiên cứu}
 
-Đề tài đặt ra bốn mục tiêu cụ thể:
+Đề tài đặt bốn mục tiêu:
 
 \begin{enumerate}
-    \item Xây dựng đầy đủ bốn loại node embedded trên ESP32/ESP32-S3: \textbf{Tag} (thẻ phát beacon), \textbf{Scanner} (đầu quét), \textbf{Relay} (chuyển tiếp mesh) và \textbf{Gateway} (cầu nối tới server).
-    \item Tích hợp pipeline xử lý dữ liệu phía server (ThingsBoard) để phân tích cường độ tín hiệu và quyết định phòng, thay vì thực hiện thuật toán này trực tiếp trên firmware. Kiến trúc này cho phép điều chỉnh tham số mà không cần nạp lại firmware.
-    \item Bảo mật ở hai lớp độc lập:
+    \item Bốn loại node embedded trên ESP32/ESP32-S3: \textbf{Tag} phát beacon, \textbf{Scanner} đo RSSI, \textbf{Relay} chuyển tiếp mesh, \textbf{Gateway} cầu nối tới server.
+    \item Xử lý RSSI và chọn phòng ở phía server (ThingsBoard) thay vì trên firmware, để tinh chỉnh tham số không cần nạp lại firmware.
+    \item Bảo mật hai lớp riêng biệt:
     \begin{itemize}
-        \item Lớp beacon: chống giả mạo bằng chữ ký HMAC-16 với khoá dẫn xuất theo epoch (TOTP-style), chống tấn công replay.
-        \item Lớp truyền dẫn: MQTTS (MQTT over TLS) cho kênh truyền dữ liệu telemetry giữa gateway và ThingsBoard; HTTPS cho tải firmware OTA.
+        \item Beacon: HMAC-16 với khoá dẫn xuất theo epoch (kiểu TOTP), chặn giả mạo và replay.
+        \item Truyền dẫn: MQTTS cho telemetry gateway--server, HTTPS cho tải firmware OTA.
     \end{itemize}
-    \item Cơ chế cập nhật firmware từ xa (OTA) đồng loạt cho toàn bộ mạng, có xác thực chống downgrade và cơ chế fallback nếu cập nhật thất bại.
+    \item OTA đồng loạt cho cả mesh, có chống downgrade và fallback khi cập nhật thất bại.
 \end{enumerate}
 
 \section{Phạm vi}
 
-Đề tài giới hạn phạm vi để đảm bảo tính khả thi và tập trung:
+Ranh giới đề tài:
 
 \begin{itemize}
-    \item \textbf{Mức định vị}: xác định phòng đang chứa thẻ (\textit{room-level}), không xác định toạ độ (x, y) cụ thể trong phòng. Với độ chính xác cần thiết cho các ứng dụng đã nêu (theo dõi bệnh nhân, tài sản, người cao tuổi), thông tin phòng đã đủ.
-    \item \textbf{Quy mô thí nghiệm}: 3--5 phòng liền nhau trong một căn hộ hoặc tầng nhà. Không xử lý bài toán đa tầng hay đa toà nhà.
-    \item \textbf{Số lượng thiết bị}: 1--N thẻ di động, 3 đầu quét cố định (mỗi phòng một cái), 1 relay trung gian và 1 gateway. Kiến trúc mesh cho phép mở rộng số node nhưng đề tài không đánh giá scale trên 10 thẻ đồng thời.
-    \item \textbf{Môi trường}: trong nhà tiêu chuẩn có tường bê tông và tường thạch cao, có nguồn nhiễu WiFi 2.4~GHz ở mức thông thường. Không đánh giá trong môi trường công nghiệp có nhiễu điện từ mạnh.
-    \item \textbf{Không xét}: định vị ngoài trời, tracking chuyển động (velocity), phân tích quỹ đạo. Đây là hướng phát triển tiếp theo, không thuộc phạm vi khoá luận này.
+    \item \textbf{Mức định vị}: chỉ xác định phòng (\textit{room-level}), không tính toạ độ (x, y). Với các ứng dụng đã nêu, thông tin phòng đã đủ.
+    \item \textbf{Quy mô}: 3--5 phòng liền nhau trên một tầng. Không xử lý đa tầng hay đa toà nhà.
+    \item \textbf{Số thiết bị}: 1--N tag, 3 scanner cố định, 1 relay, 1 gateway. Mesh cho phép mở rộng nhưng đề tài không đo scale trên 10 tag.
+    \item \textbf{Môi trường}: nhà ở thông thường, tường bê tông và thạch cao, nhiễu WiFi 2.4~GHz mức bình thường. Không test trong nhà máy có nhiễu điện từ mạnh.
+    \item \textbf{Không làm}: định vị ngoài trời, tracking vận tốc, phân tích quỹ đạo. Xem chương kết luận cho hướng phát triển.
 \end{itemize}
 
 \section{Các công cụ và board mạch phát triển}
@@ -109,7 +109,7 @@ ThingsBoard Community Edition là nền tảng IoT mã nguồn mở, cung cấp:
 
 \section{Cấu trúc của khoá luận}
 
-Khoá luận được chia thành sáu chương, trình bày tuần tự từ bối cảnh, lý thuyết đến triển khai và đánh giá:
+Sáu chương, đi từ bối cảnh, lý thuyết đến triển khai và đánh giá:
 
 \begin{itemize}
     \item \textbf{Chương 1 -- Giới thiệu:} Bối cảnh, động lực thực hiện, mục tiêu nghiên cứu, phạm vi, công cụ và cấu trúc khoá luận.
