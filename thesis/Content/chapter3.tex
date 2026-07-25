@@ -1,103 +1,469 @@
 \chapter{CƠ SỞ LÝ THUYẾT}
 \label{Chapter3}
 
+Chương này trình bày các nền tảng lý thuyết mà hệ thống dựa trên: từ lớp vật lý BLE và cường độ tín hiệu RSSI, kiến trúc BLE Mesh, các thuật toán xử lý tín hiệu và quyết định vị trí, đến các giao thức bảo mật, cập nhật firmware và truyền dữ liệu.
+
 \section{BLE Advertising và RSSI}
-% - Cấu trúc gói ADV theo Bluetooth Core Spec.
-% - Manufacturer Specific Data (0xFF field).
-% - RSSI: định nghĩa, đơn vị dBm.
-% - Ảnh hưởng của môi trường lên RSSI.
+
+\subsection{Cấu trúc gói ADV}
+
+Bluetooth Low Energy dùng cơ chế \textit{advertising} (ADV) để thiết bị quảng bá sự hiện diện. Gói ADV có kích thước tối đa 37 byte payload, bao gồm địa chỉ Bluetooth (6~byte) và dữ liệu tuỳ chọn (tối đa 31~byte) theo cấu trúc TLV (type-length-value)~\cite{ble-core-spec}.
+
+Trong đề tài, thẻ Tag dùng \textit{Manufacturer Specific Data} (AD type 0xFF) với CID (Company Identifier) 0x02E5 của Espressif Systems~\cite{ble-cid}. Sau CID là 24 byte payload tự định nghĩa:
+
+\begin{lstlisting}[language=C,caption=Cấu trúc payload beacon tag]
+typedef struct {
+    uint8_t  uuid[16];      // System UUID, prefix "AB00"
+    uint16_t major;         // Loại tag: 0x0001=PERSON, 0x0002=ASSET
+    uint16_t minor;         // Tag ID (0x0001..0xFFFF)
+    int8_t   tx_power;      // RSSI tham chieu tai 1m (calibrate)
+    uint8_t  sequence;      // Bo dem chong replay, tang moi 500ms
+    uint16_t mac16;         // HMAC-16 chu ky payload
+} bmt_tag_adv_payload_t;
+\end{lstlisting}
+
+Trường \texttt{tx\_power} rất quan trọng cho việc tính khoảng cách: nó là RSSI mà một thiết bị chuẩn sẽ đo được khi cách thẻ đúng 1~m, được calibrate trong nhà máy hoặc lúc lắp đặt. Trường \texttt{sequence} cho phép đầu quét phát hiện gói trùng lặp và gói replay. Trường \texttt{mac16} là chữ ký xác thực (giải thích chi tiết ở~\ref{sec:security}).
+
+\subsection{RSSI và mất mát đường truyền}
+
+RSSI (Received Signal Strength Indicator) là công suất tín hiệu nhận được, đơn vị dBm (decibel-milliwatt). Với BLE, RSSI thường nằm trong khoảng $-30$~dBm (rất gần) đến $-100$~dBm (gần mất tín hiệu).
+
+Trong không gian tự do, công suất tín hiệu giảm theo bình phương khoảng cách (định luật nghịch bình phương). Trong nhà, có tường, đồ vật và đa đường truyền, mô hình tổng quát là \textit{log-distance path loss}~\cite{rappaport-wireless}:
+
+\begin{equation}
+    P_r(d) = P_0 - 10 \cdot n \cdot \log_{10}\left(\frac{d}{d_0}\right) + X_\sigma
+    \label{eq:pathloss}
+\end{equation}
+
+trong đó:
+\begin{itemize}
+    \item $P_r(d)$: công suất nhận tại khoảng cách $d$ (dBm).
+    \item $P_0$: công suất tham chiếu tại khoảng cách $d_0$ (thường $d_0 = 1$~m).
+    \item $n$: hệ số mất mát đường truyền (path-loss exponent).
+    \item $X_\sigma$: nhiễu ngẫu nhiên phân phối chuẩn với độ lệch chuẩn $\sigma$.
+\end{itemize}
+
+Đảo công thức~\eqref{eq:pathloss} bỏ qua $X_\sigma$ để ước lượng khoảng cách:
+
+\begin{equation}
+    \hat{d} = d_0 \cdot 10^{\frac{P_0 - P_r}{10 n}}
+    \label{eq:distance}
+\end{equation}
+
+Trong đề tài, $P_0$ chính là trường \texttt{tx\_power} trong payload beacon, $d_0 = 1$~m và $n = 2.5$ (mặc định cho môi trường nhà ở có tường thạch cao).
 
 \section{BLE Mesh}
+\label{sec:ble-mesh}
+
+BLE Mesh là chuẩn được Bluetooth SIG công bố năm 2017 (bản 1.0) và cập nhật 2019 (bản 1.0.1)~\cite{ble-mesh-spec}, cho phép nhiều thiết bị BLE tạo thành mạng lưới trao đổi thông điệp qua nhiều hop.
 
 \subsection{Provisioner và Node}
-% - Vai trò của Provisioner.
-% - Vai trò của Node (Relay/Friend/Low-Power/Proxy).
 
-\subsection{NetKey, AppKey và các Layer}
-% - Network Layer, Access Layer.
-% - Cách encrypt và authenticate mỗi layer.
+Mạng mesh gồm hai vai trò chính:
+
+\begin{itemize}
+    \item \textbf{Provisioner}: thiết bị có quyền thêm node mới vào mạng, cấp NetKey/AppKey và địa chỉ. Trong đề tài, chỉ có Gateway đóng vai trò này.
+    \item \textbf{Node}: thành viên bình thường, gửi/nhận thông điệp. Scanner và Relay là Node.
+\end{itemize}
+
+Chuẩn định nghĩa bốn tính năng optional cho Node: \textit{Relay} (forward gói của node khác), \textit{Proxy} (bridge BLE Mesh sang smartphone qua GATT), \textit{Friend} (đóng vai trò cache cho node LPN), \textit{Low Power Node -- LPN} (tiết kiệm pin cực đại). Đề tài không dùng Friend/LPN vì mọi node đều cắm điện; Relay được bật trên tất cả node để tăng khả năng phủ; Proxy để mặc định cho tiện debug.
+
+\subsection{Khoá và các layer}
+
+BLE Mesh dùng hai lớp mã hoá độc lập:
+
+\begin{itemize}
+    \item \textbf{Network Layer}: mã hoá bằng \textit{NetKey} (16~byte). Mọi node trong cùng mạng dùng chung NetKey. Đây là lớp forwarding: một node muốn relay gói không cần biết nội dung, chỉ cần NetKey để giải mã header network.
+    \item \textbf{Access Layer}: mã hoá bằng \textit{AppKey} (16~byte). Chỉ những node được cấp AppKey mới đọc được nội dung thông điệp. Một mạng có thể có nhiều AppKey cho các nhóm ứng dụng khác nhau.
+\end{itemize}
+
+Trong đề tài, mỗi mạng có 1 NetKey và 1 AppKey duy nhất, cả hai đều sinh ngẫu nhiên bằng hàm \texttt{esp\_fill\_random()} khi gateway boot lần đầu và lưu vào NVS.
 
 \subsection{Provisioning và Static OOB}
-% - Các bước trong quy trình provisioning.
-% - Vì sao Static OOB đủ cho tình huống này.
 
-\subsection{Vendor Model và Opcode}
-% - Model ID, Company ID.
-% - Cách định nghĩa opcode 3-byte.
+Provisioning là quá trình một Provisioner thêm một Unprovisioned Device vào mạng. Chuẩn Mesh định nghĩa 5 bước:
+
+\begin{enumerate}
+    \item \textbf{Provisioning Beacon}: Unprovisioned Device phát quảng bá chứa UUID 128-bit.
+    \item \textbf{Invite}: Provisioner gửi lời mời kèm khả năng OOB (Out-Of-Band authentication).
+    \item \textbf{Public Key exchange}: hai bên trao đổi khoá công khai theo ECDH curve P-256.
+    \item \textbf{Authentication}: xác thực dựa trên OOB (numeric, static, output, input).
+    \item \textbf{Data delivery}: Provisioner gửi NetKey và địa chỉ unicast đã mã hoá bằng khoá phiên (session key).
+\end{enumerate}
+
+Đề tài dùng phương thức \textit{Static OOB}: cả Provisioner và Node đều biết trước một giá trị bí mật 16~byte, cố định trong firmware. Node lạ không có giá trị này sẽ thất bại ở bước 4. Đây là cách đơn giản nhất để chống một thiết bị lạ tự động join mạng, phù hợp cho triển khai closed-fleet.
+
+\subsection{Vendor Model và opcode}
+
+Bluetooth SIG định nghĩa các model chuẩn (đèn on/off, cảm biến nhiệt độ,\ldots), nhưng cho phép mỗi vendor định nghĩa \textit{Vendor Model} riêng. Vendor Model được nhận biết bằng cặp (Company ID, Model ID).
+
+Đề tài dùng một Vendor Model duy nhất với Company ID 0x02E5 (Espressif) và Model ID 0x0000. Model có 5 opcode 3-byte, mô tả trong Bảng~\ref{tab:opcodes}.
+
+\begin{table}[htp]
+    \centering
+    \caption{Các opcode Vendor Model dùng trong đề tài.}
+    \label{tab:opcodes}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Opcode} & \textbf{Chiều} & \textbf{Ý nghĩa} \\
+        \hline
+        \texttt{TAG\_STATUS}    & Scanner $\to$ Gateway    & Báo cáo RSSI của một tag. \\
+        \texttt{RESET\_CMD}     & Gateway $\to$ tất cả     & Xoá state và reboot. \\
+        \texttt{OTA\_TRIGGER}   & Gateway $\to$ Node       & Bắt đầu WiFi OTA. \\
+        \texttt{OTA\_RESULT}    & Node $\to$ Gateway       & Báo kết quả OTA (0=OK, 1=FAIL). \\
+        \texttt{OTA\_KEY\_PUSH} & Gateway $\to$ Scanner    & Đẩy khoá HMAC OTA-beacon mới. \\
+        \hline
+    \end{tabular}
+\end{table}
 
 \subsection{Relay feature}
-% - Forwarding ở Network Layer, không cần AppKey.
-% - TTL và chống loop.
+
+Node có tính năng Relay bật sẽ forward gói mesh ở Network Layer, không cần giải mã nội dung. Trong đề tài, Relay là node cầu nối chính, còn Scanner cũng bật Relay để tăng khả năng phủ khi hai Scanner cách xa nhau nhưng gần Relay.
+
+TTL (Time To Live) mặc định của gói mesh là 7, đủ cho mạng nhỏ 5--10 hop.
 
 \section{Xử lý tín hiệu RSSI}
 
-\subsection{Kalman filter 1D}
-% - Công thức: p, k, x, r, q.
-% - Vì sao chọn 1D thay vì 2D hoặc particle filter.
-% - Tuning q, r.
+\subsection{Bộ lọc Kalman 1D}
 
-\subsection{Path-loss log-distance model}
-% - Công thức: $d = 10^{(P_0 - P_r) / (10 n)}$.
-% - Ý nghĩa hệ số n (indoor 2.5-3.5).
+RSSI đo được từ mỗi ADV có phương sai lớn (độ lệch chuẩn 3--5~dBm ngay cả khi tag đứng yên). Nếu dùng thẳng RSSI thô để quyết định phòng, kết quả sẽ nhảy loạn xạ.
 
-\subsection{Anti-replay theo sequence number}
-% - Vì sao dùng sequence 1 byte.
-% - Ngưỡng jump forward và backward.
+Bộ lọc Kalman 1D là phiên bản đơn giản nhất, coi biến trạng thái $x$ (RSSI thực) là hằng số bị nhiễu Gaussian~\cite{kalman-1960}. Phương trình cập nhật:
+
+\begin{align}
+    p_k &= p_{k-1} + q \label{eq:kalman-predict}\\
+    K_k &= \frac{p_k}{p_k + r} \label{eq:kalman-gain}\\
+    x_k &= x_{k-1} + K_k \cdot (z_k - x_{k-1}) \label{eq:kalman-update}\\
+    p_k &= (1 - K_k) \cdot p_k \label{eq:kalman-cov}
+\end{align}
+
+trong đó:
+\begin{itemize}
+    \item $x_k$: RSSI ước lượng sau lần cập nhật thứ $k$.
+    \item $z_k$: RSSI đo được ở lần thứ $k$.
+    \item $K_k$: Kalman gain, quyết định tỉ lệ tin vào phép đo mới so với ước lượng cũ.
+    \item $p_k$: hiệp phương sai lỗi ước lượng.
+    \item $q$: nhiễu quá trình (process noise), phản ánh mức tin vào tính hằng số.
+    \item $r$: nhiễu quan sát (measurement noise), phản ánh độ nhiễu của phép đo.
+\end{itemize}
+
+Đề tài dùng $q = 0.1$ và $r = 2.0$ theo kết quả thực nghiệm của~\cite{zhuang-kalman-ble}. Tăng $r$ làm lọc mượt hơn nhưng phản ứng chậm hơn; tăng $q$ ngược lại.
+
+\subsection{Ước lượng khoảng cách}
+
+Sau khi lọc Kalman, RSSI ổn định được đưa vào công thức~\eqref{eq:distance} để tính khoảng cách. Với $n = 2.5$ và $\texttt{tx\_power} = -59$~dBm (RSSI tại 1~m cho ESP32 tx power mặc định), Bảng~\ref{tab:rssi-distance} minh hoạ quan hệ RSSI--khoảng cách.
+
+\begin{table}[htp]
+    \centering
+    \caption{Quan hệ RSSI với khoảng cách ước lượng ($n = 2.5$, $P_0 = -59$~dBm).}
+    \label{tab:rssi-distance}
+    \begin{tabular}{cc}
+        \hline
+        \textbf{RSSI (dBm)} & \textbf{Khoảng cách ước lượng (m)} \\
+        \hline
+        $-59$ & 1.0 \\
+        $-70$ & 2.8 \\
+        $-80$ & 6.3 \\
+        $-90$ & 14.5 \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Bảng cho thấy sai số tuyệt đối tăng nhanh khi RSSI giảm, phù hợp để phân biệt ``gần'' vs ``xa'' nhưng không đủ chính xác cho định vị centimet. Vì lý do này, đề tài chỉ dùng RSSI để xác định phòng chứ không tính (x, y).
+
+\subsection{Chống replay theo sequence}
+
+Trường \texttt{sequence} 1~byte trong payload tăng lên mỗi 500~ms và tràn về 0 khi vượt 255. Scanner lưu \texttt{last\_sequence} cho mỗi tag và áp dụng luật:
+
+\begin{itemize}
+    \item Nếu \texttt{sequence == last\_sequence}: gói trùng (do đa đường truyền hoặc scanner nhận 2 lần). Bỏ qua.
+    \item Nếu $-10 \leq (\texttt{sequence} - \texttt{last\_sequence}) < 0$: gói đến trễ vì overlap kênh quảng cáo, chấp nhận nhưng không cập nhật \texttt{last\_sequence}.
+    \item Nếu $-10 > (\texttt{sequence} - \texttt{last\_sequence})$ hoặc $> 30$: nhảy bất thường (tag reboot, hoặc bị attacker replay gói cũ). Reset trạng thái Kalman.
+    \item Ngược lại: cập nhật bình thường.
+\end{itemize}
+
+Ngưỡng 30 (cửa sổ chấp nhận forward) đủ khoan dung cho việc scanner bỏ lỡ một số gói do trùng kênh, nhưng đủ chặt để chặn attacker replay một gói cũ.
 
 \section{Quyết định zone}
 
-\subsection{Best-scanner selection}
-% - Chọn scanner có RSSI mạnh nhất.
-% - Cửa sổ tươi (fresh window).
+Thuật toán quyết định phòng chạy trên server (Rule Chain của ThingsBoard), không trên firmware.
 
-\subsection{Hysteresis}
-% - Vì sao cần: chống flap.
-% - Ngưỡng dBm.
+\subsection{Chọn scanner mạnh nhất}
 
-\subsection{Leaky-bucket debounce}
-% - Đếm consecutive-agreement.
-% - Leaky part: giảm 1 thay vì reset 0.
+Với mỗi tag, server duy trì bảng RSSI mới nhất từ từng scanner. Ứng viên phòng là phòng của scanner có RSSI lớn nhất trong \textit{cửa sổ tươi} (fresh window), mặc định 10~s. Scanner có RSSI cũ hơn 10~s bị loại vì có thể tag đã rời phòng đó.
+
+\subsection{Hysteresis chống flapping}
+
+Nếu tag đứng ở biên giữa hai phòng, RSSI từ hai scanner tương đương và có thể đảo qua đảo lại. Kết quả là zone nhảy liên tục, dashboard nhấp nháy.
+
+Giải pháp là \textit{hysteresis}: chỉ chuyển sang phòng mới nếu RSSI của scanner mới lớn hơn RSSI của scanner hiện tại ít nhất \texttt{HYSTERESIS\_DBM}~dBm. Đề tài chọn \texttt{HYSTERESIS\_DBM = 8}, giá trị thoả hiệp giữa chống flap và độ phản hồi khi thực sự đổi phòng.
+
+\subsection{Debounce leaky-bucket}
+
+Hysteresis một mình chưa đủ: nếu tại một thời điểm scanner mới thực sự lớn hơn 8~dBm do bùng phát ngẫu nhiên, zone vẫn nhảy. Giải pháp bổ sung là \textit{leaky-bucket debounce}:
+
+\begin{itemize}
+    \item Duy trì biến \texttt{candidate\_zone} và \texttt{candidate\_count}.
+    \item Khi có báo cáo mới ủng hộ ứng viên hiện tại: tăng \texttt{candidate\_count} lên 1.
+    \item Khi có báo cáo phản đối: giảm \texttt{candidate\_count} xuống 1 (thay vì reset về 0 --- đây là phần ``leaky'').
+    \item Chỉ chuyển zone khi \texttt{candidate\_count} $\geq$ \texttt{DEBOUNCE\_COUNT}, mặc định 2.
+\end{itemize}
+
+Với \texttt{DEBOUNCE\_COUNT = 2} và tần suất báo cáo ~1~Hz, thời gian trễ chuyển zone khoảng 2~s, chấp nhận được cho ứng dụng theo dõi người.
 
 \section{Bảo mật}
+\label{sec:security}
+
+Đề tài áp dụng bảo mật ở hai lớp độc lập.
 
 \subsection{HMAC-SHA256 và HMAC-16 truncated}
-% - Định nghĩa HMAC.
-% - Vì sao truncate 16 bit là đủ cho ADV.
 
-\subsection{Key rotation}
-% - Chu kỳ 24h.
-% - Cơ chế phân phối key qua mesh (đã encrypt AppKey).
+HMAC (Hash-based Message Authentication Code)~\cite{rfc2104} tạo mã xác thực từ dữ liệu và khoá bí mật:
 
-\subsection{MQTTS/TLS}
-% - Handshake TLS 1.2.
-% - CN verify vs SAN verify.
+\begin{equation}
+    \text{HMAC}(K, m) = H\left((K' \oplus \text{opad}) \parallel H((K' \oplus \text{ipad}) \parallel m)\right)
+    \label{eq:hmac}
+\end{equation}
+
+trong đó $H$ là hàm băm (SHA-256), $K'$ là khoá đã pad, opad và ipad là hai chuỗi hằng.
+
+Với SHA-256, kết quả là 32~byte. Payload BLE ADV chỉ có ~24~byte khả dụng, không đủ chỗ cho HMAC đầy đủ. Đề tài rút gọn còn 2~byte đầu (HMAC-16). Điều này giảm không gian tìm kiếm brute-force xuống $2^{16}$ (65~536), yếu về mặt lý thuyết mật mã, nhưng đủ khi kết hợp với anti-replay: attacker phải đoán đúng HMAC-16 \textit{và} bắt được sequence hợp lệ, xác suất rất thấp trong practice.
+
+\subsection{Hai cơ chế khoá độc lập}
+
+Đề tài dùng hai lịch trình khoá riêng, một cho Tag beacon và một cho OTA-beacon.
+
+\textbf{(a) Khoá Tag: dẫn xuất theo epoch (TOTP-style).}
+
+Tag và Scanner đều lưu trước một \textit{master key} 16~byte cố định trong firmware. Khoá thực dùng để ký từng gói không phải master mà là \texttt{epoch\_key} dẫn xuất:
+
+\begin{align}
+    \text{epoch\_counter} &= \left\lfloor \frac{\text{esp\_timer\_get\_time()}}{1\text{~hour}} \right\rfloor \\
+    \text{epoch\_key} &= \text{HKDF}(\text{master\_key}, \text{epoch\_counter})
+\end{align}
+
+Do Tag không có RTC, \texttt{epoch\_counter} là ``giờ kể từ lúc boot'', không phải wall-clock. Scanner không biết Tag mới boot lúc nào, nên khi lần đầu nhận gói hợp lệ nó \textit{khoá} vào giá trị epoch mà Tag đang dùng (biến \texttt{locked\_epoch}) và sau đó chỉ chấp nhận cửa sổ hẹp quanh giá trị này.
+
+Kết quả: một gói bắt được ở epoch $E$ không thể replay ở epoch $E+1$ (đã lệch 1~h). Attacker không có \texttt{master\_key} không thể tính được epoch\_key mới.
+
+\textbf{(b) Khoá OTA-beacon: xoay đơn giản.}
+
+Khoá OTA-beacon là bí mật chia sẻ giữa Gateway và tất cả Scanner. Gateway xoay khoá mỗi 24~giờ theo wall-clock:
+
+\begin{enumerate}
+    \item Sinh 16~byte ngẫu nhiên bằng \texttt{esp\_fill\_random()}.
+    \item Import vào PSA. Nếu thất bại, huỷ và giữ khoá cũ.
+    \item Ghi NVS.
+    \item Push cho từng Scanner qua \texttt{OTA\_KEY\_PUSH} (đã mã hoá bằng AppKey của mesh).
+\end{enumerate}
+
+Không cần derive theo epoch vì Gateway có mesh path để phân phối khoá mới cho mọi Scanner. Attacker replay OTA-beacon cũ hơn 24~h sẽ bị reject vì Scanner đã có khoá mới.
+
+\subsection{MQTTS/TLS + CN verify}
+
+Kênh truyền dữ liệu telemetry giữa Gateway và ThingsBoard đi qua MQTTS (MQTT over TLS) trên port 8883. Chi tiết giao thức TLS trình bày ở~\ref{sec:mqtt-http-tls}.
+
+Vì thiết bị embedded không có DNS resolver và kết nối tới server theo địa chỉ IP thô, đề tài chọn xác thực bằng \textit{Common Name} (CN) thay vì \textit{Subject Alternative Name} (SAN). Firmware kiểm tra CN trong chứng chỉ server khớp chuỗi cố định \texttt{"bmt-tb.local"}. Điều này cho phép thay đổi IP máy chủ mà không cần regenerate cert.
 
 \section{Cập nhật firmware qua mạng (OTA)}
 
-\subsection{esp\_https\_ota và dual-slot partition}
-% - Cấu trúc partition table cho OTA.
-% - Vai trò của OTA data partition.
+\subsection{Kiến trúc esp\_https\_ota và dual-slot partition}
+
+ESP-IDF phân vùng flash thành hai slot ứng dụng: \texttt{ota\_0} và \texttt{ota\_1}, mỗi slot đủ chứa một firmware image đầy đủ. Bootloader chọn slot nào chạy dựa trên bảng \texttt{ota\_data}. Khi OTA chạy:
+
+\begin{enumerate}
+    \item Firmware hiện tại (chạy từ slot $S$) tải image mới về slot $S' \neq S$.
+    \item Xác minh chữ ký (nếu bật Secure Boot) và checksum.
+    \item Cập nhật \texttt{ota\_data} để lần boot sau chạy slot $S'$.
+    \item Reboot.
+    \item Nếu firmware mới không tự đánh dấu ``ok'' trong vài giây đầu, bootloader tự động rollback về slot $S$.
+\end{enumerate}
+
+Cơ chế dual-slot đảm bảo OTA thất bại giữa chừng không làm brick thiết bị.
 
 \subsection{SHA256 skip và version compare}
-% - Cấu trúc app descriptor.
-% - Version format YYYYMMDDHHMMSS.
+
+Trước khi ghi flash, firmware kiểm tra:
+
+\begin{itemize}
+    \item \textbf{SHA256 skip}: nếu SHA256 của image mới trùng SHA256 image hiện tại (đọc từ \texttt{esp\_app\_get\_description()}), bỏ qua. Tránh flash lại chính image đang chạy.
+
+    \item \textbf{Version compare chống downgrade}: so sánh chuỗi \texttt{PROJECT\_VER} định dạng \texttt{YYYYMMDDHHMMSS}. Đây là mtime file nguồn mới nhất được ghi vào firmware lúc build. So sánh bằng \texttt{strncmp}, do định dạng cố định 14 ký tự nên so sánh lexicographic tương đương so sánh thời gian. Chỉ chấp nhận image mới hơn.
+\end{itemize}
 
 \subsection{Cơ chế trigger OTA}
-% - Broadcast beacon HMAC cho scanner.
-% - Unicast mesh cho relay.
-% - Self-check định kỳ.
+
+Đề tài dùng ba cách kích hoạt OTA:
+
+\begin{enumerate}
+    \item \textbf{UART thủ công}: gõ \texttt{g} trên console Gateway để OTA chính Gateway, \texttt{u} để OTA tất cả Scanner + Relay.
+
+    \item \textbf{Broadcast beacon}: Gateway dùng NimBLE phát một beacon đặc biệt (kèm HMAC) ~ 15~s. Tất cả Scanner nghe và OTA song song. Nhanh hơn unicast qua mesh.
+
+    \item \textbf{Unicast mesh}: cho Relay (một node), Gateway gửi \texttt{OTA\_TRIGGER} qua mesh 5 lần cách nhau 500~ms để đảm bảo nhận.
+\end{enumerate}
+
+Sau OTA thành công, node reboot, task \texttt{report\_pending\_task} phát hiện cờ pending trong NVS và gửi \texttt{OTA\_RESULT (status=0)} về Gateway.
+
+\subsection{Auto-check}
+
+Ngoài trigger thủ công, mỗi node có task \texttt{auto\_check\_task} tự động gọi \texttt{bmt\_ota\_trigger()} mỗi 3 phút. Vì có SHA256 skip, các lần trigger khi chưa có firmware mới sẽ kết thúc nhanh (chỉ tải header, so SHA256, huỷ). Cơ chế này đảm bảo mọi node đều lên phiên bản mới nhất không cần điều phối trung tâm.
+
+\section{MQTT, HTTP và TLS}
+\label{sec:mqtt-http-tls}
+
+\subsection{MQTT}
+
+MQTT (Message Queuing Telemetry Transport) là giao thức lightweight publish/subscribe trên TCP, được OASIS chuẩn hoá năm 2014 (bản 3.1.1) và 2019 (bản 5.0)~\cite{mqtt-spec}. Đề tài dùng MQTT 3.1.1.
+
+Kiến trúc gồm hai loại thực thể:
+
+\begin{itemize}
+    \item \textbf{Broker}: máy chủ trung tâm, nhận và định tuyến thông điệp. Trong đề tài, broker là component tích hợp trong ThingsBoard.
+    \item \textbf{Client}: thiết bị kết nối tới broker, có thể \textit{publish} (gửi) hoặc \textit{subscribe} (đăng ký nhận) thông điệp trên các \textit{topic}. Gateway là MQTT client.
+\end{itemize}
+
+Topic có cấu trúc phân cấp, ví dụ \texttt{v1/gateway/telemetry}, dấu \texttt{/} phân tách các cấp. MQTT hỗ trợ ba mức QoS:
+
+\begin{itemize}
+    \item QoS 0 (at-most-once): fire-and-forget, không đảm bảo giao.
+    \item QoS 1 (at-least-once): broker gửi ACK, publisher có thể gửi lại nếu không nhận ACK. Có thể trùng.
+    \item QoS 2 (exactly-once): handshake 4-way, chi phí cao nhất. Đảm bảo mỗi thông điệp giao đúng 1 lần.
+\end{itemize}
+
+Đề tài dùng QoS 0 cho telemetry tag report (mất một vài gói không ảnh hưởng vì có báo cáo mới liên tục) và QoS 1 cho các sự kiện quan trọng như connect device và OTA result (cần đảm bảo giao ít nhất 1 lần).
+
+Ngoài publish/subscribe, MQTT còn có \textit{retained message} (broker giữ thông điệp cuối cùng trên topic, subscriber mới connect nhận ngay) và \textit{Last Will and Testament -- LWT} (thông điệp broker tự publish khi client mất kết nối bất thường), đề tài chưa dùng.
+
+\textbf{Vì sao chọn MQTT thay HTTP polling}: telemetry là dòng dữ liệu liên tục. Với HTTP polling, client phải gửi request định kỳ, mỗi lần setup TCP + TLS handshake mới (~1--2~s trên embedded), tiêu tốn năng lượng và làm chậm phản hồi. MQTT giữ một kết nối TCP + TLS bền, chi phí thiết lập một lần. Payload MQTT cũng nhỏ hơn HTTP (không có headers).
+
+\subsection{HTTP và HTTPS}
+
+HTTP (HyperText Transfer Protocol) là giao thức request-response phổ dụng nhất trên Internet. Đặc điểm:
+
+\begin{itemize}
+    \item Client gửi \textit{request} với method (GET, POST, PUT, DELETE,\ldots), URL, headers và optional body.
+    \item Server trả \textit{response} với status code (200 OK, 404 Not Found, 500 Server Error,\ldots), headers và body.
+    \item Stateless: mỗi request độc lập, không giữ session ở tầng giao thức.
+\end{itemize}
+
+Đề tài dùng HTTP theo cách rất đơn giản: node gửi GET tới URL kiểu \texttt{https://192.168.1.10:8443/Scanner.bin} và server trả về file \texttt{.bin}.
+
+Với file lớn, HTTP hỗ trợ \textit{chunked transfer encoding}: server chia response thành nhiều chunk, gửi lần lượt, cuối cùng gửi chunk rỗng đánh dấu kết thúc. Điều này cho phép streaming mà không cần biết trước tổng kích thước. \texttt{esp\_https\_ota} dùng chunked để tải firmware.
+
+\textbf{HTTPS} là HTTP chạy trên TLS. Chi tiết TLS trình bày ở phần sau.
+
+\textbf{Vì sao dùng HTTPS cho OTA}: file \texttt{.bin} chứa các chuỗi hằng như \texttt{BMT\_WIFI\_SSID}, \texttt{BMT\_WIFI\_PASS} và \texttt{BMT\_TB\_GATEWAY\_TOKEN} được nhúng thẳng. Nếu tải qua HTTP, kẻ tấn công trên LAN có thể sniff traffic để lấy các credential này mà không cần chạm vào phần cứng board. HTTPS bịt lỗ hổng này.
+
+\subsection{TLS}
+
+TLS (Transport Layer Security) là giao thức chuẩn để mã hoá kênh truyền, hiện đang dùng phiên bản 1.2 và 1.3~\cite{rfc8446}. TLS đảm bảo ba tính chất:
+
+\begin{itemize}
+    \item \textbf{Confidentiality}: dữ liệu được mã hoá, kẻ nghe lén không đọc được.
+    \item \textbf{Integrity}: mọi thay đổi giữa đường đều bị phát hiện (MAC).
+    \item \textbf{Authentication}: xác thực danh tính server (và optional client) bằng chứng chỉ X.509.
+\end{itemize}
+
+\textbf{Handshake TLS 1.2} tóm tắt:
+
+\begin{enumerate}
+    \item Client gửi \texttt{ClientHello} liệt kê phiên bản, cipher suite hỗ trợ và random 32~byte.
+    \item Server chọn cipher suite, gửi \texttt{ServerHello}, chứng chỉ X.509 và random 32~byte.
+    \item Client xác minh chứng chỉ dựa trên CA đã cấu hình.
+    \item Hai bên trao đổi khoá (ECDHE hoặc RSA), tính khoá phiên chung.
+    \item Handshake hoàn tất, dữ liệu ứng dụng đi trong kênh mã hoá.
+\end{enumerate}
+
+TLS 1.3 rút gọn handshake còn 1 round-trip, tăng hiệu năng đáng kể trên embedded.
+
+\textbf{Chứng chỉ X.509} là cấu trúc dữ liệu ràng buộc khoá công khai với một danh tính. Chứng chỉ được ký bởi một \textit{Certificate Authority (CA)}. Client tin tưởng chứng chỉ nếu tin CA đã ký nó.
+
+Với hệ thống tự host trong mạng nội bộ, đề tài dùng \textit{self-signed CA}: tự tạo CA private key + cert, dùng CA đó ký chứng chỉ server. CA cert được embed vào firmware để node tin tưởng.
+
+\textbf{CN vs SAN verification}. Cả CN (Common Name) và SAN (Subject Alternative Name) đều là trường trong chứng chỉ đại diện cho tên/địa chỉ server. TLS hiện đại ưu tiên SAN vì SAN cho phép nhiều tên hoặc IP, còn CN chỉ 1 tên.
+
+Trong đề tài, firmware embedded không có DNS resolver, chỉ kết nối theo IP. Xác thực SAN đòi hỏi khớp chính xác IP hoặc hostname trong SAN với cái mà client dùng để kết nối --- không tiện khi IP có thể thay đổi theo triển khai. Đề tài chọn xác thực bằng CN cố định \texttt{"bmt-tb.local"}: server cert có CN này, firmware kiểm tra CN thay vì SAN. Kết quả: đổi IP không cần regenerate cert.
+
+\subsection{Kết hợp: MQTTS và HTTPS dùng chung CA/cert}
+
+Trong triển khai của đề tài, cả kênh MQTTS (port 8883, giữa Gateway và ThingsBoard) và kênh HTTPS OTA (port 8443, giữa mọi node và nginx serve file .bin) đều chạy trên cùng một máy chủ vật lý và dùng chung một cặp:
+
+\begin{itemize}
+    \item Một self-signed CA (khoá + chứng chỉ, giữ trong \texttt{thingsboard/tls/ca.pem} và \texttt{ca.key}).
+    \item Một server cert do CA ký với CN \texttt{"bmt-tb.local"}.
+\end{itemize}
+
+CA cert được embed vào firmware ở hai chỗ:
+
+\begin{itemize}
+    \item \texttt{apps/gateway/components/bmt\_mqtt/ca.pem}: cho MQTTS client.
+    \item \texttt{components/bmt\_ota/ota\_ca.pem}: cho HTTPS OTA client (dùng chung ở tất cả 4 firmware).
+\end{itemize}
+
+Khi regenerate cert, cả hai file đều phải cập nhật đồng thời, sau đó re-flash toàn bộ node.
 
 \section{Giao thức ThingsBoard Gateway API}
 
+ThingsBoard cung cấp \textit{Gateway API} qua MQTT cho các thiết bị đóng vai trò gateway cho nhiều sub-device (như Gateway của đề tài đại diện cho tất cả Scanner, Relay và Tag trên mesh).
+
 \subsection{Kiến trúc Gateway/Sub-device}
-% - 1 gateway đại diện cho nhiều sub-device.
-% - Auto-provision.
+
+Một Gateway trong ThingsBoard được đăng ký như một device thông thường nhưng bật cờ \textit{Is Gateway}. Sau đó, Gateway có thể tự động tạo và quản lý các sub-device (không cần đăng ký trước trong UI) bằng cách publish tới các topic đặc biệt.
+
+Mỗi sub-device có \textit{Device Profile} riêng, cho phép áp Rule Chain khác nhau. Đề tài dùng hai profile: \texttt{ble\_tag} cho các Tag, \texttt{ble\_mesh\_node} cho Scanner/Relay.
 
 \subsection{Các topic MQTT}
-% - v1/gateway/telemetry.
-% - v1/gateway/attributes.
-% - v1/devices/me/rpc/request.
 
-\subsection{Rule chain engine}
-% - Kiến trúc node-based.
-% - Các loại node: Transform, Filter, Save Timeseries, Save Attributes.
+Bảng~\ref{tab:mqtt-topics} liệt kê các topic đề tài sử dụng.
+
+\begin{table}[htp]
+    \centering
+    \caption{Các topic MQTT dùng trong ThingsBoard Gateway API.}
+    \label{tab:mqtt-topics}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Topic} & \textbf{Chiều} & \textbf{Nội dung} \\
+        \hline
+        \texttt{v1/gateway/connect}                & Gateway $\to$ Broker & Đăng ký sub-device mới. \\
+        \texttt{v1/gateway/disconnect}             & Gateway $\to$ Broker & Huỷ đăng ký sub-device. \\
+        \texttt{v1/gateway/telemetry}              & Gateway $\to$ Broker & Đẩy telemetry của sub-device. \\
+        \texttt{v1/gateway/attributes}             & Gateway $\to$ Broker & Cập nhật attribute. \\
+        \texttt{v1/devices/me/rpc/request/+}       & Broker $\to$ Gateway & RPC (ví dụ trigger OTA). \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Payload luôn là JSON. Ví dụ báo cáo RSSI của tag:
+
+\begin{lstlisting}[language=Python,caption=Payload telemetry gửi tới v1/gateway/telemetry]
+{
+  "bmt_tag_0x0001": [
+    {
+      "ts": 1732345678000,
+      "values": {
+        "scanner_mac": "AC-BC-32-12-34-56",
+        "rssi": -47
+      }
+    }
+  ]
+}
+\end{lstlisting}
+
+\subsection{Rule Chain Engine}
+
+Rule Chain là DAG (đồ thị có hướng không chu trình) các \textit{rule node} xử lý message. Mỗi node có input, thực hiện logic và định tuyến ra một hoặc nhiều output theo \textit{relation type} (\texttt{Success}, \texttt{Failure}, \texttt{True}, \texttt{False},\ldots).
+
+Các loại rule node hay dùng:
+
+\begin{itemize}
+    \item \textit{Transform}: chạy JavaScript biến đổi payload, có thể đổi \texttt{msgType}.
+    \item \textit{Filter}: JS trả về boolean, quyết định True/False output.
+    \item \textit{Save Timeseries}: ghi dữ liệu vào bảng chuỗi thời gian.
+    \item \textit{Save Attributes}: ghi thuộc tính (client-scope, server-scope hoặc shared).
+    \item \textit{RPC Call}: gửi RPC tới device.
+\end{itemize}
+
+Đề tài dùng hai Rule Chain: \texttt{ble\_tag\_zone\_detection} cho profile \texttt{ble\_tag} (thực hiện thuật toán hysteresis + debounce đã trình bày ở Chương~\ref{sec:ble-mesh}), và \texttt{ble\_mesh\_node\_ota} cho profile \texttt{ble\_mesh\_node} (lưu \texttt{ota\_result} vào attribute).
+
+Chi tiết implementation của các rule chain sẽ trình bày ở Chương~\ref{Chapter4}.
