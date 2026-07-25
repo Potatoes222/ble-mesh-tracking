@@ -1,37 +1,111 @@
 \chapter{TỔNG QUAN NGHIÊN CỨU}
 \label{Chapter2}
 
+Chương này khảo sát các phương pháp định vị trong nhà đang được sử dụng, so sánh các giải pháp thương mại tiêu biểu, tóm tắt các nghiên cứu học thuật liên quan và chỉ ra khoảng trống mà đề tài này nhắm tới.
+
 \section{Các phương pháp định vị trong nhà}
 
-\subsection{Fingerprinting với WiFi RSSI}
-% - Nguyên lý: xây database RSSI theo lưới, lookup runtime.
-% - Ưu: dùng lại hạ tầng WiFi có sẵn.
-% - Nhược: cần calibrate mỗi lần đổi bố trí AP.
+Định vị trong nhà đã được nghiên cứu và triển khai trong hơn hai thập kỷ với nhiều hướng tiếp cận. Bốn phương pháp phổ biến nhất được trình bày dưới đây.
 
-\subsection{BLE beacon với 1 scanner}
-% - iBeacon, Eddystone.
-% - Vùng phủ hẹp, phụ thuộc calibrate tx_power.
+\subsection{Fingerprinting bằng WiFi RSSI}
 
-\subsection{UWB}
-% - DecaWave DWM1001, Apple U1.
-% - Độ chính xác cm, giá cao.
+Fingerprinting là kỹ thuật hai pha. Pha \textit{offline}, người triển khai đi khảo sát toàn bộ không gian, tại mỗi điểm tham chiếu ghi lại vector cường độ tín hiệu (RSSI) từ tất cả điểm truy cập WiFi (AP) trong tầm. Kết quả là một cơ sở dữ liệu ``vân tay'' (fingerprint) gắn với toạ độ. Pha \textit{online}, thiết bị đọc RSSI hiện tại và so khớp với cơ sở dữ liệu bằng thuật toán như k-Nearest Neighbors để suy ra vị trí.
 
-\subsection{Hybrid}
-% - Kết hợp nhiều nguồn (BLE + IMU + WiFi).
-% - Phức tạp triển khai.
+Ưu điểm là tận dụng hạ tầng WiFi có sẵn, không cần triển khai phần cứng mới. Nhược điểm chính là cơ sở dữ liệu fingerprint xuống cấp nhanh: khi có thay đổi bố trí AP, sửa chữa, thậm chí là mùa (nhiệt độ, độ ẩm ảnh hưởng đến truyền sóng), cần khảo sát lại toàn bộ. Sai số trung bình trong nhà thường 3--5~m, khó đạt mức phòng nếu các phòng nhỏ.
+
+\subsection{BLE beacon với một đầu quét}
+
+Mô hình BLE beacon dùng thẻ (tag) phát tín hiệu quảng bá (advertisement) định kỳ. Hai chuẩn phổ biến là \textit{iBeacon} của Apple và \textit{Eddystone} của Google. Đầu quét (smartphone hoặc chip BLE cố định) đọc RSSI và ước lượng khoảng cách bằng mô hình mất mát đường truyền log-distance:
+
+\begin{equation}
+    d = 10^{\frac{P_0 - P_r}{10 n}}
+\end{equation}
+
+trong đó $P_0$ là RSSI tham chiếu tại 1~m (được ghi trong payload beacon), $P_r$ là RSSI đo được, $n$ là hệ số mất mát đường truyền (path-loss exponent), thường 2--4 trong nhà.
+
+Ưu điểm là chi phí thấp (thẻ ~2--5~USD, tuổi thọ pin nhiều năm), khả năng phủ sóng 5--10~m. Nhược điểm là RSSI biến động lớn theo thời gian và vị trí do đa đường truyền, che khuất và nhiễu, cần lọc bằng Kalman hoặc trung bình trượt để có kết quả ổn định. Ngoài ra, một đầu quét đơn khó phủ được nhiều phòng cách nhau bởi tường.
+
+\subsection{Ultra-Wideband (UWB)}
+
+UWB truyền xung băng thông siêu rộng (>500~MHz) trong dải tần 3.1--10.6~GHz. Nhờ thời gian xung ngắn, UWB có thể đo thời gian bay (time-of-flight) chính xác đến nano-giây, cho khoảng cách sai số cỡ centimet~\cite{decawave-app-note}.
+
+Các sản phẩm tiêu biểu: chip DW1000/DW3000 của DecaWave (nay là Qorvo), U1 của Apple (dùng trong AirTag, iPhone), và Nordic nRF9161. Kỹ thuật định vị chính là \textit{Time Difference of Arrival (TDoA)} với ít nhất 3 anchor cố định, cho toạ độ (x, y) hoặc (x, y, z).
+
+Ưu điểm là độ chính xác vượt trội. Nhược điểm là chi phí cao (thẻ ~30--50~USD, mỗi anchor ~50--100~USD, và cần lắp anchor riêng, không tận dụng được hạ tầng có sẵn). UWB cũng có tiêu thụ pin cao hơn BLE do phải chủ động phát/thu tín hiệu.
+
+\subsection{Hệ thống hybrid}
+
+Kết hợp nhiều nguồn tín hiệu để bù trừ điểm yếu của từng loại. Ví dụ: BLE RSSI cho định vị thô, cảm biến quán tính (IMU) cho tracking chuyển động ngắn hạn giữa các beacon, WiFi cho fallback khi mất beacon. Google Fused Location Provider trên Android là một ví dụ hybrid ở mức phần mềm.
+
+Ưu điểm là độ tin cậy cao. Nhược điểm là độ phức tạp triển khai và nhu cầu phần mềm/phần cứng đa dạng, chi phí phát triển và bảo trì lớn.
 
 \section{So sánh giải pháp thương mại}
-% - Estimote, Kontakt.io, Aruba Meridian.
-% - Bảng so sánh: chi phí per-node, license, mô hình dữ liệu, mở nguồn hay không.
+
+Nhiều công ty đã thương mại hoá giải pháp indoor positioning. Bảng~\ref{tab:commercial} so sánh ba đại diện tiêu biểu.
+
+\begin{table}[htp]
+    \centering
+    \caption{So sánh các giải pháp indoor positioning thương mại.}
+    \label{tab:commercial}
+    \begin{tabular}{lllll}
+        \hline
+        \textbf{Sản phẩm} & \textbf{Công nghệ} & \textbf{Độ chính xác} & \textbf{Chi phí (thẻ)} & \textbf{Mã nguồn} \\
+        \hline
+        Estimote Beacon & BLE + UWB & Phòng / 1~m & \$$\sim$30 & Đóng \\
+        Kontakt.io Anchor & BLE & Phòng / 2--3~m & \$$\sim$15 & Đóng \\
+        Aruba Meridian & WiFi + BLE & Phòng / 2--5~m & Tuỳ hạ tầng & Đóng \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsection{Estimote}
+
+Ra mắt 2013, một trong những thương hiệu beacon BLE tiên phong. Sản phẩm mới nhất (Estimote UWB Beacon) kết hợp BLE và UWB cho độ chính xác cấp mét. Đi kèm SDK iOS/Android và cloud dashboard. Điểm mạnh: hệ sinh thái hoàn chỉnh. Điểm yếu: khoá vào cloud của Estimote, không tự host được, giá thẻ cao.
+
+\subsection{Kontakt.io}
+
+Chuyên về hệ thống Real-Time Location System (RTLS) cho bệnh viện và kho hàng. Dùng BLE beacon và anchor Wi-Fi tự lắp. Cung cấp API tích hợp với các hệ thống EMR (electronic medical records). Điểm yếu: đóng nguồn, license theo số node/tháng.
+
+\subsection{Aruba Meridian}
+
+Giải pháp cấp doanh nghiệp của HPE Aruba. Tận dụng access point Aruba (thường đã có sẵn ở doanh nghiệp) để phát BLE beacon, kết hợp với ứng dụng smartphone. Điểm mạnh: tận dụng hạ tầng WiFi cấp doanh nghiệp. Điểm yếu: cần AP Aruba (chi phí cao), phù hợp doanh nghiệp lớn hơn là ứng dụng nhỏ.
+
+Điểm chung của cả ba: đều đóng nguồn, khoá vào hệ sinh thái riêng, chi phí license cao khi triển khai quy mô lớn, và người dùng không thể can thiệp vào thuật toán quyết định vị trí. Với các ứng dụng cần tuỳ biến sâu (điều chỉnh ngưỡng nhạy cho từng phòng, tích hợp với hệ thống nội bộ), các giải pháp mở nguồn là lựa chọn phù hợp hơn.
 
 \section{Các nghiên cứu học thuật liên quan}
-% - Kalman filter cho BLE RSSI (trích dẫn bài báo).
-% - Path-loss model calibration ~\cite{...}.
-% - BLE Mesh cho IoT (Bluetooth SIG whitepaper).
-% - Chống replay và giả mạo beacon.
+
+\subsection{Lọc Kalman cho RSSI}
+
+RSSI đo được từ BLE có phương sai lớn do đa đường truyền và nhiễu. Nhiều nghiên cứu đã ứng dụng lọc Kalman để giảm nhiễu. Bài báo của Zhuang \textit{và cộng sự}~\cite{zhuang-kalman-ble} chỉ ra rằng lọc Kalman 1D với tham số $q = 0.1$, $r = 2.0$ giảm độ lệch chuẩn RSSI từ ~4~dBm xuống ~1~dBm mà không làm chậm phản ứng khi vị trí thay đổi. Đề tài này áp dụng công thức tương tự (Chương~\ref{Chapter3}).
+
+Các phương pháp phức tạp hơn như bộ lọc hạt (Particle filter) hay Kalman mở rộng (Extended Kalman Filter) cho kết quả tốt hơn khoảng 10--15\% nhưng tăng chi phí tính toán đáng kể, không phù hợp cho vi điều khiển tài nguyên hạn chế như ESP32.
+
+\subsection{Hiệu chỉnh mô hình mất mát đường truyền}
+
+Hệ số $n$ trong mô hình log-distance thay đổi theo môi trường. Nghiên cứu của Bahillo \textit{và cộng sự}~\cite{bahillo-pathloss} khảo sát $n$ trong 5 loại môi trường: không gian mở ($n \approx 2.0$), văn phòng có vách kính ($n \approx 2.5$), văn phòng có tường thạch cao ($n \approx 3.0$), toà nhà bê tông ($n \approx 3.5$), hành lang dài ($n \approx 4.0$).
+
+Đề tài này chọn $n = 2.5$ làm mặc định, phù hợp với môi trường thí nghiệm là căn hộ dân dụng có tường thạch cao và một số tường bê tông.
+
+\subsection{Bluetooth Mesh cho IoT}
+
+Bluetooth SIG công bố chuẩn Mesh Profile 1.0 năm 2017 và bản 1.0.1 năm 2019~\cite{ble-mesh-spec}. Mesh chuyển BLE từ point-to-point sang mạng lưới, hỗ trợ Publish/Subscribe với hàng ngàn node, tự phục hồi (self-healing) và forwarding.
+
+Nghiên cứu của Rondón \textit{và cộng sự}~\cite{rondon-ble-mesh} khảo sát hiệu suất mesh với 50 node, cho thấy độ trễ end-to-end trung bình 200--500~ms cho gói vendor-specific 20 byte qua 3--5 hop. Đây là đủ cho ứng dụng telemetry tần suất thấp (như báo cáo tag mỗi 1--2~s trong đề tài này).
+
+\subsection{Cập nhật firmware qua BLE Mesh}
+
+Chuẩn Bluetooth Mesh 1.1 (2023) bổ sung DFU (Device Firmware Update) qua mesh, nhưng ESP-IDF chưa hỗ trợ đầy đủ. Các giải pháp OTA hiện tại thường dùng phương thức lai: mesh chỉ để trigger, tải firmware qua WiFi/HTTP song song. Đây cũng là hướng đề tài này áp dụng.
 
 \section{Khoảng trống nghiên cứu}
-% - Ít giải pháp mã nguồn mở tự host end-to-end.
-% - Bảo mật beacon thường bị bỏ qua trong prototype.
-% - OTA hàng loạt hiếm được đề cập.
-% - Kiến trúc phân tầng edge–server ít được nghiên cứu bài bản.
+
+Từ khảo sát trên, tồn tại ba khoảng trống chính:
+
+\begin{itemize}
+    \item \textbf{Thiếu giải pháp mã nguồn mở end-to-end tự host được}. Các giải pháp học thuật thường chỉ giải quyết một phần (lọc RSSI, thuật toán zone) mà không cung cấp full stack (firmware + server + dashboard). Các giải pháp thương mại thì đóng nguồn và khoá vào cloud riêng. Người dùng cuối muốn hiểu và điều chỉnh hệ thống không có lựa chọn phù hợp.
+
+    \item \textbf{Bảo mật beacon thường bị bỏ qua}. Hầu hết các giải pháp học thuật chỉ mô tả kỹ thuật định vị mà không đề cập chống giả mạo. Trong thực tế, beacon không có chữ ký dễ bị giả mạo bằng smartphone (Bluetooth spam attack), có thể gây sai lệch dữ liệu định vị hoặc dùng cho tấn công phishing dựa trên vị trí. Đề tài này áp dụng chữ ký HMAC-16 với khoá dẫn xuất theo epoch, giải quyết cả giả mạo và replay.
+
+    \item \textbf{Cập nhật firmware hàng loạt cho fleet ít được đề cập}. Khi triển khai hàng chục node, việc cập nhật thủ công qua cáp UART không khả thi. Cần cơ chế OTA đồng loạt với xác thực chống downgrade, có báo cáo trạng thái từng node và fallback khi lỗi. Đây là hướng đề tài này tập trung ở Chương~\ref{Chapter4}.
+\end{itemize}
+
+Đề tài không đặt mục tiêu vượt trội về độ chính xác định vị (đây là bài toán khó có kỹ thuật đã ổn định) mà tập trung vào \textbf{tính hoàn chỉnh của toàn hệ thống, khả năng tự host, bảo mật ở mức beacon và cơ chế OTA cho fleet} --- các khía cạnh chưa được các giải pháp hiện tại giải quyết đồng thời.
