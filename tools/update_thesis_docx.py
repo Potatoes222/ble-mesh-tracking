@@ -493,6 +493,12 @@ def main():
         if p.text.strip().startswith("Sinh viên thực hiện:"):
             p.text = "Sinh viên thực hiện: Cao Trọng Phước – Tăng Sĩ Thông"
             break
+    for p in doc.paragraphs:
+        if p.text.strip().startswith("Giảng viên hướng dẫn:"):
+            p.text = "Giảng viên hướng dẫn: TS. HUỲNH HỮU THUẬN"
+            p.add_run().add_break()
+            p.add_run("Trưởng Bộ môn Máy tính – Hệ thống nhúng")
+            break
 
     # Xóa bản tóm tắt tiếng Anh.
     start = end = None
