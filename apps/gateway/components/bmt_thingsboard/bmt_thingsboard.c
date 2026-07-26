@@ -38,6 +38,40 @@ static void tb_set_role(const char* dev, const char* role)
 	esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/attributes", json, 0, 1, 0);
 }
 
+void bmt_tb_reconnect_all_devices(void)
+{
+	int reannounced = 0;
+
+	for (int i = 0; i < bmt_node_table_capacity(); i++)
+	{
+		bmt_node_t* n = bmt_node_table_get(i);
+		if (!n || !n->used)
+			continue;
+		char dev[32];
+		snprintf(dev, sizeof(dev), BMT_DEV_NAME_NODE_FMT,
+		         n->mac[0], n->mac[1], n->mac[2], n->mac[3], n->mac[4], n->mac[5]);
+		tb_connect_device(dev, BMT_PROFILE_NODE);
+		tb_set_role(dev, n->is_scan ? BMT_ROLE_SCAN : BMT_ROLE_RELAY);
+		reannounced++;
+	}
+
+	bmt_zone_lock();
+	for (int i = 0; i < bmt_zone_track_capacity(); i++)
+	{
+		bmt_tag_track_t* t = bmt_zone_track_get(i);
+		if (!t || !t->active)
+			continue;
+		char dev[32];
+		snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, t->tag_id);
+		tb_connect_device(dev, BMT_PROFILE_TAG);
+		tb_set_role(dev, BMT_ROLE_TAG);
+		reannounced++;
+	}
+	bmt_zone_unlock();
+
+	ESP_LOGI("BMT_TB", "Re-announced %d known device(s) to ThingsBoard after MQTT (re)connect", reannounced);
+}
+
 void bmt_tb_pub_gateway_online(void)
 {
 	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
@@ -89,7 +123,7 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	/* Check truoc get_or_add de biet co phai tag moi khong — dung cho quyet
 	 * dinh connect/set_role voi TB o duoi. */
 	bool was_new = (bmt_zone_track_find(r->tag_id) == NULL);
-	bmt_tag_track_t* t = bmt_zone_track_get_or_add(r->tag_id, r->tag_type);
+	bmt_tag_track_t* t = bmt_zone_track_get_or_add(r->tag_id, r->battery);
 	if (!t)
 	{
 		bmt_zone_unlock();
@@ -141,16 +175,16 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 	}
 
 	snprintf(json, sizeof(json),
-	         "{\"%s\":[{\"scanner_id\":\"%s\",\"type\":\"%s\","
+	         "{\"%s\":[{\"scanner_id\":\"%s\",\"battery\":%u,"
 	         "\"rssi\":%d,\"distance\":%.2f,\"loss\":%u}]}",
-	         dev, scanner_key, r->tag_type == 0x01 ? "PERSON" : "ASSET",
+	         dev, scanner_key, r->battery,
 	         r->rssi, r->distance_dm / 10.0f, r->loss_pct);
 
 	int msg_id = esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/telemetry", json, 0, 0, 0);
 	if (msg_id >= 0)
 	{
 		bmt_mqtt_note_published();
-		ESP_LOGI("BMT_TB", "TB [%s] scanner=%s rssi=%d", dev, scanner_key, r->rssi);
+		ESP_LOGI("BMT_TB", "TB [%s] scanner=%s rssi=%d battery=%u%%", dev, scanner_key, r->rssi, r->battery);
 	}
 }
 

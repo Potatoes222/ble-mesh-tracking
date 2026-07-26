@@ -18,7 +18,7 @@
 typedef struct
 {
 	bool active;
-	uint8_t tag_type;
+	uint8_t battery; /* % pin tag (0-100), truoc la tag_type PERSON/ASSET */
 	uint16_t tag_id;
 	int8_t tx_power;
 	int8_t rssi_raw;
@@ -37,9 +37,9 @@ typedef struct
 void bmt_tag_table_reset(void);
 
 int bmt_tag_table_find(uint16_t tag_id);
-int bmt_tag_table_add(uint16_t tag_id, uint8_t tag_type, int8_t tx_power,
+int bmt_tag_table_add(uint16_t tag_id, uint8_t battery, int8_t tx_power,
                       int8_t rssi, uint8_t sequence, const uint8_t* mac);
-void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence);
+void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence, uint8_t battery);
 /* Ghi lai epoch key hien Scanner dang lock cho tag o idx nay — goi tu
  * bmt_scan.c ngay sau khi verify HMAC thanh cong (chi de hien thi/debug). */
 void bmt_tag_table_set_epoch(int idx, int32_t epoch);

@@ -13,7 +13,7 @@ typedef struct
 {
 	bool active;
 	uint16_t tag_id;
-	uint8_t tag_type;
+	uint8_t battery; /* % pin gan nhat (0-100), truoc la tag_type */
 	int8_t rssi_by_scanner[BMT_MAX_SCANNERS];
 	uint32_t ts_by_scanner[BMT_MAX_SCANNERS];
 	bool valid_by_scanner[BMT_MAX_SCANNERS];
@@ -35,7 +35,7 @@ int bmt_zone_track_capacity(void);
 bmt_tag_track_t* bmt_zone_track_get(int idx);
 bmt_tag_track_t* bmt_zone_track_find(uint16_t tag_id);
 /* Tạo entry mới nếu chưa track tag_id — trả về NULL nếu bảng đầy */
-bmt_tag_track_t* bmt_zone_track_get_or_add(uint16_t tag_id, uint8_t tag_type);
+bmt_tag_track_t* bmt_zone_track_get_or_add(uint16_t tag_id, uint8_t battery);
 
 const char* bmt_zone_name(uint8_t scanner_id);
 

@@ -274,7 +274,7 @@ void bmt_mesh_publish_tags(void)
 
 		bmt_tag_report_t report = {
 		    .scanner_id = bmt_scan_core_scanner_id(),
-		    .tag_type = t->tag_type,
+		    .battery = t->battery,
 		    .tag_id = t->tag_id,
 		    .rssi = (int8_t)t->rssi_filtered,
 		    .distance_dm = dist_dm,

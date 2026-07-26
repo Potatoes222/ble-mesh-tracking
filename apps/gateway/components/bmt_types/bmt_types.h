@@ -20,7 +20,8 @@
 typedef struct
 {
 	uint8_t scanner_id;
-	uint8_t tag_type;
+	uint8_t battery; /* % pin tag (0-100), truoc la tag_type — PHAI khop struct
+	                  * ben Scanner (apps/scanner bmt_types.h) tung byte. */
 	uint16_t tag_id;
 	int8_t rssi;
 	int16_t distance_dm;

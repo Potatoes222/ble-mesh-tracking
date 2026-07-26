@@ -554,15 +554,15 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 
 		if (scanner_mac)
 		{
-			ESP_LOGI(TAG, "[VND] src=0x%04x MAC=%02x:%02x:%02x:%02x:%02x:%02x tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
+			ESP_LOGI(TAG, "[VND] src=0x%04x MAC=%02x:%02x:%02x:%02x:%02x:%02x tag=0x%04x rssi=%d battery=%u%% (mesh_recv=%" PRIu32 ")",
 			         src, scanner_mac[0], scanner_mac[1], scanner_mac[2],
 			         scanner_mac[3], scanner_mac[4], scanner_mac[5],
-			         report.tag_id, report.rssi, s_mesh_received);
+			         report.tag_id, report.rssi, report.battery, s_mesh_received);
 		}
 		else
 		{
-			ESP_LOGW(TAG, "[VND] src=0x%04x MAC=? (chua tra ra) tag=0x%04x rssi=%d (mesh_recv=%" PRIu32 ")",
-			         src, report.tag_id, report.rssi, s_mesh_received);
+			ESP_LOGW(TAG, "[VND] src=0x%04x MAC=? (chua tra ra) tag=0x%04x rssi=%d battery=%u%% (mesh_recv=%" PRIu32 ")",
+			         src, report.tag_id, report.rssi, report.battery, s_mesh_received);
 		}
 
 		bmt_mqtt_enqueue_tag_report(&report, scanner_mac);

@@ -18,7 +18,8 @@
 typedef struct
 {
 	uint8_t scanner_id;
-	uint8_t tag_type;
+	uint8_t battery; /* % pin cua tag (0-100). Truoc day la tag_type PERSON/ASSET,
+	                  * da bo — giu nguyen vi tri/kich thuoc de mesh msg khong doi. */
 	uint16_t tag_id;
 	int8_t rssi;
 	int16_t distance_dm;
@@ -42,7 +43,7 @@ typedef struct
 typedef struct
 {
 	uint8_t uuid[16];
-	uint16_t major;
+	uint16_t battery; /* Truoc la major (PERSON/ASSET), gio la % pin 0-100 */
 	uint16_t minor;
 	int8_t tx_power;
 	uint8_t sequence;
@@ -51,7 +52,7 @@ typedef struct
 
 typedef struct
 {
-	uint8_t tag_type;
+	uint8_t battery; /* % pin tag (0-100), truoc la tag_type */
 	uint16_t tag_id;
 	int8_t tx_power;
 	uint8_t sequence;

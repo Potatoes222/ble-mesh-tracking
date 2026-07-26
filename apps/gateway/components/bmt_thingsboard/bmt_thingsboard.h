@@ -23,3 +23,13 @@ void bmt_tb_pub_ota_result(uint16_t addr, uint8_t status);
 /* Task quét định kỳ, đánh dấu tag OUT_OF_RANGE nếu quá lâu không có report
  * từ scanner nào — publish zone=out_of_range lên ThingsBoard */
 void bmt_tb_start_zone_timeout_task(void);
+
+/* [FIX] Goi lai tu bmt_mqtt.c moi khi MQTT_EVENT_CONNECTED (ca lan dau va
+ * moi lan reconnect sau khi rot mang). ThingsBoard Gateway API coi "device
+ * connected" la trang thai gan voi TUNG PHIEN MQTT — mat ket noi la ThingsBoard
+ * quen het, du Gateway (RAM cuc bo, khong bi anh huong boi MQTT) van nho da
+ * tung goi tb_connect_device() cho node/tag do roi nen khong goi lai (vi
+ * was_new==false). Khong goi lai connect sau reconnect -> ThingsBoard am tham
+ * bo qua moi telemetry/attribute publish sau do cho device "chua connect" —
+ * day chinh la nguyen nhan rssi/battery dung im dù mesh + MQTT socket van song. */
+void bmt_tb_reconnect_all_devices(void);

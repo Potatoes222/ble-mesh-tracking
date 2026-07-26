@@ -72,9 +72,8 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				if (!bmt_auth_verify_tag(p.minor, (uint8_t*)&p,
 				                         sizeof(p) - sizeof(p.mac16), p.mac16))
 					goto next_field;
-				out->tag_type = (p.major == BMT_TAG_MAJOR_PERSON)
-				                    ? BMT_TAG_TYPE_PERSON
-				                    : BMT_TAG_TYPE_ASSET;
+				/* Field truoc la major (PERSON/ASSET), gio la % pin 0-100 */
+				out->battery = (uint8_t)p.battery;
 				out->tag_id = p.minor;
 				out->tx_power = p.tx_power;
 				out->sequence = p.sequence;
@@ -87,9 +86,8 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				uint16_t minor = ((uint16_t)adv_data[pos + 24] << 8) | adv_data[pos + 25];
 				if (major != BMT_TAG_MAJOR_PERSON && major != BMT_TAG_MAJOR_ASSET)
 					goto next_field;
-				out->tag_type = (major == BMT_TAG_MAJOR_PERSON)
-				                    ? BMT_TAG_TYPE_PERSON
-				                    : BMT_TAG_TYPE_ASSET;
+				/* iPhone-as-tag khong bao % pin cua he thong -> 0 (unknown) */
+				out->battery = 0;
 				out->tag_id = minor | 0x8000;
 				out->tx_power = BMT_PHONE_TX_POWER_1M;
 				out->sequence = 0;
@@ -178,11 +176,12 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
 
 		int idx = bmt_tag_table_find(payload.tag_id);
 		if (idx < 0)
-			idx = bmt_tag_table_add(payload.tag_id, payload.tag_type,
+			idx = bmt_tag_table_add(payload.tag_id, payload.battery,
 			                        payload.tx_power, param->scan_rst.rssi,
 			                        payload.sequence, param->scan_rst.bda);
 		else
-			bmt_tag_table_update(idx, param->scan_rst.rssi, payload.sequence);
+			bmt_tag_table_update(idx, param->scan_rst.rssi, payload.sequence,
+			                     payload.battery);
 
 		if (idx >= 0)
 			bmt_tag_table_set_epoch(idx, bmt_auth_get_locked_epoch(payload.tag_id));
