@@ -97,6 +97,167 @@ def add_body_paragraph(doc: Document, text: str, style: str | None = None):
     return p
 
 
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+
+def m_el(tag: str):
+    return OxmlElement(f"m:{tag}")
+
+
+def m_run(text: str):
+    r = m_el("r")
+    rpr = m_el("rPr")
+    sty = m_el("sty")
+    sty.set(qn("m:val"), "p")
+    rpr.append(sty)
+    r.append(rpr)
+    t = m_el("t")
+    t.text = text
+    r.append(t)
+    return r
+
+
+def m_group(*nodes):
+    box = m_el("box")
+    e = m_el("e")
+    for node in nodes:
+        e.append(node)
+    box.append(e)
+    return box
+
+
+def m_frac(num, den):
+    f = m_el("f")
+    num_el = m_el("num")
+    num_el.append(num)
+    den_el = m_el("den")
+    den_el.append(den)
+    f.extend([num_el, den_el])
+    return f
+
+
+def m_sub(base, sub):
+    obj = m_el("sSub")
+    e = m_el("e")
+    e.append(base)
+    s = m_el("sub")
+    s.append(sub)
+    obj.extend([e, s])
+    return obj
+
+
+def m_sup(base, sup):
+    obj = m_el("sSup")
+    e = m_el("e")
+    e.append(base)
+    s = m_el("sup")
+    s.append(sup)
+    obj.extend([e, s])
+    return obj
+
+
+def m_hat(base):
+    acc = m_el("acc")
+    prop = m_el("accPr")
+    char = m_el("chr")
+    char.set(qn("m:val"), "\u0302")
+    prop.append(char)
+    e = m_el("e")
+    e.append(base)
+    acc.extend([prop, e])
+    return acc
+
+
+def m_delim(left: str, content, right: str):
+    d = m_el("d")
+    dpr = m_el("dPr")
+    beg = m_el("begChr")
+    beg.set(qn("m:val"), left)
+    end = m_el("endChr")
+    end.set(qn("m:val"), right)
+    dpr.extend([beg, end])
+    e = m_el("e")
+    e.append(content)
+    d.extend([dpr, e])
+    return d
+
+
+def sub(name: str, index: str):
+    return m_sub(m_run(name), m_run(index))
+
+
+def equation_nodes(kind: str):
+    """Tạo cấu trúc công thức OMML cho các công thức dùng trong khóa luận."""
+    if kind == "distance_simple":
+        return [
+            m_run("d = "),
+            m_sup(
+                m_run("10"),
+                m_frac(m_group(sub("P", "0"), m_run(" − "), sub("P", "r")), m_run("10n")),
+            ),
+        ]
+    if kind == "path_loss":
+        inner = m_frac(m_run("d"), sub("d", "0"))
+        return [
+            sub("P", "r"), m_run("(d) = "), sub("P", "0"), m_run(" − 10n · "),
+            m_sub(m_run("log"), m_run("10")), m_delim("(", inner, ")"),
+            m_run(" + "), sub("X", "σ"),
+        ]
+    if kind == "distance_hat":
+        exponent = m_frac(m_group(sub("P", "0"), m_run(" − "), sub("P", "r")), m_run("10n"))
+        return [m_hat(m_run("d")), m_run(" = "), sub("d", "0"), m_run(" · "), m_sup(m_run("10"), exponent)]
+    if kind == "kalman_predict":
+        return [sub("p", "k"), m_run(" = "), sub("p", "k−1"), m_run(" + q")]
+    if kind == "kalman_gain":
+        return [sub("K", "k"), m_run(" = "), m_frac(sub("p", "k"), m_group(sub("p", "k"), m_run(" + r")))]
+    if kind == "kalman_update":
+        delta = m_group(sub("z", "k"), m_run(" − "), sub("x", "k−1"))
+        return [sub("x", "k"), m_run(" = "), sub("x", "k−1"), m_run(" + "), sub("K", "k"), m_run(" · "), m_delim("(", delta, ")")]
+    if kind == "kalman_cov":
+        return [sub("p", "k"), m_run(" = "), m_delim("(", m_group(m_run("1 − "), sub("K", "k")), ")"), m_run(" · "), sub("p", "k")]
+    if kind == "hmac":
+        left = m_group(m_delim("(", m_group(m_run("K′ ⊕ opad")), ")"), m_run(" ∥ H"),
+                       m_delim("(", m_group(m_delim("(", m_group(m_run("K′ ⊕ ipad")), ")"), m_run(" ∥ m")), ")"))
+        return [m_run("HMAC(K, m) = H"), m_delim("(", left, ")")]
+    if kind == "epoch_counter":
+        frac = m_frac(m_run("esp_timer_get_time()"), m_run("1 giờ"))
+        return [m_run("epoch_counter = ⌊"), frac, m_run("⌋")]
+    if kind == "epoch_key":
+        return [m_run("epoch_key = HKDF(master_key, epoch_counter)")]
+    raise ValueError(kind)
+
+
+def add_equation(doc: Document, kind: str):
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.first_line_indent = Cm(0)
+    para = m_el("oMathPara")
+    omath = m_el("oMath")
+    for node in equation_nodes(kind):
+        omath.append(node)
+    para.append(omath)
+    p._p.append(para)
+    return p
+
+
+def add_tex_equation(doc: Document, block: str):
+    compact = re.sub(r"\s+", " ", block)
+    if "d = 10^" in compact and "hat" not in compact:
+        add_equation(doc, "distance_simple")
+    elif "P_r(d)" in compact:
+        add_equation(doc, "path_loss")
+    elif r"\hat{d}" in compact:
+        add_equation(doc, "distance_hat")
+    elif "K_k &=" in compact:
+        for kind in ("kalman_predict", "kalman_gain", "kalman_update", "kalman_cov"):
+            add_equation(doc, kind)
+    elif r"\text{HMAC}" in compact:
+        add_equation(doc, "hmac")
+    elif "epoch_counter" in compact or r"epoch\_counter" in compact:
+        add_equation(doc, "epoch_counter")
+        add_equation(doc, "epoch_key")
+
+
 def parse_table(lines: list[str], start: int):
     rows = []
     caption = ""
@@ -176,6 +337,17 @@ def add_tex(doc: Document, path: Path):
         if line.startswith(r"\item"):
             flush()
             add_body_paragraph(doc, line[5:].strip(), list_style or "List Bullet")
+            i += 1
+            continue
+        if line.startswith(r"\begin{equation") or line.startswith(r"\begin{align"):
+            flush()
+            env = "align" if "align" in line else "equation"
+            block = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith(rf"\end{{{env}"):
+                block.append(lines[i])
+                i += 1
+            add_tex_equation(doc, "\n".join(block))
             i += 1
             continue
         if line == r"\begin{table}[htp]" or line.startswith(r"\begin{table}"):
