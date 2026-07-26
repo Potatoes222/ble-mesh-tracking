@@ -107,7 +107,7 @@ Khi phát hiện unprovisioned beacon, Gateway đọc 4 byte đầu UUID:
     \item Prefix khác: bỏ qua, không provision.
 \end{itemize}
 
-Không cần bấm nút trên gateway hay quét QR: cấp nguồn scanner/relay là chúng tự vào mesh. Điều này giảm rào cản triển khai ở hiện trường, nhất là khi có nhiều node.
+Không cần bấm nút trên gateway hay quét QR: cấp nguồn scanner/relay là chúng tự vào mesh. Giảm thao tác ở hiện trường khi triển khai nhiều node.
 
 \subsection{Config task chờ ACK APP\_KEY\_ADD và MODEL\_APP\_BIND}
 
@@ -115,7 +115,7 @@ Sau khi provisioning xong (assign địa chỉ và NetKey), gateway vẫn phải
 
 \subsection{Node table persist NVS}
 
-Gateway giữ mảng \texttt{bmt\_node\_t nodes[BMT\_MAX\_NODES]} với các trường: địa chỉ mesh, UUID gốc, kiểu (SCAN/RELAY), \texttt{config\_done}, \texttt{last\_seen\_ms}. Sau mỗi lần provision hoặc drop node, mảng được persist vào NVS qua \texttt{nvs\_set\_blob}. Khi khởi động lại, gateway load blob bằng \texttt{nvs\_get\_blob} và khôi phục lại state mesh mà không phải re-provision tất cả. Điều này quan trọng cho tự phục hồi sau mất điện: gateway boot lại, biết ngay đang có scanner nào ở đâu.
+Gateway giữ mảng \texttt{bmt\_node\_t nodes[BMT\_MAX\_NODES]} với các trường: địa chỉ mesh, UUID gốc, kiểu (SCAN/RELAY), \texttt{config\_done}, \texttt{last\_seen\_ms}. Sau mỗi lần provision hoặc drop node, mảng được persist vào NVS qua \texttt{nvs\_set\_blob}. Khi khởi động lại, gateway load blob bằng \texttt{nvs\_get\_blob} và khôi phục state mesh không cần re-provision. Nhờ vậy, sau mất điện gateway boot lại là biết ngay các scanner đang ở địa chỉ nào.
 
 \subsection{MQTT worker và hàng đợi tag report}
 
