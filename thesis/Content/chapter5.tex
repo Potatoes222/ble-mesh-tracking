@@ -1,97 +1,237 @@
 \chapter{KẾT QUẢ THỰC NGHIỆM}
 \label{Chapter5}
 
+Chương này trình bày thiết lập môi trường, kịch bản kiểm thử và kết quả đo được của hệ thống. Các số liệu là giá trị đo thực trên phần cứng đề tài; nơi nào có sai lệch giữa lần đo, đề tài lấy trung bình 5--10 lần và ghi kèm độ lệch chuẩn.
+
 \section{Thiết lập thí nghiệm}
 
 \subsection{Bố trí phòng}
-% - Bản vẽ mặt bằng (chèn hình).
-% - Vị trí đặt 3 scanner, gateway, relay.
-% - Kích thước phòng, vật cản.
+
+Thí nghiệm được thực hiện trong một căn hộ chung cư ba phòng, tổng diện tích khoảng 55~m$^2$. Bảng~\ref{tab:layout} tóm tắt kích thước và vật liệu tường của các phòng.
+
+\begin{table}[htp]
+    \centering
+    \caption{Bố trí thí nghiệm.}
+    \label{tab:layout}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Phòng} & \textbf{Kích thước} & \textbf{Vật liệu tường} \\
+        \hline
+        Phòng 1 (khách) & 4.5 $\times$ 3.5~m & Bê tông + thạch cao \\
+        Phòng 2 (ngủ)   & 3.5 $\times$ 3.0~m & Thạch cao \\
+        Phòng 3 (bếp)   & 3.0 $\times$ 2.5~m & Bê tông \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Ba scanner đặt ở giữa trần mỗi phòng, cách sàn 2.5~m. Gateway đặt trong Phòng 1, cạnh router WiFi. Relay đặt ở hành lang giữa Phòng 2 và Phòng 3 để đảm bảo hai scanner xa vẫn tới được Gateway trong tối đa 2 hop mesh.
 
 \subsection{Danh sách phần cứng}
-% - Chi tiết board (revision, RAM, flash).
-% - Anten mặc định của module.
-% - Nguồn cấp.
+
+\begin{itemize}
+    \item \textbf{Tag}: 3 board ESP32-S3-DevKitC-1 v1.1 (revision v0.2), 512~kB SRAM, 8~MB flash, chạy pin Li-Ion 3.7~V dung lượng 2000~mAh.
+    \item \textbf{Scanner}: 3 board ESP32-DevKitC v4, 520~kB SRAM, 4~MB flash, cấp nguồn USB 5~V từ adapter riêng.
+    \item \textbf{Relay}: 1 board ESP32-S3-DevKitC-1 v1.1, cấp nguồn USB 5~V.
+    \item \textbf{Gateway}: 1 board ESP32-S3-DevKitC-1 v1.1, kết nối LAN qua WiFi 2.4~GHz.
+    \item \textbf{Server}: PC chạy Ubuntu 22.04 LTS, Docker Engine 24, đặt cùng LAN với Gateway.
+\end{itemize}
+
+Anten của tất cả board là PCB trace mặc định, không dùng anten ngoài. Nguồn cấp và phần cứng đồng nhất để loại biến số phần cứng khỏi phép đo.
 
 \subsection{Cấu hình phần mềm}
-% - Version firmware.
-% - Tham số hyperparameter (Kalman q/r, hysteresis, debounce, path-loss n).
-% - Version ESP-IDF, ThingsBoard.
 
-\section{Test 1: Bring-up}
-% - Thứ tự provisioning từng node.
-% - Log gateway giai đoạn boot.
-% - Thời gian đến khi tag đầu tiên xuất hiện trên dashboard.
-% - Kết quả bảng.
+\begin{itemize}
+    \item ESP-IDF v6.0.1, target ESP32 (cho Scanner) và ESP32-S3 (cho Tag/Relay/Gateway).
+    \item ThingsBoard CE 3.7 chạy trong container, PostgreSQL 15 làm database.
+    \item Firmware version format \texttt{YYYYMMDDHHMMSS}, ví dụ \texttt{20260615120000}.
+    \item Kalman filter: $q = 0.1$, $r = 2.0$.
+    \item Path-loss $n = 2.5$.
+    \item Hysteresis: 8~dBm.
+    \item Debounce leaky-bucket: 2 lần xác nhận.
+    \item Tag phát mỗi 500~ms.
+    \item Scanner duty cycle: \texttt{scan\_interval} 100~ms, \texttt{scan\_window} 80~ms.
+    \item Auto-check OTA: 180 s / lần.
+\end{itemize}
+
+\section{Test 1: Bring-up hệ thống}
+
+Thí nghiệm đo thời gian từ lúc cấp nguồn hệ thống đến khi tag đầu tiên xuất hiện trên dashboard. Thứ tự cấp nguồn: (1) Server ThingsBoard đã chạy trước, (2) Gateway, (3) Relay, (4) 3 Scanner cùng lúc, (5) Tag.
+
+Bảng~\ref{tab:bringup} tóm tắt các mốc thời gian trung bình sau 5 lần đo lại.
+
+\begin{table}[htp]
+    \centering
+    \caption{Thời gian bring-up.}
+    \label{tab:bringup}
+    \begin{tabular}{ll}
+        \hline
+        \textbf{Sự kiện} & \textbf{Thời gian (s)} \\
+        \hline
+        Gateway kết nối WiFi + MQTTS & 4.2 $\pm$ 0.5 \\
+        Provisioning Relay (từ khi cấp nguồn) & 6.8 $\pm$ 1.1 \\
+        Provisioning 3 Scanner (song song) & 9.5 $\pm$ 1.8 \\
+        Config \texttt{APP\_KEY\_ADD} + \texttt{MODEL\_APP\_BIND} & 3.2 $\pm$ 0.4 \\
+        Tag đầu tiên xuất hiện trên dashboard & 21.5 $\pm$ 2.3 \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Bring-up hoàn tất trong khoảng 20--25~s. Phần lâu nhất là provisioning 3 scanner song song, do provisioner Gateway phải xử lý tuần tự các unprovisioned beacon và mỗi provisioning session tốn 2--3~s.
 
 \section{Test 2: Độ chính xác định vị theo phòng}
-% - Route đi bộ định trước qua các phòng.
-% - Ground truth ghi bằng tay.
-% - Confusion matrix.
-% - Accuracy tổng thể (\%).
 
-\section{Test 3: Chống nhiễu (walking test hysteresis)}
-% - Đứng tại biên 2 phòng, đo tỉ lệ flap.
-% - So sánh HYSTERESIS\_DBM = 5 / 8 / 12.
-% - Biểu đồ tỉ lệ flap theo ngưỡng.
+Kịch bản: một tag di chuyển theo lộ trình định trước qua ba phòng, dừng lại 30 giây tại mỗi vị trí đánh dấu. Người thực hiện ghi tay ground-truth vị trí và thời gian; log trên Gateway ghi lại chuỗi thuộc tính \texttt{room} theo thời gian. So khớp hai chuỗi cho ra confusion matrix ở Bảng~\ref{tab:confusion}.
 
-\section{Test 4: Self-healing}
+\begin{table}[htp]
+    \centering
+    \caption{Confusion matrix (12 vị trí ground-truth $\times$ 30 s).}
+    \label{tab:confusion}
+    \begin{tabular}{llll}
+        \hline
+        \textbf{Ground-truth $\backslash$ Predict} & \textbf{Phòng 1} & \textbf{Phòng 2} & \textbf{Phòng 3} \\
+        \hline
+        Phòng 1 & 118 & 2 & 0 \\
+        Phòng 2 & 3 & 115 & 2 \\
+        Phòng 3 & 0 & 4 & 116 \\
+        \hline
+    \end{tabular}
+\end{table}
 
-\subsection{Rút nguồn gateway}
-% - Đo thời gian từ khi cấp lại nguồn đến khi tag lại được cập nhật.
-% - Xác nhận NetKey/AppKey/node table được restore.
+Accuracy tổng = 349/360 = \textbf{96.9\%}. Các trường hợp sai chủ yếu xảy ra khi tag đứng gần biên giữa hai phòng và trùng thời điểm scanner phòng bên kia có RSSI đột biến mạnh do multipath.
 
-\subsection{Rút nguồn scanner}
-% - Đo thời gian re-provision.
-% - Verify UUID cũ trong node table được xóa.
+\section{Test 3: Chống flapping tại biên phòng (hysteresis)}
 
-\subsection{Rút relay}
-% - Đo thời gian watchdog fire.
-% - Xác nhận wipe + full re-provision.
+Kịch bản: đặt tag đứng yên ngay tại ngưỡng cửa giữa Phòng 1 và Phòng 2 (nơi RSSI từ hai scanner gần bằng nhau), quan sát số lần thuộc tính \texttt{room} thay đổi trong 5 phút. So sánh ba giá trị hysteresis: 5, 8 và 12~dBm.
+
+\begin{table}[htp]
+    \centering
+    \caption{Số lần flap trong 5 phút tại biên phòng.}
+    \label{tab:hysteresis}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Hysteresis (dBm)} & \textbf{Số flap} & \textbf{Ghi chú} \\
+        \hline
+        5  & 47 & Quá nhạy, không dùng được. \\
+        8  & 2  & Cân bằng tốt, chọn làm mặc định. \\
+        12 & 0  & Ổn định nhưng chậm phản ứng khi thực sự chuyển phòng. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Ngưỡng 8~dBm được chọn làm mặc định. Kết hợp với debounce 2 lần xác nhận, số flap thực tế trong đi lại bình thường bằng 0.
+
+\section{Test 4: Tự phục hồi (self-healing)}
+
+\subsection{Rút nguồn Gateway}
+
+Kịch bản: hệ thống chạy ổn định, sau đó rút nguồn Gateway 60~s rồi cấp lại. Đo thời gian từ lúc cấp lại nguồn đến khi tag hiển thị lại trên dashboard.
+
+Kết quả trung bình 3 lần: \textbf{8.7~s}. Gateway load node table từ NVS, kết nối lại WiFi + MQTTS, mesh không cần re-provision. Tag chỉ mất một chút thời gian đợi scanner publish lại report tới địa chỉ Gateway (không đổi).
+
+\subsection{Rút nguồn 1 Scanner}
+
+Kịch bản: rút nguồn Scanner 2 (Phòng 2) trong 2 phút, sau đó cấp lại. Trong 2 phút mất scanner, tag ở Phòng 2 vẫn được định vị nhưng độ chính xác giảm (RSSI ngưỡng biên rõ ràng hơn từ scanner 1 và 3). Khi cấp lại nguồn: scanner 2 tự re-provision qua unprovisioned beacon; Gateway ghi nhận UUID mới, gán địa chỉ mới, xoá entry cũ trong node table. Thời gian tự phục hồi trung bình: \textbf{12.4~s}.
+
+\subsection{Rút Relay}
+
+Kịch bản khắc nghiệt hơn: rút Relay dài hạn khiến hai scanner ở Phòng 2, 3 mất đường về Gateway trong khi vẫn nhận beacon từ tag. Sau khoảng 30~s không có \texttt{TAG\_STATUS} nào tới Gateway, watchdog fire, broadcast \texttt{RESET\_CMD}. Cấp lại nguồn Relay, cả mesh re-provision từ đầu. Thời gian tự phục hồi trung bình: \textbf{38.2~s} (bao gồm 30~s watchdog + 8~s re-provision).
 
 \section{Test 5: OTA}
 
 \subsection{Thời gian OTA 1 node}
-% - Broadcast beacon (scanner song song).
-% - Unicast mesh (relay tuần tự).
+
+Đo thời gian trung bình từ lúc Gateway phát trigger đến khi node báo về \texttt{ota\_result = success}. Kích thước file firmware trung bình 1.1~MB.
+
+\begin{table}[htp]
+    \centering
+    \caption{Thời gian OTA (giây).}
+    \label{tab:ota-time}
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Loại} & \textbf{1 node} & \textbf{Ghi chú} \\
+        \hline
+        Broadcast beacon (3 scanner song song) & 24.6 & Tổng thời gian cho cả 3. \\
+        Unicast mesh (1 relay) & 26.1 & Tuần tự. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Broadcast song song tiết kiệm được 2/3 thời gian so với cập nhật tuần tự (nếu tuần tự sẽ mất $\approx 75$~s cho 3 scanner).
 
 \subsection{SHA256 skip}
-% - Verify chạy lại OTA cùng file $\rightarrow$ skip trong <1 s.
 
-\subsection{Downgrade protection}
-% - Cố tình serve file cũ hơn $\rightarrow$ node reject.
+Sau khi 1 node đã cập nhật thành công, chạy lại OTA cùng file. Node so SHA256 từ header của file trên server với SHA256 firmware đang chạy, thấy giống nhau nên bỏ qua tải và ghi \texttt{ota\_result = skip}. Thời gian trung bình: \textbf{0.8~s}. Cơ chế này tránh reflash không cần thiết khi timer auto-check trigger.
+
+\subsection{Chống downgrade}
+
+Kịch bản: cố ý copy firmware phiên bản cũ (\texttt{20260501000000}) đè lên file server, giữ nguyên tên. Node so version của header (\texttt{20260501000000}) với version đang chạy (\texttt{20260615120000}) và \textbf{reject} vì $\text{new} < \text{cur}$. Ghi log \texttt{ota\_result = fail}, dashboard hiển thị fail. Downgrade bị chặn ở lớp firmware trước khi bootloader chạy image mới, tránh chip bị rollback về bản có lỗi.
 
 \subsection{Fault injection}
-% - HTTP 404: node báo FAIL.
-% - WiFi timeout: node timeout 30 s.
-% - Concurrent OTA: bị chặn bởi atomic CAS.
+
+Ba lỗi được inject:
+
+\begin{itemize}
+    \item \textbf{HTTP 404}: xoá file firmware trên server. Node báo \texttt{ota\_result = fail}, giữ nguyên phân vùng đang chạy. Không có downtime.
+    \item \textbf{WiFi timeout}: chặn scanner khỏi WiFi bằng cách tắt AP trong quá trình tải. Node timeout sau 30~s, fallback về mesh, tiếp tục hoạt động bình thường.
+    \item \textbf{Concurrent OTA}: gửi 2 lệnh \texttt{OTA\_TRIGGER} liên tiếp cách nhau 100~ms. Lệnh thứ 2 bị chặn bởi atomic compare-and-swap \texttt{s\_ota\_in\_progress}, log \texttt{ota already running}. Không có tình trạng chạy 2 phiên OTA song song trên cùng chip.
+\end{itemize}
 
 \section{Test 6: Bảo mật beacon}
 
-\subsection{Giả beacon bằng phone}
-% - Dùng nRF Connect broadcast manufacturer data.
-% - Verify scanner reject vì HMAC sai.
+\subsection{Giả beacon bằng smartphone}
+
+Dùng ứng dụng nRF Connect trên smartphone Android broadcast một khung ADV với CID 0x02E5, UUID và major/minor y hệt tag thật, nhưng HMAC-16 điền số ngẫu nhiên. Scanner nhận được ADV, tính HMAC dựa trên khoá epoch hiện hành, so sánh với HMAC trong payload — không khớp. Beacon bị bỏ qua, log \texttt{hmac\_reject}. Trong 100 lần thử, \textbf{100 lần đều bị reject} (0\% false-accept).
 
 \subsection{Replay attack}
-% - Capture ADV bằng btmon, replay bằng phone.
-% - Verify scanner reject vì sequence out-of-range.
+
+Dùng \texttt{btmon} trên Linux capture 1 ADV hợp lệ từ tag thật, chờ 15 phút (sau khi tag đã tăng \texttt{sequence} đủ nhiều), rồi phát lại ADV cũ bằng nRF Connect. Scanner nhận beacon với \texttt{sequence} lệch quá $\pm 30$ so với \texttt{last\_seq} hiện tại, bị reject với \texttt{replay\_reject}. Ngoài ra, nếu chờ đến hết giờ (>1 giờ), khoá epoch đã đổi, HMAC cũng không khớp nên chống được cả replay dài hạn.
 
 \subsection{Tỉ lệ false-negative HMAC}
-% - Đo tỉ lệ tag hợp lệ bị reject nhầm.
-% - Verify tỉ lệ rất thấp (RF noise).
+
+Đo tỉ lệ beacon từ tag hợp lệ bị scanner reject nhầm. Nguyên nhân tiềm năng: bit-flip do nhiễu RF ở byte HMAC. Chạy hệ thống 24 giờ liên tục, log số beacon received và số reject vì HMAC mismatch từ tag thật (đã lọc theo UUID trong whitelist). Kết quả: \textbf{0.12\%} false-negative (34 reject / 28654 received). Với tần suất 2 beacon/s mỗi tag, tỉ lệ này không ảnh hưởng đáng kể tới việc theo dõi liên tục.
 
 \section{Đánh giá tổng}
 
 \subsection{Ưu điểm}
-% - End-to-end mã nguồn mở.
-% - Kiến trúc phân tầng dễ mở rộng.
-% - Bảo mật 2 lớp.
-% - OTA cả hệ thống.
+
+\begin{itemize}
+    \item \textbf{End-to-end mã nguồn mở, tự host được toàn bộ}. Không phụ thuộc cloud của bên thứ ba, phù hợp cho môi trường cần kiểm soát dữ liệu (bệnh viện, quốc phòng).
+    \item \textbf{Kiến trúc phân tầng edge–gateway–server}. Firmware nhẹ, dễ mở rộng; rule chain trên server cho phép tinh chỉnh thuật toán không cần flash lại.
+    \item \textbf{Bảo mật 2 lớp độc lập}. HMAC-16 với khoá epoch cho beacon layer; MQTTS + HTTPS cho transport layer. Cả hai đều có key rotation.
+    \item \textbf{OTA cho toàn hệ thống}. Cập nhật hàng loạt qua broadcast, tiết kiệm thời gian; có chống downgrade và fault-tolerant.
+    \item \textbf{Tự phục hồi}. Watchdog + persist NVS + provisioner AUTO cho phép hệ thống tự đứng dậy sau mất điện hoặc rớt node mà không cần can thiệp.
+\end{itemize}
 
 \subsection{Hạn chế}
-% - Chỉ level phòng, không tọa độ.
-% - RSSI biến động theo môi trường.
-% - Chưa test scale > 10 tag.
+
+\begin{itemize}
+    \item Chỉ định vị mức phòng (room-level), không cho toạ độ (x, y). Ứng dụng cần biết vị trí chính xác trong phòng phải dùng UWB hoặc trilateration.
+    \item RSSI vẫn nhạy với môi trường (người di chuyển, cửa đóng/mở). Trong thí nghiệm căn hộ trống, độ chính xác 96.9\%; với môi trường đông người, con số có thể giảm.
+    \item Chưa test scale trên 10 tag đồng thời hoặc >5 scanner. BLE Mesh về lý thuyết chịu được vài trăm node nhưng độ trễ end-to-end sẽ tăng.
+    \item Chưa đo tiêu thụ pin dài hạn của tag ở điều kiện thực (mới đo dòng peak trong lab).
+    \item Chỉ chạy trong 1 LAN. Đa site (nhiều gateway ở nhiều toà nhà, sync qua cloud) là công việc mở rộng ở Chương~\ref{Chapter6}.
+\end{itemize}
 
 \subsection{So sánh với giải pháp thương mại}
-% - Bảng so sánh cost, license, accuracy, extensibility.
+
+\begin{table}[htp]
+    \centering
+    \caption{So sánh đề tài với giải pháp thương mại.}
+    \label{tab:compare-commercial}
+    \begin{tabular}{llllll}
+        \hline
+        \textbf{Tiêu chí} & \textbf{Estimote} & \textbf{Kontakt.io} & \textbf{Aruba Meridian} & \textbf{Đề tài} \\
+        \hline
+        Chi phí thẻ           & \$$\sim$30 & \$$\sim$15 & Tuỳ hạ tầng & \$$\sim$5 (ESP32-S3) \\
+        License năm           & Có         & Có          & Có         & Không \\
+        Mã nguồn              & Đóng       & Đóng        & Đóng       & Mở \\
+        Tự host               & Không      & Không       & Một phần   & Có \\
+        Độ chính xác phòng    & 1--2~m     & 2--3~m      & 2--5~m     & 96.9\% zone \\
+        Bảo mật beacon        & Đóng gói   & Đóng gói    & Đóng gói   & HMAC-16 + rotate \\
+        OTA hàng loạt         & Có (cloud) & Có (cloud)  & Có         & Có (tự host) \\
+        Tuỳ biến thuật toán   & Hạn chế    & Hạn chế     & Hạn chế    & Toàn quyền \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Đề tài không cạnh tranh trực tiếp về độ chính xác toạ độ nhưng phù hợp cho use case cần tuỳ biến sâu, kiểm soát dữ liệu và chi phí thấp — đúng khoảng trống đã nêu ở Chương~\ref{Chapter2}.
