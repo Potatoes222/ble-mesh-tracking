@@ -488,6 +488,12 @@ def normalize_language(text: str) -> str:
 def main():
     doc = Document(DOCX)
 
+    # Cập nhật danh sách sinh viên thực hiện trên trang bìa.
+    for p in doc.paragraphs:
+        if p.text.strip().startswith("Sinh viên thực hiện:"):
+            p.text = "Sinh viên thực hiện: Cao Trọng Phước – Tăng Sĩ Thông"
+            break
+
     # Xóa bản tóm tắt tiếng Anh.
     start = end = None
     for idx, p in enumerate(doc.paragraphs):
@@ -609,7 +615,7 @@ def main():
 
     doc.core_properties.title = "Khóa luận tốt nghiệp – Hệ thống định vị trong nhà dựa trên BLE Mesh"
     doc.core_properties.subject = "BLE Mesh, ESP32 và ThingsBoard"
-    doc.core_properties.author = "Cao Trọng Phước"
+    doc.core_properties.author = "Cao Trọng Phước; Tăng Sĩ Thông"
     doc.core_properties.keywords = "BLE Mesh, RSSI, ESP32, ThingsBoard, định vị trong nhà"
     doc.save(DOCX)
 
