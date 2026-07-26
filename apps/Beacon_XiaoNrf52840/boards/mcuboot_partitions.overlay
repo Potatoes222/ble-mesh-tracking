@@ -1,0 +1,61 @@
+/*
+ * [SECURITY] Ban sao cua xiao_ble_nrf52840.overlay, danh RIENG cho build cua
+ * chinh MCUboot (khong phai app "beacon").
+ *
+ * LY DO CAN FILE RIENG: Zephyr chi tu dong ap dung boards/xiao_ble_nrf52840.overlay
+ * cho app chinh (beacon). MCUboot la 1 Zephyr app HOAN TOAN RIENG duoc sysbuild
+ * build o thu muc khac (bootloader/mcuboot/boot/zephyr), nen phai truyen tay
+ * qua bien mcuboot_EXTRA_DTC_OVERLAY_FILE (xem sysbuild/CMakeLists.txt).
+ *
+ * KHONG DUOC dung chung 1 file voi app: "chosen { zephyr,code-partition }"
+ * phai KHAC NHAU giua 2 ben — MCUboot phai link vao boot_partition (0x27000),
+ * con app phai link vao slot0_partition (0x33000). Dung chung file (voi cung
+ * 1 dong chosen) se lam MCUboot tu link nham vao slot0_partition, khien no
+ * ghi de len chinh app — da gap loi nay khi build thu (địa chỉ 0x33000 bị
+ * trung giữa 2 file .hex).
+ */
+
+/delete-node/ &reserved_partition_0;
+/delete-node/ &code_partition;
+/delete-node/ &storage_partition;
+/delete-node/ &boot_partition;
+
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reserved_partition_0: partition@0 {
+			label = "reserved";
+			reg = <0x00000000 0x00027000>;
+		};
+
+		boot_partition: partition@27000 {
+			label = "mcuboot";
+			reg = <0x00027000 0x0000c000>;
+		};
+
+		slot0_partition: partition@33000 {
+			label = "image-0";
+			reg = <0x00033000 0x000b9000>;
+		};
+
+		storage_partition: partition@ec000 {
+			label = "storage";
+			reg = <0x000ec000 0x00008000>;
+		};
+
+		uf2_partition: partition@f4000 {
+			label = "UF2";
+			read-only;
+			reg = <0x000f4000 0x0000c000>;
+		};
+	};
+};

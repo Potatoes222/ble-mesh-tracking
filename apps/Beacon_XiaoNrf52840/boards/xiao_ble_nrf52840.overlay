@@ -1,0 +1,119 @@
+/*
+ * [SECURITY] MCUboot partition layout — Tag nRF52840.
+ *
+ * XIAO nRF52840 xuat xuong tu factory da co san Adafruit UF2 bootloader
+ * (khong dung SWD/J-Link duoc, chi co the flash lai qua UF2 mass-storage).
+ * Bootloader nay nam CO DINH o dia chi cao (0xF4000-0x100000, xem
+ * nrf52840_partition_uf2_sdv7.dtsi trong Zephyr) va duoc CPU nhay toi truc
+ * tiep tu UICR.BOOTLOADERADDR ngay khi cap nguon — KHONG DUOC DUNG TOI
+ * vung nay, day la duong lui duy nhat neu MCUboot/app bi loi (van co the
+ * flash lai qua UF2 drag-and-drop nhu binh thuong).
+ *
+ * Bootloader Adafruit sau khi chay xong se nhay toi dia chi 0x27000 (dia
+ * chi "Application" hardcode san trong bootloader, von danh cho SoftDevice
+ * s140 v7 — Zephyr khong dung SoftDevice nhung van phai boot dung cho nay).
+ * Vi vay: thay vi dat app truc tiep tai 0x27000 nhu truoc, gio dat MCUboot
+ * (boot_partition) tai day — MCUboot tro thanh "second-stage" bootloader,
+ * duoc chain-load boi Adafruit bootloader, roi tu no verify chu ky + nhay
+ * toi slot0_partition (app that).
+ *
+ * Layout moi:
+ *   0x00000 - 0x27000  reserved        (khong dung, giu nguyen y nghia cu)
+ *   0x27000 - 0x33000  boot_partition  (MCUboot, 48 KB)
+ *   0x33000 - 0xEC000  slot0_partition (app, ~741 KB — single-slot mode,
+ *                                       chua can slot1 vi chua lam OTA qua
+ *                                       BLE, update = re-flash UF2 toan bo)
+ *   0xEC000 - 0xF4000  storage_partition (32 KB, giu nguyen dia chi cu)
+ *   0xF4000 - 0x100000 uf2_partition   (Adafruit bootloader — KHONG DUNG TOI)
+ */
+
+/delete-node/ &reserved_partition_0;
+/delete-node/ &code_partition;
+/delete-node/ &storage_partition;
+/delete-node/ &boot_partition;
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	/* [POWER] Doc pin qua MACH DO PIN ON-BOARD (danh cho pin cam vao
+	 * BAT+/BAT- — LIR2032 3.6V hoac LiPo).
+	 *
+	 * KHAC voi cach do VDD noi (chi dung cho CR2032 cap thang 3V3): khi
+	 * pin di qua duong BAT+ -> bo dieu ap on-board, VDD bi ghim ~3.3V,
+	 * KHONG phan anh dien ap pin thuc. Nen phai doc dien ap tai node
+	 * BAT+ qua bo chia ap on-board (1M/510k) -> chan P0.31 (AIN7).
+	 *
+	 * P0.14 (VBAT_ENABLE, active-low) phai keo LOW de "dong" bo chia ap
+	 * vao mach do (xem bmt_battery.c). Giu LOW ca doi -> bo chia ap ri
+	 * ~2.6uA lien tuc, chap nhan duoc; KHONG de HIGH vi khi do P0.31 co
+	 * the vot len 3.6V (gioi han chan) — canh bao chinh thuc cua Seeed. */
+	zephyr,user {
+		io-channels = <&adc 7>;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reserved_partition_0: partition@0 {
+			label = "reserved";
+			reg = <0x00000000 0x00027000>;
+		};
+
+		boot_partition: partition@27000 {
+			label = "mcuboot";
+			reg = <0x00027000 0x0000c000>;
+		};
+
+		slot0_partition: partition@33000 {
+			label = "image-0";
+			reg = <0x00033000 0x000b9000>;
+		};
+
+		storage_partition: partition@ec000 {
+			label = "storage";
+			reg = <0x000ec000 0x00008000>;
+		};
+
+		uf2_partition: partition@f4000 {
+			label = "UF2";
+			read-only;
+			reg = <0x000f4000 0x0000c000>;
+		};
+	};
+};
+
+/* [POWER] Tat peripheral SPI2 (xiao_spi) — board bat mac dinh nhung firmware
+ * khong dung SPI o dau. (Ghi chu: lan truoc tuong disable no gay treo, nhung
+ * thuc te loi la do flash APP CHUA KY — mcuboot tu choi. Disable SPI2 that ra
+ * vo hai. Nho flash bang signed-merge, xem _fw_backup.) */
+&xiao_spi {
+	status = "disabled";
+};
+
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* Kenh 7 = P0.31 (AIN7) = dau ra bo chia ap BAT+ on-board.
+	 * Gain 1/6 + ref internal (0.6V) -> dai do 0..3.6V, du cho dien ap
+	 * SAU bo chia ap (BAT+ 4.2V / ~3.0 = ~1.4V, thoai mai trong dai). */
+	channel@7 {
+		reg = <7>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		/* Bo chia ap on-board tro khang nguon ~342k (1037k||510k) — RAT CAO
+		 * voi SAADC. PHAI de acquisition-time 40us (max cua SAADC) thi cap
+		 * sample-and-hold moi kip nap day -> doc chinh xac. De DEFAULT (10us)
+		 * doc sai lech vai tram mV (da thay: firmware 3.88V vs VOM 3.27V). */
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
+		zephyr,input-positive = <NRF_SAADC_AIN7>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <4>;
+	};
+};

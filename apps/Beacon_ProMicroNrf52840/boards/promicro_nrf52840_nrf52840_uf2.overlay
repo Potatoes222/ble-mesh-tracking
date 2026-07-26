@@ -1,0 +1,167 @@
+/*
+ * [SECURITY + POWER] MCUboot partition layout + doc pin — Tag ProMicro nRF52840
+ * (board nice!nano v2 compatible, vd "Nologo ProMicro nRF52840").
+ *
+ * ===== KHAC BIET QUAN TRONG SO VOI BAN XIAO =====
+ *
+ * 1) DIA CHI APP KHAC NHAU (0x26000 vs 0x27000):
+ *    ProMicro dung Adafruit UF2 bootloader phien ban SoftDevice s140 *v6*
+ *    (zephyr: nrf52840_partition_uf2_sdv6.dtsi) -> bootloader nhay toi
+ *    0x26000. XIAO dung s140 *v7* -> nhay toi 0x27000. Dat MCUboot sai dia
+ *    chi nay = board khong bao gio boot len app.
+ *
+ * 2) DOC PIN KHONG QUA CHIA AP NGOAI:
+ *    XIAO: pin -> BQ25101 -> LDO ngoai; doc pin qua bo chia ap 1M/510k ra
+ *    chan P0.31 (AIN7), phai keo P0.14 LOW de dong mach do.
+ *    ProMicro/nice!nano v2: pin noi THANG vao chan VDDH, KHONG co chia ap
+ *    ngoai — doc dien ap pin bang dau vao noi bo VDDHDIV5 cua SAADC
+ *    (= VDDH/5). Khong can chan enable nao, khong co canh bao qua ap kieu
+ *    P0.14 cua Seeed.
+ *
+ * Layout (tuong tu XIAO nhung dich xuong 0x1000):
+ *   0x00000 - 0x26000  reserved        (vung SoftDevice cu, khong dung)
+ *   0x26000 - 0x32000  boot_partition  (MCUboot, 48 KB)
+ *   0x32000 - 0xEC000  slot0_partition (app, ~744 KB — single-slot)
+ *   0xEC000 - 0xF4000  storage_partition (32 KB)
+ *   0xF4000 - 0x100000 uf2_partition   (Adafruit bootloader — KHONG DUNG TOI)
+ */
+
+/delete-node/ &reserved_partition_0;
+/delete-node/ &code_partition;
+/delete-node/ &storage_partition;
+/delete-node/ &boot_partition;
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	/* [POWER] Doc pin qua dau vao noi bo VDDHDIV5 (VDDH/5) — xem giai thich
+	 * o dau file. Khong co io-channel ngoai nao can khai bao them.
+	 *
+	 * [POWER] ext-vcc-gpios = CONG TAC MEM CAT NGUON RA CHAN VCC (P0.13).
+	 * Board nay (chuan nice!nano v2) co 1 MOSFET nam giua bo on ap va chan
+	 * VCC 3.3V dua ra ngoai, dieu khien bang P0.13:
+	 *     P0.13 HIGH -> VCC BAT   |   P0.13 LOW -> VCC TAT
+	 * (nice!nano v1 nguoc cuc tinh — v2 va ban clone nay la active-high.)
+	 *
+	 * Dinh nghia board promicro_nrf52840 cua Zephyr KHONG khai bao chan nay,
+	 * nen no bi bo o trang thai reset (input/disconnected) -> cong tac tu
+	 * "bat" -> nhanh VCC ngoai luon co dien du app khong dung gi. Theo tai
+	 * lieu cua chinh board SuperMini: standby mac dinh ~1000uA (1mA), tat
+	 * cong tac nay xuong con ~150uA.
+	 *
+	 * => Rat khop voi hien tuong do duoc 1.8-1.9mA KHONG DOI du da: tat log,
+	 *    sua buffer USB, tat uart0/i2c0/i2c1/spi2 (dong den tu phan cung
+	 *    ngoai MCU nen doi firmware kieu gi cung khong nhuc nhich).
+	 *
+	 * App beacon khong cap nguon cho thiet bi ngoai nao -> tat han cho tiet kiem.
+	 */
+	zephyr,user {
+		io-channels = <&adc 0>;
+		ext-vcc-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reserved_partition_0: partition@0 {
+			label = "reserved";
+			reg = <0x00000000 0x00026000>;
+		};
+
+		boot_partition: partition@26000 {
+			label = "mcuboot";
+			reg = <0x00026000 0x0000c000>;
+		};
+
+		slot0_partition: partition@32000 {
+			label = "image-0";
+			reg = <0x00032000 0x000ba000>;
+		};
+
+		storage_partition: partition@ec000 {
+			label = "storage";
+			reg = <0x000ec000 0x00008000>;
+		};
+
+		uf2_partition: partition@f4000 {
+			label = "UF2";
+			read-only;
+			reg = <0x000f4000 0x0000c000>;
+		};
+	};
+};
+
+/* [POWER] GHI CHU VE USB — KHONG tat o day, tat bang Kconfig.
+ *
+ * Board include <boards/common/usb/cdc_acm_serial.dtsi> -> tao node
+ * board_cdc_acm_uart duoi &zephyr_udc0 va tro chosen zephyr,console vao do.
+ * Tang USB nay ton ~0.8mA lien tuc (gan nua tong dong), can go bo o ban chay
+ * that — nhung go bang **CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n** trong
+ * prj.conf, KHONG phai bang cach tat node usbd o overlay nay.
+ *
+ * Ly do: overlay trong boards/ duoc ap dung cho MOI ban build. Neu tat cung
+ * node usbd o day thi ban debug.conf (bat lai console de xem log) se hong —
+ * CONFIG_CONSOLE=y nhung khong co thiet bi UART nao de xuat -> van khong co
+ * COM port. Da dinh dung loi nay mot lan.
+ * Dieu khien bang Kconfig thi bat/tat theo tung ban build duoc.
+ */
+
+/* [POWER TEST] Tat uart0/i2c0/i2c1/spi2 — board bat san 4 peripheral nay voi
+ * chan vat ly that (qua pinctrl), nhung app khong noi gi vao cac chan do ->
+ * co the dang THA NOI (floating), nghi ngo la nguon gay dong ro ~1.9mA khong
+ * doi du da tat log + tang buffer USB.
+ * >> KET QUA DO THUC TE: KHONG doi gi (1.9 -> 1.8mA, nam trong sai so dong ho).
+ *    Tuc day KHONG phai thu pham. Van giu lai vi ve nguyen tac tat peripheral
+ *    khong dung la dung, va khong gay hai.
+ * Console van chay qua USB CDC-ACM rieng
+ * (zephyr_udc0), KHONG lien quan uart0 vat ly nay nen tat khong mat log.
+ * Giu nguyen pwm0 vi dang duoc "red_pwm_led" (LED bao trang thai) su dung. */
+&uart0 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+&spi2 {
+	status = "disabled";
+};
+
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	/* Kenh 0 map toi dau vao NOI BO VDDHDIV5 = VDDH/5 (khong phai chan GPIO
+	 * nao ca — pin LiPo noi thang vao VDDH tren board nay).
+	 *
+	 * Chon gain 1/2 + ref noi bo 0.6V -> dai do tai ADC = 0.6 * 2 = 1.2V.
+	 * Pin LiPo 3.0-4.2V -> VDDHDIV5 cho ra 0.60-0.84V: nam gon trong dai,
+	 * do phan giai tot (~70% thang do o muc pin day). Khi cam USB, VDDH co
+	 * the len ~5.5V -> 1.1V, VAN duoi 1.2V nen khong bi bao hoa.
+	 * (Gain 1/6 nhu ban XIAO se phi ~3/4 thang do o day.)
+	 *
+	 * Nguon tin hieu la mach chia ap NOI BO tro khang thap -> KHONG can
+	 * acquisition-time 40us dai nhu ban XIAO (von phai bu cho tro khang
+	 * ~342k cua chia ap ngoai). 10us mac dinh la du. */
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_2";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
+		zephyr,input-positive = <NRF_SAADC_VDDHDIV5>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <4>;
+	};
+};

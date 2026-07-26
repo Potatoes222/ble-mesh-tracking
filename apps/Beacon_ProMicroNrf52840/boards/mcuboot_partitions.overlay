@@ -1,0 +1,65 @@
+/*
+ * [SECURITY] Ban sao partition cua promicro_nrf52840_nrf52840_uf2.overlay,
+ * danh RIENG cho build cua chinh MCUboot (khong phai app "beacon").
+ *
+ * LY DO CAN FILE RIENG: Zephyr chi tu dong ap dung boards/<board>.overlay cho
+ * app chinh. MCUboot la 1 Zephyr app HOAN TOAN RIENG duoc sysbuild build o thu
+ * muc khac, nen phai truyen tay qua bien mcuboot_EXTRA_DTC_OVERLAY_FILE
+ * (xem sysbuild/CMakeLists.txt).
+ *
+ * KHONG DUOC dung chung 1 file voi app: "chosen { zephyr,code-partition }"
+ * phai KHAC NHAU giua 2 ben — MCUboot phai link vao boot_partition (0x26000),
+ * con app phai link vao slot0_partition (0x32000). Dung chung se lam MCUboot
+ * tu link nham vao slot0 va ghi de len chinh app.
+ *
+ * (Luu y dia chi 0x26000 — KHAC ban XIAO la 0x27000. Xem giai thich day du
+ * trong promicro_nrf52840_nrf52840_uf2.overlay.)
+ *
+ * File nay CHI khai bao partition, KHONG khai bao ADC/zephyr,user — MCUboot
+ * khong doc pin, them vao chi lam phinh bootloader vo ich.
+ */
+
+/delete-node/ &reserved_partition_0;
+/delete-node/ &code_partition;
+/delete-node/ &storage_partition;
+/delete-node/ &boot_partition;
+
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reserved_partition_0: partition@0 {
+			label = "reserved";
+			reg = <0x00000000 0x00026000>;
+		};
+
+		boot_partition: partition@26000 {
+			label = "mcuboot";
+			reg = <0x00026000 0x0000c000>;
+		};
+
+		slot0_partition: partition@32000 {
+			label = "image-0";
+			reg = <0x00032000 0x000ba000>;
+		};
+
+		storage_partition: partition@ec000 {
+			label = "storage";
+			reg = <0x000ec000 0x00008000>;
+		};
+
+		uf2_partition: partition@f4000 {
+			label = "UF2";
+			read-only;
+			reg = <0x000f4000 0x0000c000>;
+		};
+	};
+};
