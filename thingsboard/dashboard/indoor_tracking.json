@@ -87,7 +87,7 @@
                         }
                       }
                     },
-                    "tooltipValueFormatter": "var labels = {0: \"out_of_range\", 1: \"room_1\", 2: \"room_2\", 3: \"room_3\"};\r\nreturn labels[Math.round(value)] || value;",
+                    "tooltipValueFormatter": "var labels = {0: \"out_of_range\", 1: \"room_1\", 2: \"room_2\", 3: \"room_3\", 4: \"room_4\"};\r\nreturn labels[Math.round(value)] || value;",
                     "comparisonSettings": {
                       "showValuesForComparison": false,
                       "comparisonValuesLabel": "",
@@ -196,7 +196,7 @@
                   "lineHeight": "1"
                 },
                 "tickLabelColor": "rgba(0, 0, 0, 0.54)",
-                "ticksFormatter": "var labels = {0: \"out_of_range\", 1: \"room_1\", 2: \"room_2\", 3: \"room_3\"};\r\nreturn labels[Math.round(value)] || \"\";",
+                "ticksFormatter": "var labels = {0: \"out_of_range\", 1: \"room_1\", 2: \"room_2\", 3: \"room_3\", 4: \"room_4\"};\r\nreturn labels[Math.round(value)] || \"\";",
                 "showTicks": true,
                 "ticksColor": "rgba(0, 0, 0, 0.54)",
                 "showLine": true,
@@ -206,7 +206,7 @@
                 "id": "default",
                 "order": 0,
                 "min": 0,
-                "max": 3,
+                "max": 4,
                 "ticksGenerator": null,
                 "interval": null,
                 "splitNumber": null
@@ -550,6 +550,13 @@
                   "color": "#f44336",
                   "settings": {},
                   "_hash": 0.7778768288490686
+                },
+                {
+                  "name": "battery",
+                  "type": "attribute",
+                  "label": "battery",
+                  "color": "#9c27b0",
+                  "settings": {}
                 }
               ],
               "alarmFilterConfig": {
@@ -589,7 +596,7 @@
           "padding": "0px",
           "settings": {
             "useMarkdownTextFunction": false,
-            "markdownTextPattern": "<div class=\"td-card\">\r\n  <div class=\"td-title\">Tag Detail</div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Device</span><span class=\"td-value\">${entityName}</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Scanner</span><span class=\"td-value\">${current_scanner:0}</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">RSSI</span><span class=\"td-value\">${current_rssi:0} dBm</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Last seen</span><span class=\"td-value\">just now</span></div>\r\n</div>",
+            "markdownTextPattern": "<div class=\"td-card\">\r\n  <div class=\"td-title\">Tag Detail</div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Device</span><span class=\"td-value\">${entityName}</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Scanner</span><span class=\"td-value\">${current_scanner:0}</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">RSSI</span><span class=\"td-value\">${current_rssi:0} dBm</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Last seen</span><span class=\"td-value\">just now</span></div>\r\n  <div class=\"td-row\"><span class=\"td-label\">Battery</span><span class=\"td-value\">${battery:0}%</span></div>\r\n</div>",
             "markdownTextFunction": "return '# Some title\\n - Entity name: ' + data[0]['entityName'];",
             "applyDefaultMarkdownStyle": false,
             "markdownCss": ".td-card {\r\n  padding: 16px;\r\n  font-family: 'Roboto', sans-serif;\r\n  height: 100%;\r\n}\r\n.td-title {\r\n  font-size: 16px;\r\n  font-weight: 600;\r\n  color: #333;\r\n  margin-bottom: 16px;\r\n  padding-bottom: 8px;\r\n  border-bottom: 1px solid #eee;\r\n}\r\n.td-row {\r\n  display: flex;\r\n  justify-content: space-between;\r\n  align-items: center;\r\n  padding: 10px 4px;\r\n  border-bottom: 1px solid #f5f5f5;\r\n  font-size: 14px;\r\n}\r\n.td-row:last-child {\r\n  border-bottom: none;\r\n}\r\n.td-label {\r\n  color: #777;\r\n  font-weight: 500;\r\n}\r\n.td-value {\r\n  color: #2e7d32;\r\n  font-weight: 600;\r\n  font-family: 'Roboto Mono', monospace;\r\n}"
@@ -672,10 +679,10 @@
           "padding": "0px",
           "settings": {
             "useMarkdownTextFunction": false,
-            "markdownTextPattern": "<div class=\"fp-container\">\n  <div class=\"fp-title\">Floor Plan</div>\n\n  <div class=\"fp-zone fp-${current_zone}-active-room_1\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 1</span>\n      <span class=\"fp-zone-meta\">zone 1</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n  <div class=\"fp-zone fp-${current_zone}-active-room_2\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 2</span>\n      <span class=\"fp-zone-meta\">zone 2</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n  <div class=\"fp-zone fp-${current_zone}-active-room_3\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 3</span>\n      <span class=\"fp-zone-meta\">zone 3</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n</div>",
+            "markdownTextPattern": "<div class=\"fp-container\">\n  <div class=\"fp-title\">Floor Plan</div>\n\n  <div class=\"fp-zone fp-${current_zone}-active-room_1\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 1</span>\n      <span class=\"fp-zone-meta\">zone 1</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n  <div class=\"fp-zone fp-${current_zone}-active-room_2\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 2</span>\n      <span class=\"fp-zone-meta\">zone 2</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n  <div class=\"fp-zone fp-${current_zone}-active-room_3\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 3</span>\n      <span class=\"fp-zone-meta\">zone 3</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n  <div class=\"fp-zone fp-${current_zone}-active-room_4\">\n    <div class=\"fp-zone-info\">\n      <span class=\"fp-zone-name\">Room 4</span>\n      <span class=\"fp-zone-meta\">zone 4</span>\n    </div>\n    <span class=\"fp-here-badge\">📍 here</span>\n  </div>\n</div>",
             "markdownTextFunction": "return '# Some title\\n - Entity name: ' + data[0]['entityName'];",
             "applyDefaultMarkdownStyle": false,
-            "markdownCss": ".fp-container {\r\n  padding: 16px;\r\n  font-family: 'Roboto', sans-serif;\r\n  height: 100%;\r\n}\r\n.fp-title {\r\n  font-size: 16px;\r\n  font-weight: 600;\r\n  color: #333;\r\n  margin-bottom: 16px;\r\n  padding-bottom: 8px;\r\n  border-bottom: 1px solid #eee;\r\n}\r\n.fp-zone {\r\n  display: flex;\r\n  align-items: center;\r\n  justify-content: space-between;\r\n  padding: 14px 16px;\r\n  margin-bottom: 10px;\r\n  border-radius: 8px;\r\n  background: #fafafa;\r\n  border: 1px solid #e0e0e0;\r\n}\r\n.fp-room_1-active-room_1,\r\n.fp-room_3-active-room_3,\r\n.fp-room_2-active-room_2 {\r\n  background: #e3f2fd !important;\r\n  border-color: #1976d2 !important;\r\n  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15) !important;\r\n}\r\n.fp-zone-name {\r\n  font-size: 15px;\r\n  font-weight: 600;\r\n  color: #222;\r\n}\r\n.fp-zone-meta {\r\n  font-size: 12px;\r\n  color: #888;\r\n  font-family: 'Roboto Mono', monospace;\r\n  display: block;\r\n  margin-top: 4px;\r\n}\r\n.fp-here-badge {\r\n  display: none;\r\n  background: #1976d2;\r\n  color: #fff;\r\n  padding: 4px 10px;\r\n  border-radius: 999px;\r\n  font-size: 12px;\r\n  font-weight: 600;\r\n}\r\n.fp-room_1-active-room_1 .fp-here-badge,\r\n.fp-room_3-active-room_3 .fp-here-badge,\r\n.fp-room_2-active-room_2 .fp-here-badge {\r\n  display: inline-block;\r\n}"
+            "markdownCss": ".fp-container {\r\n  padding: 16px;\r\n  font-family: 'Roboto', sans-serif;\r\n  height: 100%;\r\n}\r\n.fp-title {\r\n  font-size: 16px;\r\n  font-weight: 600;\r\n  color: #333;\r\n  margin-bottom: 16px;\r\n  padding-bottom: 8px;\r\n  border-bottom: 1px solid #eee;\r\n}\r\n.fp-zone {\r\n  display: flex;\r\n  align-items: center;\r\n  justify-content: space-between;\r\n  padding: 14px 16px;\r\n  margin-bottom: 10px;\r\n  border-radius: 8px;\r\n  background: #fafafa;\r\n  border: 1px solid #e0e0e0;\r\n}\r\n.fp-room_1-active-room_1,\r\n.fp-room_3-active-room_3,\r\n.fp-room_2-active-room_2,\r\n.fp-room_4-active-room_4 {\r\n  background: #e3f2fd !important;\r\n  border-color: #1976d2 !important;\r\n  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15) !important;\r\n}\r\n.fp-zone-name {\r\n  font-size: 15px;\r\n  font-weight: 600;\r\n  color: #222;\r\n}\r\n.fp-zone-meta {\r\n  font-size: 12px;\r\n  color: #888;\r\n  font-family: 'Roboto Mono', monospace;\r\n  display: block;\r\n  margin-top: 4px;\r\n}\r\n.fp-here-badge {\r\n  display: none;\r\n  background: #1976d2;\r\n  color: #fff;\r\n  padding: 4px 10px;\r\n  border-radius: 999px;\r\n  font-size: 12px;\r\n  font-weight: 600;\r\n}\r\n.fp-room_1-active-room_1 .fp-here-badge,\r\n.fp-room_3-active-room_3 .fp-here-badge,\r\n.fp-room_2-active-room_2 .fp-here-badge,\r\n.fp-room_4-active-room_4 .fp-here-badge {\r\n  display: inline-block;\r\n}"
           },
           "title": "Markdown/HTML Card",
           "showTitleIcon": false,
