@@ -90,6 +90,20 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				out->mac16 = p.mac16;
 				return true;
 			}
+			if (cid == BMT_CID_APPLE && field_len >= 26 && adv_data[pos + 4] == 0x02 && adv_data[pos + 5] == 0x15)
+			{
+				uint16_t major = ((uint16_t)adv_data[pos + 22] << 8) | adv_data[pos + 23];
+				uint16_t minor = ((uint16_t)adv_data[pos + 24] << 8) | adv_data[pos + 25];
+				if (major != BMT_TAG_MAJOR_PERSON && major != BMT_TAG_MAJOR_ASSET)
+					goto next_field;
+				/* iPhone-as-tag khong bao % pin cua he thong -> 0 (unknown) */
+				out->battery = 0;
+				out->tag_id = minor | 0x8000;
+				out->tx_power = BMT_PHONE_TX_POWER_1M;
+				out->sequence = 0;
+				out->mac16 = 0;
+				return true;
+			}
 		}
 	next_field:
 		pos += field_len + 1;
