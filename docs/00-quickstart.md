@@ -97,6 +97,28 @@ Full command list: [08-uart-commands.md](08-uart-commands.md). Test procedures: 
 
 ## 7. OTA
 
+### Where OTA `.bin` files come from
+
+The repo does **not** ship pre-built firmware images. `firmware/*.bin` is gitignored on purpose — pre-built binaries drift out of sync with source (private WiFi/IP baked in, wrong TLS keys, etc.) and are not safe to distribute in an opensource project.
+
+`.bin` files appear in `firmware/` automatically as a side-effect of building each app:
+
+```
+cd apps/gateway && idf.py build     # -> firmware/Gateway.bin
+cd apps/scanner && idf.py build     # -> firmware/Scanner.bin
+cd apps/relay   && idf.py build     # -> firmware/Relay.bin
+```
+
+The copy step is a CMake `POST_BUILD` command in each app (see `apps/*/CMakeLists.txt`). To send the `.bin` elsewhere, override:
+
+```
+idf.py -DBMT_OTA_DIR=/some/dir build
+```
+
+Rebuild any time you change config (`bmt_config.h`) or source — otherwise the node that boots after OTA still runs the old code.
+
+### Serving OTA over HTTPS
+
 The nginx OTA fileserver comes up automatically with `docker compose up -d` in step 3 (it is one of the services in the stack). It serves `firmware/` over HTTPS on port `8443` using the same TLS cert as MQTTS. To restart just it:
 
 ```
