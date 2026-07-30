@@ -126,26 +126,14 @@ static void wifi_event_handler(void* arg, esp_event_base_t base,
 	}
 }
 
-static void ota_wifi_task(void* arg)
+static esp_err_t ota_wifi_bring_up(void)
 {
-	(void)arg;
-
-	if (s_cfg.silence_log_during_ota)
-		esp_log_level_set("*", ESP_LOG_NONE);
-
-	printf("\n[OTA] ===== WiFi OTA triggered =====\n");
-	printf("[OTA] URL: %s\n", s_cfg.url);
-
-	/* Mac dinh coi la "fail" khi roi xuong don dep — chi tat co nay khi bo qua
-	 * do cung version (khong phai loi, khong can bao Gateway) */
-	bool do_report_fail = true;
-
 	s_wifi_evgrp = xEventGroupCreate();
 	esp_err_t err = esp_netif_init();
 	if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
 	{
 		printf("[OTA] netif init failed: %s\n", esp_err_to_name(err));
-		goto ota_fail;
+		return err;
 	}
 	esp_event_loop_create_default();
 	s_sta_netif = esp_netif_create_default_wifi_sta();
@@ -155,13 +143,10 @@ static void ota_wifi_task(void* arg)
 	if (err != ESP_OK)
 	{
 		printf("[OTA] wifi init failed: %s\n", esp_err_to_name(err));
-		goto ota_fail;
+		return err;
 	}
-
-	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-	                                    &wifi_event_handler, NULL, &s_evt_any_id);
-	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-	                                    &wifi_event_handler, NULL, &s_evt_got_ip);
+	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &s_evt_any_id);
+	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, &s_evt_got_ip);
 
 	wifi_config_t wifi_cfg = {.sta = {.threshold.authmode = WIFI_AUTH_WPA2_PSK}};
 	strncpy((char*)wifi_cfg.sta.ssid, s_cfg.wifi_ssid, sizeof(wifi_cfg.sta.ssid));
@@ -171,104 +156,18 @@ static void ota_wifi_task(void* arg)
 	esp_wifi_start();
 
 	printf("[OTA] Connecting WiFi (max %" PRIu32 "s)...\n", s_cfg.wifi_timeout_ms / 1000);
-	EventBits_t bits = xEventGroupWaitBits(s_wifi_evgrp, WIFI_CONNECTED_BIT,
-	                                       pdFALSE, pdFALSE,
-	                                       pdMS_TO_TICKS(s_cfg.wifi_timeout_ms));
+	EventBits_t bits = xEventGroupWaitBits(s_wifi_evgrp, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(s_cfg.wifi_timeout_ms));
 	if (!(bits & WIFI_CONNECTED_BIT))
 	{
 		printf("[OTA] WiFi connect timeout\n");
-		goto ota_fail_wifi;
+		return ESP_ERR_TIMEOUT;
 	}
+	return ESP_OK;
+}
 
-	printf("[OTA] WiFi connected — checking firmware version...\n");
-	{
-		esp_http_client_config_t http_cfg = {
-		    .url = s_cfg.url,
-		    .timeout_ms = 120000,
-		    .keep_alive_enable = true,
-		    .cert_pem = (const char*)bmt_ota_ca_pem_start,
-		    .cert_len = (size_t)(bmt_ota_ca_pem_end - bmt_ota_ca_pem_start),
-		    .common_name = BMT_OTA_SERVER_CN,
-		};
-		esp_https_ota_config_t ota_cfg = {.http_config = &http_cfg};
-		esp_https_ota_handle_t ota_handle = NULL;
-
-		err = esp_https_ota_begin(&ota_cfg, &ota_handle);
-		if (err != ESP_OK)
-		{
-			printf("[OTA] esp_https_ota_begin FAILED: %s\n", esp_err_to_name(err));
-			goto ota_fail_wifi;
-		}
-
-		esp_app_desc_t new_desc;
-		err = esp_https_ota_get_img_desc(ota_handle, &new_desc);
-		if (err != ESP_OK)
-		{
-			printf("[OTA] esp_https_ota_get_img_desc FAILED: %s\n", esp_err_to_name(err));
-			esp_https_ota_abort(ota_handle);
-			goto ota_fail_wifi;
-		}
-
-		const esp_app_desc_t* cur_desc = esp_app_get_description();
-
-		print_sha256_hex("[OTA] Node   SHA256: ", cur_desc->app_elf_sha256, sizeof(cur_desc->app_elf_sha256));
-		print_sha256_hex("[OTA] Server SHA256: ", new_desc.app_elf_sha256, sizeof(new_desc.app_elf_sha256));
-
-		if (memcmp(new_desc.app_elf_sha256, cur_desc->app_elf_sha256, sizeof(new_desc.app_elf_sha256)) == 0)
-		{
-			printf("[OTA] SHA256 match — node firmware is IDENTICAL to server firmware, skip.\n");
-			esp_https_ota_abort(ota_handle);
-			do_report_fail = false;
-			goto ota_fail_wifi;
-		}
-		printf("[OTA] SHA256 differ — node firmware DIFFERS from server firmware, checking version...\n");
-
-		printf("[OTA] Node   version: %s\n", cur_desc->version);
-		printf("[OTA] Server version: %s\n", new_desc.version);
-
-		if (strncmp(new_desc.version, cur_desc->version, sizeof(new_desc.version)) <= 0)
-		{
-			printf("[OTA] Server version is NOT newer — skip, no downgrade.\n");
-			esp_https_ota_abort(ota_handle);
-			do_report_fail = false;
-			goto ota_fail_wifi;
-		}
-
-		printf("[OTA] Server version is NEWER -> flashing firmware...\n");
-		while (1)
-		{
-			err = esp_https_ota_perform(ota_handle);
-			if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS)
-				break;
-		}
-
-		if (err == ESP_OK && esp_https_ota_is_complete_data_received(ota_handle))
-		{
-			err = esp_https_ota_finish(ota_handle);
-		}
-		else
-		{
-			esp_https_ota_abort(ota_handle);
-			if (err == ESP_OK)
-				err = ESP_FAIL;
-		}
-	}
-
-	if (err == ESP_OK)
-	{
-		printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
-		mark_pending();
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		esp_restart();
-	}
-	else
-	{
-		printf("[OTA] esp_https_ota FAILED: %s\n", esp_err_to_name(err));
-	}
-
-ota_fail_wifi:
+static void ota_wifi_tear_down(void)
+{
 	esp_wifi_stop();
-ota_fail:
 	if (s_evt_any_id)
 	{
 		esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_evt_any_id);
@@ -290,6 +189,111 @@ ota_fail:
 		vEventGroupDelete(s_wifi_evgrp);
 		s_wifi_evgrp = NULL;
 	}
+}
+
+/* Return: ESP_OK = flashed OK; ESP_ERR_NOT_FOUND = skip (SHA match hoac
+ * version khong moi hon — khong phai loi); other = that su fail. */
+static esp_err_t ota_check_and_flash(void)
+{
+	printf("[OTA] WiFi connected — checking firmware version...\n");
+	esp_http_client_config_t http_cfg = {
+	    .url = s_cfg.url,
+	    .timeout_ms = 120000,
+	    .keep_alive_enable = true,
+	    .cert_pem = (const char*)bmt_ota_ca_pem_start,
+	    .cert_len = (size_t)(bmt_ota_ca_pem_end - bmt_ota_ca_pem_start),
+	    .common_name = BMT_OTA_SERVER_CN,
+	};
+	esp_https_ota_config_t ota_cfg = {.http_config = &http_cfg};
+	esp_https_ota_handle_t ota_handle = NULL;
+
+	esp_err_t err = esp_https_ota_begin(&ota_cfg, &ota_handle);
+	if (err != ESP_OK)
+	{
+		printf("[OTA] esp_https_ota_begin FAILED: %s\n", esp_err_to_name(err));
+		return err;
+	}
+
+	esp_app_desc_t new_desc;
+	err = esp_https_ota_get_img_desc(ota_handle, &new_desc);
+	if (err != ESP_OK)
+	{
+		printf("[OTA] esp_https_ota_get_img_desc FAILED: %s\n", esp_err_to_name(err));
+		esp_https_ota_abort(ota_handle);
+		return err;
+	}
+
+	const esp_app_desc_t* cur_desc = esp_app_get_description();
+	print_sha256_hex("[OTA] Node   SHA256: ", cur_desc->app_elf_sha256, sizeof(cur_desc->app_elf_sha256));
+	print_sha256_hex("[OTA] Server SHA256: ", new_desc.app_elf_sha256, sizeof(new_desc.app_elf_sha256));
+
+	if (memcmp(new_desc.app_elf_sha256, cur_desc->app_elf_sha256, sizeof(new_desc.app_elf_sha256)) == 0)
+	{
+		printf("[OTA] SHA256 match — node firmware is IDENTICAL to server firmware, skip.\n");
+		esp_https_ota_abort(ota_handle);
+		return ESP_ERR_NOT_FOUND;
+	}
+	printf("[OTA] SHA256 differ — node firmware DIFFERS from server firmware, checking version...\n");
+	printf("[OTA] Node   version: %s\n", cur_desc->version);
+	printf("[OTA] Server version: %s\n", new_desc.version);
+	if (strncmp(new_desc.version, cur_desc->version, sizeof(new_desc.version)) <= 0)
+	{
+		printf("[OTA] Server version is NOT newer — skip, no downgrade.\n");
+		esp_https_ota_abort(ota_handle);
+		return ESP_ERR_NOT_FOUND;
+	}
+
+	printf("[OTA] Server version is NEWER -> flashing firmware...\n");
+	while (1)
+	{
+		err = esp_https_ota_perform(ota_handle);
+		if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS)
+			break;
+	}
+	if (err == ESP_OK && esp_https_ota_is_complete_data_received(ota_handle))
+	{
+		err = esp_https_ota_finish(ota_handle);
+	}
+	else
+	{
+		esp_https_ota_abort(ota_handle);
+		if (err == ESP_OK)
+			err = ESP_FAIL;
+	}
+	if (err != ESP_OK)
+		printf("[OTA] esp_https_ota FAILED: %s\n", esp_err_to_name(err));
+	return err;
+}
+
+static void ota_wifi_task(void* arg)
+{
+	(void)arg;
+
+	if (s_cfg.silence_log_during_ota)
+		esp_log_level_set("*", ESP_LOG_NONE);
+
+	printf("\n[OTA] ===== WiFi OTA triggered =====\n");
+	printf("[OTA] URL: %s\n", s_cfg.url);
+
+	bool do_report_fail = true;
+	esp_err_t err = ota_wifi_bring_up();
+	if (err == ESP_OK)
+	{
+		err = ota_check_and_flash();
+		if (err == ESP_OK)
+		{
+			printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
+			mark_pending();
+			vTaskDelay(pdMS_TO_TICKS(1000));
+			esp_restart();
+		}
+		else if (err == ESP_ERR_NOT_FOUND)
+		{
+			do_report_fail = false;
+		}
+	}
+
+	ota_wifi_tear_down();
 
 	if (s_cfg.silence_log_during_ota)
 		esp_log_level_set("*", ESP_LOG_INFO);
