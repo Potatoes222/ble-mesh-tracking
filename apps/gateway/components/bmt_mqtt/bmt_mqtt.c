@@ -121,10 +121,6 @@ static void mqtt_event_handler(void* args, esp_event_base_t base, int32_t id, vo
 		ESP_LOGI(TAG, "MQTT connected to ThingsBoard");
 		esp_mqtt_client_subscribe(s_client, "v1/devices/me/rpc/request/+", 1);
 		ESP_LOGI(TAG, "Subscribed to RPC topic");
-		/* [FIX] ThingsBoard quen het trang thai "device connected" moi khi
-		 * mat phien MQTT — phai goi lai connect cho toan bo node/tag da biet,
-		 * neu khong telemetry/attribute cua chung se bi am tham bo qua sau
-		 * reconnect (xem giai thich day du trong bmt_tb_reconnect_all_devices). */
 		bmt_tb_reconnect_all_devices();
 		break;
 

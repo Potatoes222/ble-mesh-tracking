@@ -72,12 +72,6 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				if (!bmt_auth_verify_tag(p.minor, (uint8_t*)&p,
 				                         sizeof(p) - sizeof(p.mac16), p.mac16))
 				{
-					/* [TEST] Do ti le false-negative/false-accept HMAC (Chuong 5,
-					 * Test 6) — log lai tag_id + seq bi tu choi de sau grep dem.
-					 * Neu tag_id nam trong danh sach tag that dang test ma van
-					 * bi reject -> false-negative (nhieu RF lam sai 1 bit HMAC).
-					 * Neu tag_id la gia (beacon gia lap qua nRF Connect) ->
-					 * reject dung, tinh vao ty le chan gia mao thanh cong. */
 					ESP_LOGW(TAG, "[AUTH] reject tag_id=0x%04x seq=%u mac_rx=0x%04x",
 					         p.minor, p.sequence, p.mac16);
 					goto next_field;

@@ -14,9 +14,6 @@
 #include "bmt_config.h"
 #include "bmt_mesh.h"
 
-/* [ADD] In version/compile-time — thay vi phai cuon log cu len tim dong
- * "Compile time:" luc boot. Uptime da co san o RELAY HEALTH dinh ky, chi
- * them vao lenh '1' de xem duoc bat cu luc nao khong can doi 30s. */
 static void print_version(void)
 {
 	const esp_app_desc_t* desc = esp_app_get_description();

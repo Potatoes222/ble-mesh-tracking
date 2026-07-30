@@ -7,12 +7,6 @@
 #define BMT_TB_GATEWAY_TOKEN "YOUR_TB_GATEWAY_TOKEN"
 
 #define BMT_DEV_NAME_GATEWAY "bmt_gateway"
-/* [FIX] Dinh danh theo MAC (co dinh), khong theo dia chi mesh (doi moi lan
- * re-provision) — dung 6 tham so %02x tu mac[0..5]. Truoc day dung dia chi
- * mesh lam ten device tren ThingsBoard: moi lan node tu reset/re-provision
- * (watchdog, rut nguon, gio "r") la sinh ra 1 device MOI ("bmt_node_0x00xx"
- * voi addr moi), device cu khong bao gio bi xoa — TB tich luy "device ma"
- * vo han theo thoi gian, lich su tach vun cho tung node vat ly. */
 #define BMT_DEV_NAME_NODE_FMT "bmt_node_%02x%02x%02x%02x%02x%02x"
 #define BMT_DEV_NAME_TAG_FMT "bmt_tag_0x%04x"
 

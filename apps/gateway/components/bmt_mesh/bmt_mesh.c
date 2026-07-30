@@ -54,14 +54,6 @@ static EventGroupHandle_t s_cfg_ack_evgrp = NULL;
 static volatile uint16_t s_cfg_wait_addr = 0;
 static volatile uint32_t s_cfg_wait_opcode = 0;
 
-/* [FIX-provision] Config client (s_cfg_client / s_root_models[1]) la TAI NGUYEN
- * DUNG CHUNG — chi xu ly 1 giao dich tai 1 thoi diem, va bien cho-ACK
- * (s_cfg_wait_addr/opcode + event group) cung dung chung. Khi reset nhieu node
- * cung luc, moi node provision xong lai spawn 1 config task chay ~15s CHONG LEN
- * nhau -> task B ghi de s_cfg_wait_addr=B trong khi task A dang cho ACK cua A
- * -> ACK cua A ve nhung addr khong khop -> A timeout -> abort. Day la ly do
- * "co node duoc config, node khong". Mutex nay serialize: moi luc chi 1 config
- * task chay, dung ban chat single-transaction cua config client. */
 static SemaphoreHandle_t s_cfg_mutex = NULL;
 
 static bool wait_cfg_ack(uint16_t addr, uint32_t opcode)
@@ -106,11 +98,6 @@ static bool cfg_send_retry(const char* step, uint16_t addr, uint32_t opcode,
 	return false;
 }
 
-/* [FIX-provision] Config that bai sau retry -> XOA entry khoi bang + provisioner.
- * Neu de nguyen (config_done=false) se thanh "zombie": nhanh re-provision o
- * mesh_prov_cb co guard "if(!config_done) break" -> node nay khi reset & beacon
- * unprovisioned lai se bi BO QUA vinh vien (deadlock). Xoa han de lan beacon sau
- * duoc provision sach. */
 static void cfg_abort_cleanup(uint16_t addr)
 {
 	ESP_LOGE(TAG, "[CFG] Config 0x%04x THAT BAI sau %d lan — xoa entry (tranh zombie chan re-provision)",
@@ -475,10 +462,6 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 		ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
 	if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT)
 	{
-		/* [FIX-provision] Bao hieu cho node_ping_task (dang giu s_cfg_mutex cho
-		 * DEFAULT_TTL_GET nay) biet round-trip da xong, cung 1 co che voi
-		 * SET_STATE_EVT o tren — de mutex duoc nha ngay khi co ACK thay vi
-		 * phai cho het 10s timeout moi nha. */
 		if (param->error_code == 0 && addr == s_cfg_wait_addr &&
 		    param->params->opcode == s_cfg_wait_opcode && s_cfg_ack_evgrp)
 			xEventGroupSetBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT);
@@ -615,13 +598,6 @@ static void node_ping_task(void* arg)
 			common.ctx.addr = n->addr;
 			common.ctx.send_ttl = 7;
 			common.msg_timeout = 5000;
-			/* [FIX-provision] Config client la tai nguyen DUNG CHUNG voi
-			 * scan_config_task/relay_config_task — khoa mutex XUYEN SUOT ca
-			 * round-trip (gui + cho ACK/timeout qua wait_cfg_ack), khong phai
-			 * chi luc gui, vi request con "bay" tren mesh sau khi ham gui tra
-			 * ve — nha mutex som se van dam transaction voi task khac dang
-			 * gui. Thieu buoc nay gay "[CFG] TIMEOUT opcode=0x800c" (chinh la
-			 * DEFAULT_TTL_GET nay) va keo dai hang doi provision vo ich. */
 			if (s_cfg_mutex)
 				xSemaphoreTake(s_cfg_mutex, portMAX_DELAY);
 			esp_err_t pe = esp_ble_mesh_config_client_get_state(&common, &get);

@@ -128,18 +128,12 @@ static void self_update_task(void* arg)
 	if (err == ESP_OK)
 	{
 		printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
-		/* [ADD] Bao cao thanh cong TRUOC khi reboot — publish xong con 1000ms
-		 * delay o duoi lam thoi gian cho MQTT flush qua TCP (ket noi da san
-		 * co san, chi la 1 goi nho nen thuong xong trong vai chuc ms). */
 		bmt_tb_pub_gateway_ota_result(true);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 		esp_restart();
 	}
 
 self_update_fail:
-	/* [ADD] Bao cao THAT BAI — CHI khi da thuc su thu OTA (khong phai 2 nhanh
-	 * "skip vi giong het/khong moi hon" o tren, vi do khong phai loi, tranh
-	 * spam FAILED moi 3 phut khi khong co ban moi de cap nhat). */
 	bmt_tb_pub_gateway_ota_result(false);
 	printf("[OTA] Gateway self-update FAILED: %s\n", esp_err_to_name(err));
 	atomic_store(&s_running, false);
