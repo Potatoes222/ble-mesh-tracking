@@ -12,7 +12,8 @@ LOG_MODULE_REGISTER(bmt_main, LOG_LEVEL_INF);
 
 static void bt_ready(int err)
 {
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("Bluetooth init failed (err %d)", err);
 		return;
 	}
@@ -23,7 +24,8 @@ static void bt_ready(int err)
 	bmt_auth_init();
 
 	err = bmt_beacon_start();
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("bmt_beacon_start failed (err %d)", err);
 		return;
 	}
@@ -36,12 +38,14 @@ int main(void)
 
 	/* Doc pin khong lien quan BLE, khoi dong doc lap voi bt_enable */
 	int batt_err = bmt_battery_init();
-	if (batt_err) {
+	if (batt_err)
+	{
 		LOG_ERR("bmt_battery_init failed (err %d)", batt_err);
 	}
 
 	int err = bt_enable(bt_ready);
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("bt_enable failed (err %d)", err);
 	}
 	return 0;

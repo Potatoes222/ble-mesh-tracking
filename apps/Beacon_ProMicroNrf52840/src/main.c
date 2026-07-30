@@ -17,11 +17,12 @@ LOG_MODULE_REGISTER(bmt_main, LOG_LEVEL_INF);
  * khai bao chan dieu khien nen no o trang thai reset), ton ~1mA du app khong
  * cap nguon cho thiet bi ngoai nao. */
 static const struct gpio_dt_spec ext_vcc =
-	GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), ext_vcc_gpios);
+    GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), ext_vcc_gpios);
 
 static void ext_vcc_off(void)
 {
-	if (!gpio_is_ready_dt(&ext_vcc)) {
+	if (!gpio_is_ready_dt(&ext_vcc))
+	{
 		LOG_ERR("ext-vcc GPIO chua san sang");
 		return;
 	}
@@ -30,7 +31,8 @@ static void ext_vcc_off(void)
 	 * An toan cho MCU: MOSFET nay chi nam tren duong ra chan VCC ngoai,
 	 * ban than nRF52840 an nguon rieng qua VDDH. */
 	int err = gpio_pin_configure_dt(&ext_vcc, GPIO_OUTPUT_INACTIVE);
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("Tat VCC ngoai that bai (err %d)", err);
 		return;
 	}
@@ -39,7 +41,8 @@ static void ext_vcc_off(void)
 
 static void bt_ready(int err)
 {
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("Bluetooth init failed (err %d)", err);
 		return;
 	}
@@ -50,7 +53,8 @@ static void bt_ready(int err)
 	bmt_auth_init();
 
 	err = bmt_beacon_start();
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("bmt_beacon_start failed (err %d)", err);
 		return;
 	}
@@ -66,12 +70,14 @@ int main(void)
 
 	/* Doc pin khong lien quan BLE, khoi dong doc lap voi bt_enable */
 	int batt_err = bmt_battery_init();
-	if (batt_err) {
+	if (batt_err)
+	{
 		LOG_ERR("bmt_battery_init failed (err %d)", batt_err);
 	}
 
 	int err = bt_enable(bt_ready);
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("bt_enable failed (err %d)", err);
 	}
 	return 0;

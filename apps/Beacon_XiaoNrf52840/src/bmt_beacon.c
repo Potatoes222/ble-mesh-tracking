@@ -72,24 +72,25 @@ static void start_adv_random_interval(void)
 	build_adv_data();
 
 	const struct bt_le_adv_param param = {
-		.id = BT_ID_DEFAULT,
-		.sid = 0,
-		.secondary_max_skip = 0,
-		.options = BT_LE_ADV_OPT_USE_IDENTITY, /* dia chi cong khai, khong dung private/random rotating */
-		.interval_min = units,
-		.interval_max = units,
-		.peer = NULL,
+	    .id = BT_ID_DEFAULT,
+	    .sid = 0,
+	    .secondary_max_skip = 0,
+	    .options = BT_LE_ADV_OPT_USE_IDENTITY, /* dia chi cong khai, khong dung private/random rotating */
+	    .interval_min = units,
+	    .interval_max = units,
+	    .peer = NULL,
 	};
 
 	const struct bt_data ad[] = {
-		/* Flags = 0x06 (LE General Discoverable | No BR/EDR) — GIONG HET gia
-		 * tri hardcode ben ESP32 */
-		BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-		BT_DATA(BT_DATA_MANUFACTURER_DATA, s_mfg_data, sizeof(s_mfg_data)),
+	    /* Flags = 0x06 (LE General Discoverable | No BR/EDR) — GIONG HET gia
+	     * tri hardcode ben ESP32 */
+	    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	    BT_DATA(BT_DATA_MANUFACTURER_DATA, s_mfg_data, sizeof(s_mfg_data)),
 	};
 
 	int err = bt_le_adv_start(&param, ad, ARRAY_SIZE(ad), NULL, 0);
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("ADV start FAILED (err %d)", err);
 		s_adv_active = false;
 		return;

@@ -40,15 +40,24 @@ static const struct device* gpio0 = DEVICE_DT_GET(DT_NODELABEL(gpio0));
  * bang + noi suy giua 2 diem. Moc 4200mV=100% (day), 3300mV=0% (nguong an
  * toan toi thieu, duoi nua hong pin). Tham khao Tjoms99 lib + Nordic SoC
  * blog. */
-typedef struct {
+typedef struct
+{
 	uint16_t mv;
 	uint8_t pct;
 } batt_point_t;
 
 static const batt_point_t BATT_CURVE[] = {
-	{4200, 100}, {4110, 90}, {4020, 80}, {3930, 70}, {3840, 60},
-	{3750, 50},  {3660, 40}, {3570, 30}, {3480, 20}, {3390, 10},
-	{3300, 0},
+    {4200, 100},
+    {4110, 90},
+    {4020, 80},
+    {3930, 70},
+    {3840, 60},
+    {3750, 50},
+    {3660, 40},
+    {3570, 30},
+    {3480, 20},
+    {3390, 10},
+    {3300, 0},
 };
 #define BATT_CURVE_N (sizeof(BATT_CURVE) / sizeof(BATT_CURVE[0]))
 
@@ -70,25 +79,28 @@ int bmt_battery_read_mv(void)
 {
 	int16_t raw = 0;
 	struct adc_sequence sequence = {
-		.buffer = &raw,
-		.buffer_size = sizeof(raw),
+	    .buffer = &raw,
+	    .buffer_size = sizeof(raw),
 	};
 
 	int err = adc_sequence_init_dt(&battery_adc, &sequence);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_sequence_init_dt failed (%d)", err);
 		return err;
 	}
 
 	err = adc_read_dt(&battery_adc, &sequence);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_read_dt failed (%d)", err);
 		return err;
 	}
 
 	int32_t adc_mv = raw;
 	err = adc_raw_to_millivolts_dt(&battery_adc, &adc_mv);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_raw_to_millivolts_dt failed (%d)", err);
 		return err;
 	}
@@ -105,10 +117,12 @@ uint8_t bmt_battery_percent(int mv)
 	if (mv <= BATT_CURVE[BATT_CURVE_N - 1].mv)
 		return 0;
 
-	for (size_t i = 0; i < BATT_CURVE_N - 1; i++) {
+	for (size_t i = 0; i < BATT_CURVE_N - 1; i++)
+	{
 		uint16_t hi = BATT_CURVE[i].mv;
 		uint16_t lo = BATT_CURVE[i + 1].mv;
-		if (mv <= hi && mv >= lo) {
+		if (mv <= hi && mv >= lo)
+		{
 			/* Noi suy tuyen tinh giua 2 diem lan can */
 			int pct_hi = BATT_CURVE[i].pct;
 			int pct_lo = BATT_CURVE[i + 1].pct;
@@ -129,7 +143,8 @@ static void batt_log_work_handler(struct k_work* work)
 	ARG_UNUSED(work);
 
 	int mv = bmt_battery_read_mv();
-	if (mv < 0) {
+	if (mv < 0)
+	{
 		LOG_ERR("Battery read failed (%d)", mv);
 		return;
 	}
@@ -147,7 +162,8 @@ static void batt_log_timer_handler(struct k_timer* timer)
 
 int bmt_battery_init(void)
 {
-	if (!device_is_ready(gpio0)) {
+	if (!device_is_ready(gpio0))
+	{
 		LOG_ERR("gpio0 not ready");
 		return -ENODEV;
 	}
@@ -158,25 +174,29 @@ int bmt_battery_init(void)
 	 * P0.31 co the vot qua gioi han dien ap neu P0.14 o muc HIGH. */
 	int err = gpio_pin_configure(gpio0, BMT_BATT_ENABLE_PIN,
 	                             GPIO_OUTPUT_ACTIVE | GPIO_ACTIVE_LOW);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("config VBAT_ENABLE (P0.14) failed (%d)", err);
 		return err;
 	}
 
 	/* P0.17 charge-status: INPUT de doc trang thai sac */
 	err = gpio_pin_configure(gpio0, BMT_BATT_CHARGE_STAT_PIN, GPIO_INPUT);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("config CHARGE_STAT (P0.17) failed (%d)", err);
 		return err;
 	}
 
-	if (!adc_is_ready_dt(&battery_adc)) {
+	if (!adc_is_ready_dt(&battery_adc))
+	{
 		LOG_ERR("ADC device %s not ready", battery_adc.dev->name);
 		return -ENODEV;
 	}
 
 	err = adc_channel_setup_dt(&battery_adc);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_channel_setup_dt failed (%d)", err);
 		return err;
 	}

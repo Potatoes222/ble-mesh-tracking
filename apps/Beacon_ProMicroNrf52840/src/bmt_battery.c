@@ -21,15 +21,24 @@ static const struct adc_dt_spec battery_adc = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zep
  * TUYEN manh, khong the dung 1 cong thuc tuyen tinh -> tra bang + noi suy giua
  * 2 diem. Moc 4200mV=100% (day), 3300mV=0% (nguong an toan toi thieu, duoi nua
  * hong pin). GIU NGUYEN y het ban XIAO — cung hoa hoc pin, duong cong khong doi. */
-typedef struct {
+typedef struct
+{
 	uint16_t mv;
 	uint8_t pct;
 } batt_point_t;
 
 static const batt_point_t BATT_CURVE[] = {
-	{4200, 100}, {4110, 90}, {4020, 80}, {3930, 70}, {3840, 60},
-	{3750, 50},  {3660, 40}, {3570, 30}, {3480, 20}, {3390, 10},
-	{3300, 0},
+    {4200, 100},
+    {4110, 90},
+    {4020, 80},
+    {3930, 70},
+    {3840, 60},
+    {3750, 50},
+    {3660, 40},
+    {3570, 30},
+    {3480, 20},
+    {3390, 10},
+    {3300, 0},
 };
 #define BATT_CURVE_N (sizeof(BATT_CURVE) / sizeof(BATT_CURVE[0]))
 
@@ -51,25 +60,28 @@ int bmt_battery_read_mv(void)
 {
 	int16_t raw = 0;
 	struct adc_sequence sequence = {
-		.buffer = &raw,
-		.buffer_size = sizeof(raw),
+	    .buffer = &raw,
+	    .buffer_size = sizeof(raw),
 	};
 
 	int err = adc_sequence_init_dt(&battery_adc, &sequence);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_sequence_init_dt failed (%d)", err);
 		return err;
 	}
 
 	err = adc_read_dt(&battery_adc, &sequence);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_read_dt failed (%d)", err);
 		return err;
 	}
 
 	int32_t adc_mv = raw;
 	err = adc_raw_to_millivolts_dt(&battery_adc, &adc_mv);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_raw_to_millivolts_dt failed (%d)", err);
 		return err;
 	}
@@ -85,10 +97,12 @@ uint8_t bmt_battery_percent(int mv)
 	if (mv <= BATT_CURVE[BATT_CURVE_N - 1].mv)
 		return 0;
 
-	for (size_t i = 0; i < BATT_CURVE_N - 1; i++) {
+	for (size_t i = 0; i < BATT_CURVE_N - 1; i++)
+	{
 		uint16_t hi = BATT_CURVE[i].mv;
 		uint16_t lo = BATT_CURVE[i + 1].mv;
-		if (mv <= hi && mv >= lo) {
+		if (mv <= hi && mv >= lo)
+		{
 			/* Noi suy tuyen tinh giua 2 diem lan can */
 			int pct_hi = BATT_CURVE[i].pct;
 			int pct_lo = BATT_CURVE[i + 1].pct;
@@ -114,7 +128,8 @@ static void batt_log_work_handler(struct k_work* work)
 	ARG_UNUSED(work);
 
 	int mv = bmt_battery_read_mv();
-	if (mv < 0) {
+	if (mv < 0)
+	{
 		LOG_ERR("Battery read failed (%d)", mv);
 		return;
 	}
@@ -131,13 +146,15 @@ static void batt_log_timer_handler(struct k_timer* timer)
 
 int bmt_battery_init(void)
 {
-	if (!adc_is_ready_dt(&battery_adc)) {
+	if (!adc_is_ready_dt(&battery_adc))
+	{
 		LOG_ERR("ADC device %s not ready", battery_adc.dev->name);
 		return -ENODEV;
 	}
 
 	int err = adc_channel_setup_dt(&battery_adc);
-	if (err < 0) {
+	if (err < 0)
+	{
 		LOG_ERR("adc_channel_setup_dt failed (%d)", err);
 		return err;
 	}
