@@ -8,30 +8,9 @@
 
 LOG_MODULE_REGISTER(bmt_battery, LOG_LEVEL_INF);
 
-/* [POWER] Doc pin tren ProMicro nRF52840 (board nice!nano v2 compatible).
- *
- * ===== KHAC HAN CACH LAM CUA BAN XIAO =====
- *
- * XIAO:     pin -> IC sac BQ25101 -> LDO ngoai (SGM2040) -> VDD 3.3V.
- *           VDD bi ghim 3.3V nen KHONG phan anh dien ap pin -> phai do rieng
- *           tai node BAT+ qua bo chia ap ngoai 1M/510k -> chan P0.31 (AIN7),
- *           va phai keo chan P0.14 (VBAT_ENABLE) LOW de dong mach do.
- *
- * ProMicro: pin noi THANG vao chan VDDH cua nRF52840 (kien truc "high voltage
- *           mode" cua nice!nano v2 — xac nhan qua tai lieu ZMK + wiki
- *           joric/nrfmicro: "no battery divider, ZMK measures voltage
- *           internally on the VDDH pin").
- *           => Doc dien ap pin TRUC TIEP qua dau vao NOI BO VDDHDIV5 cua
- *              SAADC (= VDDH / 5). Khong co dien tro chia ap ngoai, khong
- *              co chan enable nao can dieu khien.
- *
- * He qua ve code (don gian hon han ban XIAO):
- *   - Khong include drivers/gpio.h, khong can device gpio0.
- *   - Khong co BMT_BATT_ENABLE_PIN / BMT_BATT_CHARGE_STAT_PIN.
- *   - Khong con rang buoc an toan kieu "P0.14 de HIGH lam P0.31 vot ap"
- *     (canh bao rieng cua Seeed cho XIAO — o day khong ap dung).
- *   - Cung khong con ~2.4uA ri lien tuc cua bo chia ap ngoai ben XIAO.
- */
+/* Pin noi THANG vao VDDH cua nRF52840 (nice!nano v2 high-voltage mode). Doc
+ * qua VDDHDIV5 noi bo cua SAADC — khong can chia ap ngoai va khong can GPIO
+ * enable (khac ban XIAO dung P0.31 + P0.14). */
 static const struct adc_dt_spec battery_adc = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 
 /* VDDHDIV5: gia tri doc duoc = VDDH / 5 -> nhan lai 5 de ra dien ap pin that.
