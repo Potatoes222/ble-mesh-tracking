@@ -45,8 +45,7 @@ static float kalman_update(bmt_kalman_t* kf, float rssi)
 
 	/* [ADAPTIVE R] cap nhat uoc luong nhieu do truoc, roi moi dung no cho
 	 * buoc Kalman ngay ben duoi (thay vi r co dinh 2.0f) */
-	kf->r_var = (1.0f - BMT_KALMAN_R_ALPHA) * kf->r_var
-	            + BMT_KALMAN_R_ALPHA * (innovation * innovation);
+	kf->r_var = (1.0f - BMT_KALMAN_R_ALPHA) * kf->r_var + BMT_KALMAN_R_ALPHA * (innovation * innovation);
 	kf->r = kf->r_var;
 	if (kf->r < BMT_KALMAN_R_MIN)
 		kf->r = BMT_KALMAN_R_MIN;
