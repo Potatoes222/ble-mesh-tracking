@@ -9,6 +9,9 @@
 
 # BLE Mesh Tracking
 
+<center><img width="1600" height="1200" alt="BLE Mesh Tracking" src="resources/images/banner.png" />
+</center>
+
 <hr>
 
 Room-level indoor tracking on ESP32 / ESP32-S3 with BLE Mesh and a self-hosted ThingsBoard CE.
