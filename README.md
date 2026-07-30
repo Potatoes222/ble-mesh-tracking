@@ -1,6 +1,9 @@
 <div align="center">
 
 ![Repo Traffic](https://komarev.com/ghpvc/?username=ble-mesh-tracking&label=Repo+Traffic&color=blue&style=flat-square)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.0.1-red?style=flat-square)
+![Target](https://img.shields.io/badge/target-ESP32%20%7C%20ESP32--S3-informational?style=flat-square)
 
 </div>
 
@@ -71,6 +74,12 @@ Shared code (relay and scanner OTA) lives at repo root under `components/bmt_ota
                                                                         v
                                                               [Indoor Tracking dashboard]
 ```
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) for the full text and [NOTICE](NOTICE) for third-party attributions.
+
+You are free to use, modify, and redistribute this project for any purpose, including commercial, as long as you keep the copyright and license notices. The Apache-2.0 patent grant applies.
 
 ## Contact
 
