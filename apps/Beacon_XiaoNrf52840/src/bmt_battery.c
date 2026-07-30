@@ -74,11 +74,6 @@ int bmt_battery_read_mv(void)
 		.buffer_size = sizeof(raw),
 	};
 
-	/* [REVERTED] Da thu gate P0.14 (chi bat truoc luc doc) de tiet kiem
-	 * ~2.4uA ri lien tuc, nhung ROLLBACK vi vi pham canh bao an toan chinh
-	 * thuc cua Seeed: de P0.14 HIGH (ngay ca da so thoi gian) lam P0.31 co
-	 * the vot len gioi han dien ap cho phep. Quay lai giu LOW ca doi (xem
-	 * comment day du trong overlay + bmt_battery_init duoi day). */
 	int err = adc_sequence_init_dt(&battery_adc, &sequence);
 	if (err < 0) {
 		LOG_ERR("adc_sequence_init_dt failed (%d)", err);

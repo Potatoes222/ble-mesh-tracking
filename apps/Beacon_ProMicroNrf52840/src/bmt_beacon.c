@@ -61,13 +61,9 @@ static void start_adv_random_interval(void)
 	uint32_t ms = BMT_ADV_INTERVAL_MIN_MS +
 	              (sys_rand32_get() % (BMT_ADV_INTERVAL_MAX_MS - BMT_ADV_INTERVAL_MIN_MS + 1));
 
-	/* [FIX POWER] s_seq_timer fire dung luc "ms" nay het (one-shot, tu
-	 * khoi dong lai moi lan o day) thay vi chu ky co dinh 500ms. Truoc day
-	 * timer fix 500ms trong khi radio duoc set interval 900-1100ms -> cu
-	 * ~500ms lai bt_le_adv_stop()+start giua chung, radio chua chay het 1
-	 * chu ky da bi restart -> dong trung binh gan gap doi. Doi one-shot khop
-	 * dung "ms" that dang dung cho radio. (Luu y: dung signed-merge de flash,
-	 * xem _fw_backup + build notes — flash app chua ky se bi mcuboot tu choi.) */
+	/* One-shot: timer fire chinh xac sau "ms" ms — dong bo voi radio interval
+	 * hien tai (900-1100ms). Timer auto-reload co dinh 500ms se ke o giua chu
+	 * ky radio va bat dau adv_stop/start nham, gay dong trung binh gap doi. */
 	k_timer_start(&s_seq_timer, K_MSEC(ms), K_NO_WAIT);
 
 	/* BLE unit = 0.625ms — cung don vi voi ESP-IDF, cong thuc doi giong het */
@@ -127,8 +123,7 @@ int bmt_beacon_start(void)
 {
 	k_work_init(&s_seq_work, seq_work_handler);
 
-	/* [FIX POWER] Timer one-shot, tu dat lai thoi gian trong
-	 * start_adv_random_interval() (khong con auto-reload 500ms co dinh). */
+	/* One-shot: chu ky dat lai trong start_adv_random_interval(). */
 	k_timer_init(&s_seq_timer, seq_timer_handler, NULL);
 
 	/* Bat dau advertise lan dau — ham nay tu k_timer_start() cho lan dau */
