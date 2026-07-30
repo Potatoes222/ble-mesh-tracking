@@ -6,18 +6,21 @@ Numeric tricks used by firmware and rule chain. Each has a code pointer.
 
 Where: `apps/scanner/components/bmt_tag_table/bmt_tag_table.c`.
 
-Raw RSSI is noisy. We smooth with a 1D Kalman filter, constants `q = 0.1`, `r = 2.0`.
+Raw RSSI is noisy. We smooth with a 1D Kalman filter. `q = 0.1` is a fixed process-noise constant. `r` is **adaptive**: seeded at `2.0`, updated each sample by an EMA of the measurement innovation squared (`BMT_KALMAN_R_ALPHA = 0.1`), clamped to `[BMT_KALMAN_R_MIN=1.0, BMT_KALMAN_R_MAX=20.0]`.
 
 Per sample:
 
 ```
-p = p + q
-k = p / (p + r)
-x = x + k * (rssi - x)
-p = (1 - k) * p
+innovation = rssi - x
+r_var = (1 - alpha) * r_var + alpha * innovation^2
+r     = clamp(r_var, R_MIN, R_MAX)
+p     = p + q
+k     = p / (p + r)
+x     = x + k * innovation
+p     = (1 - k) * p
 ```
 
-`x` is the smoothed value we send over mesh. Raise `r` to smooth harder, `q` to react faster.
+`x` is the smoothed value we send over mesh. Adaptive `r` filters harder when RSSI gets noisy (multipath, someone blocking the tag) and tracks new samples faster when RSSI is stable — no manual retuning per environment. The clamps prevent `k` from collapsing to 0 (frozen) or shooting to 1 (unfiltered) on a single outlier.
 
 ## 2. Distance from RSSI
 
