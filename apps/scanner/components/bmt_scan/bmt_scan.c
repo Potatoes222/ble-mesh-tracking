@@ -71,27 +71,23 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 					goto next_field;
 				if (!bmt_auth_verify_tag(p.minor, (uint8_t*)&p,
 				                         sizeof(p) - sizeof(p.mac16), p.mac16))
+				{
+					/* [TEST] Do ti le false-negative/false-accept HMAC (Chuong 5,
+					 * Test 6) — log lai tag_id + seq bi tu choi de sau grep dem.
+					 * Neu tag_id nam trong danh sach tag that dang test ma van
+					 * bi reject -> false-negative (nhieu RF lam sai 1 bit HMAC).
+					 * Neu tag_id la gia (beacon gia lap qua nRF Connect) ->
+					 * reject dung, tinh vao ty le chan gia mao thanh cong. */
+					ESP_LOGW(TAG, "[AUTH] reject tag_id=0x%04x seq=%u mac_rx=0x%04x",
+					         p.minor, p.sequence, p.mac16);
 					goto next_field;
+				}
 				/* Field truoc la major (PERSON/ASSET), gio la % pin 0-100 */
 				out->battery = (uint8_t)p.battery;
 				out->tag_id = p.minor;
 				out->tx_power = p.tx_power;
 				out->sequence = p.sequence;
 				out->mac16 = p.mac16;
-				return true;
-			}
-			if (cid == BMT_CID_APPLE && field_len >= 26 && adv_data[pos + 4] == 0x02 && adv_data[pos + 5] == 0x15)
-			{
-				uint16_t major = ((uint16_t)adv_data[pos + 22] << 8) | adv_data[pos + 23];
-				uint16_t minor = ((uint16_t)adv_data[pos + 24] << 8) | adv_data[pos + 25];
-				if (major != BMT_TAG_MAJOR_PERSON && major != BMT_TAG_MAJOR_ASSET)
-					goto next_field;
-				/* iPhone-as-tag khong bao % pin cua he thong -> 0 (unknown) */
-				out->battery = 0;
-				out->tag_id = minor | 0x8000;
-				out->tx_power = BMT_PHONE_TX_POWER_1M;
-				out->sequence = 0;
-				out->mac16 = 0;
 				return true;
 			}
 		}

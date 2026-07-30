@@ -34,10 +34,6 @@ typedef struct
 #define BMT_TAG_TYPE_PERSON 0x01
 #define BMT_TAG_TYPE_ASSET 0x02
 #define BMT_CID_ESPRESSIF 0x02E5
-#define BMT_CID_APPLE 0x004C
-#define BMT_TAG_MAJOR_PERSON 0x0001
-#define BMT_TAG_MAJOR_ASSET 0x0002
-#define BMT_PHONE_TX_POWER_1M (-59)
 
 #pragma pack(1)
 typedef struct
