@@ -125,7 +125,7 @@ Root folder: [tls/](../tls/)
 | File                             | Purpose                                                              |
 |----------------------------------|----------------------------------------------------------------------|
 | `ca.key`, `ca.pem`               | self-signed CA (keep the key private)                                |
-| `server.key`, `server.pem`       | server key + cert used by TB (SAN = `bmt-tb.local`)                  |
+| `server.key`, `server.pem`       | server key + cert used by TB (CN = SAN = `bmt-tb.local`)             |
 | `server.csr`, `server_ext.cnf`   | CSR + config used to sign the server cert                            |
 | `gen_certs.sh`                   | script to regenerate all of the above                                |
 
@@ -140,11 +140,11 @@ extern const uint8_t bmt_ca_pem_end[]   asm("_binary_ca_pem_end");
 
 Used to build `esp_mqtt_client_config_t` in [apps/gateway/components/bmt_mqtt/bmt_mqtt.c](../apps/gateway/components/bmt_mqtt/bmt_mqtt.c).
 
-#### 2. SAN vs IP Verification
+#### 2. CN vs IP Verification
 
-TB is reached by IP address (`BMT_TB_IP`), but the server certificate has `bmt-tb.local` in its SubjectAltName.
+TB is reached by IP address (`BMT_TB_IP`), but the server certificate has `bmt-tb.local` as both its Common Name and Subject Alternative Name.
 
-The MQTT client uses `broker.verification.common_name = BMT_TB_CN` to tell mbedTLS to verify against that name instead of the IP. If the IP changes, no cert change is needed. If the SAN changes, both the cert and `BMT_TB_CN` must move together.
+The MQTT client uses `broker.verification.common_name = BMT_TB_CN` to tell mbedTLS to verify against that name instead of the IP. The firmware checks CN (not SAN) because ESP-IDF `esp-tls` maps `common_name` to CN verification. If the IP changes, no cert change is needed. If the CN changes, both the cert and `BMT_TB_CN` must move together.
 
 #### 3. Regenerating Certificates
 

@@ -7,7 +7,7 @@ Run ThingsBoard CE on your own machine with Docker.
 - `docker-compose.yml` — ThingsBoard CE 3.7 and PostgreSQL.
 - `rulechain/` — rule chain exports (`ble_tag_zone_detection.json` plus backups).
 - `dashboard/indoor_tracking.json` — dashboard, ready to import.
-- `tls/` — CA and server certs (SAN `bmt-tb.local`).
+- `tls/` — CA and server certs (both CN and SAN = `bmt-tb.local`; firmware verifies CN).
 
 ## Steps
 
