@@ -14,3 +14,6 @@ Thumbs.db
 
 # Accidental drag-and-drop uploads
 *.zip
+
+# OTA payloads — build locally, CMake POST_BUILD copies them here
+firmware/*.bin
