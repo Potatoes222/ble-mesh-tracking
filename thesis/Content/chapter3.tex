@@ -145,7 +145,7 @@ trong đó:
     \item $r$: nhiễu quan sát (measurement noise), phản ánh độ nhiễu của phép đo.
 \end{itemize}
 
-Đề tài chọn $q = 0.1$, $r = 2.0$ theo~\cite{zhuang-kalman-ble}. Tăng $r$ lọc mượt hơn nhưng phản ứng chậm; tăng $q$ ngược lại.
+Đề tài chọn $q = 0.1$ cố định và \textbf{$r$ thích nghi} theo phương sai đo được: khởi tạo $r_0 = 2.0$ theo~\cite{zhuang-kalman-ble}, cập nhật liên tục bằng trung bình động số mũ $r_k = (1 - \alpha) r_{k-1} + \alpha (z_k - x_{k-1})^2$ với $\alpha = 0.1$, chặn trong $[1.0, 20.0]$ để tránh $K$ về 0 (đứng yên) hoặc về 1 (không lọc) khi gặp mẫu đột biến. Cơ chế thích nghi giúp lọc mạnh khi RSSI nhiễu (multipath, che khuất) và bám nhanh khi RSSI ổn định.
 
 \subsection{Ước lượng khoảng cách}
 
@@ -299,7 +299,7 @@ Ba cách kích hoạt OTA:
     \item \textbf{Broadcast beacon}: Gateway dùng NimBLE phát beacon (kèm HMAC) trong ~15~s. Mọi Scanner nghe và OTA song song. Nhanh hơn unicast qua mesh.
 
     \item \textbf{Unicast mesh}: cho Relay, Gateway gửi \texttt{OTA\_TRIGGER} 5 lần cách nhau 500~ms để đảm bảo nhận.
-\end{enumerate>
+\end{enumerate}
 
 OTA xong, node reboot; task \texttt{report\_pending\_task} phát hiện cờ pending trong NVS và gửi \texttt{OTA\_RESULT (status=0)} về Gateway.
 
@@ -319,7 +319,7 @@ Hai loại thực thể:
 \begin{itemize}
     \item \textbf{Broker}: máy chủ trung tâm nhận và định tuyến thông điệp. Đề tài dùng broker tích hợp trong ThingsBoard.
     \item \textbf{Client}: kết nối tới broker, \textit{publish} hoặc \textit{subscribe} thông điệp trên các \textit{topic}. Gateway là MQTT client.
-\end{itemize>
+\end{itemize}
 
 
 
@@ -345,9 +345,9 @@ HTTP là giao thức request-response phổ dụng nhất trên Internet. Đặc
     \item Client gửi \textit{request}: method (GET, POST, PUT, DELETE,\ldots), URL, headers, body tuỳ chọn.
     \item Server trả \textit{response}: status code (200, 404, 500,\ldots), headers, body.
     \item Stateless: mỗi request độc lập, không giữ session ở tầng giao thức.
-\end{itemize>
+\end{itemize}
 
-Đề tài dùng HTTP rất đơn giản: node gửi GET tới URL kiểu \texttt{https://192.168.1.10:8443/Scanner.bin}, server trả file \texttt{.bin}.
+Đề tài dùng HTTPS: node gửi GET tới URL kiểu \texttt{https://192.168.1.10:8443/Scanner.bin}, server trả file \texttt{.bin}.
 
 Với file lớn, HTTP có \textit{chunked transfer encoding}: server chia response thành nhiều chunk, gửi lần lượt, chunk rỗng cuối đánh dấu kết thúc. Cho phép streaming mà không cần biết trước tổng kích thước. \texttt{esp\_https\_ota} dùng chunked để tải firmware.
 
@@ -363,7 +363,7 @@ TLS là giao thức mã hoá kênh truyền, hiện dùng bản 1.2 và 1.3~\cit
     \item \textbf{Confidentiality}: dữ liệu mã hoá, kẻ nghe lén không đọc được.
     \item \textbf{Integrity}: mọi thay đổi giữa đường bị phát hiện (MAC).
     \item \textbf{Authentication}: xác thực danh tính server (và optional client) bằng chứng chỉ X.509.
-\end{itemize>
+\end{itemize}
 
 \textbf{Handshake TLS 1.2}:
 
@@ -373,7 +373,7 @@ TLS là giao thức mã hoá kênh truyền, hiện dùng bản 1.2 và 1.3~\cit
     \item Client xác minh cert dựa trên CA đã cấu hình.
     \item Hai bên trao đổi khoá (ECDHE hoặc RSA), tính khoá phiên chung.
     \item Handshake xong, dữ liệu ứng dụng đi trong kênh mã hoá.
-\end{enumerate>
+\end{enumerate}
 
 TLS 1.3 rút gọn handshake còn 1 round-trip, nhanh hơn đáng kể trên embedded.
 
@@ -392,14 +392,14 @@ Firmware embedded không có DNS resolver, chỉ kết nối theo IP. SAN đòi 
 \begin{itemize}
     \item Một self-signed CA (khoá + cert trong \texttt{thingsboard/tls/ca.pem} và \texttt{ca.key}).
     \item Một server cert do CA ký với CN \texttt{"bmt-tb.local"}.
-\end{itemize>
+\end{itemize}
 
 CA cert embed vào firmware ở hai chỗ:
 
 \begin{itemize}
     \item \texttt{apps/gateway/components/bmt\_mqtt/ca.pem}: cho MQTTS client.
     \item \texttt{components/bmt\_ota/ota\_ca.pem}: cho HTTPS OTA client (dùng ở cả 4 firmware).
-\end{itemize>
+\end{itemize}
 
 Regenerate cert phải cập nhật cả hai file, rồi reflash mọi node.
 
@@ -462,7 +462,7 @@ Các loại rule node hay dùng:
     \item \textit{Save Timeseries}: ghi vào bảng chuỗi thời gian.
     \item \textit{Save Attributes}: ghi thuộc tính (client-scope, server-scope hoặc shared).
     \item \textit{RPC Call}: gửi RPC tới device.
-\end{itemize>
+\end{itemize}
 
 Đề tài dùng hai Rule Chain: \texttt{ble\_tag\_zone\_detection} cho profile \texttt{ble\_tag} (chạy hysteresis + debounce đã nêu), và \texttt{ble\_mesh\_node\_ota} cho profile \texttt{ble\_mesh\_node} (lưu \texttt{ota\_result} vào attribute).
 

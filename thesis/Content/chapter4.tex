@@ -20,23 +20,22 @@ Tag chạy trên ESP32-S3, cấp bằng pin CR2032 hoặc Li-Ion 3.7~V. Nhiệm 
 
 \subsection{Cấu trúc gói ADV 24 byte}
 
-Payload manufacturer-specific trong khung ADV được tổ chức như Bảng~\ref{tab:tag-payload}, tổng 24 byte, gồm CID Espressif 0x02E5 (2 byte), UUID định danh tag (16 byte), major/minor (2+2 byte), \texttt{tx\_power} tại 1~m (1 byte), \texttt{sequence} chống replay (1 byte) và HMAC-16 (2 byte cuối). Định dạng cố định 24 byte cho phép scanner dùng \texttt{memcmp} để nhận diện beacon hợp lệ trong callback GAP mà không phải parse TLV.
+Struct \texttt{bmt\_tag\_adv\_payload\_t} có tổng \textbf{24 byte}, đặt trong trường manufacturer-specific data của khung ADV (khi phát, BLE stack tự thêm 2 byte Company ID Espressif \texttt{0x02E5} ở đầu, không tính vào struct). Bảng~\ref{tab:tag-payload} liệt kê offset trong struct. Định dạng cố định 24 byte cho phép scanner dùng \texttt{memcmp} để nhận diện beacon hợp lệ trong callback GAP mà không phải parse TLV.
 
 \begin{table}[htp]
     \centering
-    \caption{Layout payload ADV của Tag.}
+    \caption{Layout struct \texttt{bmt\_tag\_adv\_payload\_t} (24 byte).}
     \label{tab:tag-payload}
     \begin{tabular}{lll}
         \hline
         \textbf{Offset} & \textbf{Trường} & \textbf{Kích thước} \\
         \hline
-        0--1   & Company ID (Espressif 0x02E5) & 2 byte \\
-        2--17  & UUID (16 byte)                & 16 byte \\
-        18--19 & Major                          & 2 byte \\
-        20--21 & Minor                          & 2 byte \\
-        22     & tx\_power (RSSI 1~m)           & 1 byte \\
-        23     & Sequence number                & 1 byte \\
-        24--25 & HMAC-16 (2 byte cuối HMAC-SHA256) & 2 byte \\
+        0--15  & UUID hệ thống                     & 16 byte \\
+        16--17 & Major (PERSON=0x0001, ASSET=0x0002) & 2 byte \\
+        18--19 & Minor (tag ID)                     & 2 byte \\
+        20     & tx\_power (RSSI tại 1~m)          & 1 byte \\
+        21     & Sequence number (0--255, wrap)    & 1 byte \\
+        22--23 & HMAC-16 (2 byte cuối HMAC-SHA256) & 2 byte \\
         \hline
     \end{tabular}
 \end{table}
@@ -59,11 +58,11 @@ Scanner chạy trên ESP32 (không phải S3 vì đủ dùng, tiết kiệm chi 
 
 \subsection{Radio time-sharing GAP scan / mesh publish}
 
-BLE radio trên ESP32 là single-radio: không quét GAP và publish mesh đồng thời. Firmware chia radio theo duty cycle: \texttt{scan\_interval} 100~ms, \texttt{scan\_window} 80~ms, tức 80\% thời gian mở radio để nghe ADV, 20\% dành cho các hoạt động mesh (publish, receive, relay nếu enable). Duty cycle 80\% đủ cao để bắt gần hết beacon 500~ms từ tag nhưng vẫn để chỗ cho mesh không bị nghẽn.
+BLE radio trên ESP32 là single-radio: không quét GAP và publish mesh đồng thời. Firmware chia radio theo duty cycle: \texttt{scan\_interval} 50~ms (0x0050 BLE units), \texttt{scan\_window} 30~ms (0x0030 BLE units), tức 60\% thời gian mở radio để nghe ADV, 40\% dành cho các hoạt động mesh (publish, receive, relay nếu enable). Duty cycle 60\% đủ cao để bắt gần hết beacon 500~ms từ tag nhưng vẫn dư băng thông cho mesh mà không bị nghẽn.
 
 \subsection{Tag table và Kalman filter}
 
-Mỗi scanner giữ bảng nội bộ tối đa \texttt{BMT\_MAX\_TAGS = 20} entry. Mỗi entry chứa UUID, \texttt{last\_seq}, \texttt{last\_rssi\_raw}, trạng thái Kalman (\texttt{estimate}, \texttt{error\_cov}) và \texttt{last\_seen\_ms}. Lần đầu thấy một UUID mới, Kalman được khởi tạo bằng RSSI hiện tại và \texttt{error\_cov = 1.0}. Các lần sau, update theo công thức Kalman 1D với $q = 0.1$, $r = 2.0$ đã trình bày ở Chương~\ref{Chapter3}.
+Mỗi scanner giữ bảng nội bộ tối đa \texttt{BMT\_MAX\_TAGS = 20} entry. Mỗi entry chứa UUID, \texttt{last\_seq}, \texttt{last\_rssi\_raw}, trạng thái Kalman (\texttt{estimate}, \texttt{error\_cov}) và \texttt{last\_seen\_ms}. Lần đầu thấy một UUID mới, Kalman được khởi tạo bằng RSSI hiện tại và \texttt{error\_cov = 1.0}. Các lần sau, update theo công thức Kalman 1D với $q = 0.1$ cố định và $r$ thích nghi theo phương sai đo (chi tiết ở Chương~\ref{Chapter3}).
 
 Bảng nội bộ dùng mảng cố định (không cấp phát động) để tránh phân mảnh heap trên ESP32. 20 tag là biên trên hợp lý cho thí nghiệm quy mô căn hộ; vượt số đó, tag mới bị bỏ qua và log cảnh báo.
 
@@ -108,7 +107,7 @@ Khi phát hiện unprovisioned beacon, Gateway đọc 4 byte đầu UUID:
     \item Prefix khác: bỏ qua, không provision.
 \end{itemize}
 
-Không cần bấm nút trên gateway hay quét QR: cấp nguồn scanner/relay là chúng tự vào mesh. Điều này giảm rào cản triển khai ở hiện trường, nhất là khi có nhiều node.
+Không cần bấm nút trên gateway hay quét QR: cấp nguồn scanner/relay là chúng tự vào mesh. Giảm thao tác ở hiện trường khi triển khai nhiều node.
 
 \subsection{Config task chờ ACK APP\_KEY\_ADD và MODEL\_APP\_BIND}
 
@@ -116,7 +115,7 @@ Sau khi provisioning xong (assign địa chỉ và NetKey), gateway vẫn phải
 
 \subsection{Node table persist NVS}
 
-Gateway giữ mảng \texttt{bmt\_node\_t nodes[BMT\_MAX\_NODES]} với các trường: địa chỉ mesh, UUID gốc, kiểu (SCAN/RELAY), \texttt{config\_done}, \texttt{last\_seen\_ms}. Sau mỗi lần provision hoặc drop node, mảng được persist vào NVS qua \texttt{nvs\_set\_blob}. Khi khởi động lại, gateway load blob bằng \texttt{nvs\_get\_blob} và khôi phục lại state mesh mà không phải re-provision tất cả. Điều này quan trọng cho tự phục hồi sau mất điện: gateway boot lại, biết ngay đang có scanner nào ở đâu.
+Gateway giữ mảng \texttt{bmt\_node\_t nodes[BMT\_MAX\_NODES]} với các trường: địa chỉ mesh, UUID gốc, kiểu (SCAN/RELAY), \texttt{config\_done}, \texttt{last\_seen\_ms}. Sau mỗi lần provision hoặc drop node, mảng được persist vào NVS qua \texttt{nvs\_set\_blob}. Khi khởi động lại, gateway load blob bằng \texttt{nvs\_get\_blob} và khôi phục state mesh không cần re-provision. Nhờ vậy, sau mất điện gateway boot lại là biết ngay các scanner đang ở địa chỉ nào.
 
 \subsection{MQTT worker và hàng đợi tag report}
 
@@ -136,7 +135,7 @@ Gateway giám sát mesh có "còn sống" hay không qua counter số \texttt{TA
 \begin{enumerate}
     \item Sau boot, đợi 15~s để mesh stabilize (các node config xong, tag bắt đầu phát).
     \item Kiểm tra định kỳ 30~s: nếu 0 report trong 30~s trước đó và có ít nhất 1 scanner \texttt{config\_done}, watchdog fire.
-    \item Broadcast \texttt{RESET\_CMD} 5 lần cách 500~ms tới địa chỉ group \texttt{0xC000}, mỗi lần track \texttt{send\_ok}.
+    \item Broadcast \texttt{RESET\_CMD} 5 lần cách 500~ms tới địa chỉ all-nodes \texttt{0xFFFF}, mỗi lần track \texttt{send\_ok}.
     \item Nếu có ít nhất 1 lần \texttt{send\_ok}, gateway tự \texttt{nvs\_erase\_all} phân vùng \texttt{ble\_mesh}, xoá node table và reset. Cả mesh re-provision từ đầu.
 \end{enumerate}
 
