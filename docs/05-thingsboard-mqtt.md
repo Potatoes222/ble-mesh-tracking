@@ -63,7 +63,7 @@ Two containers: PostgreSQL for TB storage, and ThingsBoard CE 3.7.0. The followi
 | 8080 | HTTP     | TB Web UI (`http://<host>:8080`) |
 | 1883 | MQTT     | plaintext MQTT (test / fallback) |
 | 8883 | MQTTS    | MQTT over TLS 1.2 (production)   |
-| 7070 | Edge RPC | optional, not used by BMT        |
+| 7070 | Edge RPC | optional, not used here          |
 
 Start the stack:
 

@@ -1,6 +1,6 @@
 # Architecture
 
-BMT is a room-level indoor tracking system. It uses BLE Mesh for the radio, ESP32 and ESP32-S3 for the nodes, and ThingsBoard CE as the server.
+BLE Mesh Tracking is a room-level indoor tracking system. It uses BLE Mesh for the radio, ESP32 and ESP32-S3 for the nodes, and ThingsBoard CE as the server.
 
 ## Data flow
 
