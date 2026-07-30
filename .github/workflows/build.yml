@@ -1,0 +1,38 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'components/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'components/**'
+      - '.github/workflows/build.yml'
+
+jobs:
+  esp-idf:
+    name: ${{ matrix.app }} (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: gateway
+            target: esp32s3
+          - app: scanner
+            target: esp32
+          - app: relay
+            target: esp32s3
+          - app: tag
+            target: esp32s3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: latest
+          target: ${{ matrix.target }}
+          path: apps/${{ matrix.app }}
