@@ -67,7 +67,7 @@ docker compose ps          # 3 container "running": thingsboard, tb-postgres, bm
 docker compose logs -f tb  # thấy "Started ThingsboardServerApplication" là xong
 ```
 
-Container thứ 3 `bmt-ota-server` (nginx, cổng **8081**) tự phục vụ file firmware `.bin` từ thư mục `firmware/` của repo — **không cần** tự tay chạy `python -m http.server` mỗi lần OTA nữa. Build xong firmware mới chỉ việc copy `.bin` vào `firmware/` là các node tải được.
+Container thứ 3 `bmt-ota-server` (nginx, cổng **8443 HTTPS**) tự phục vụ file firmware `.bin` từ thư mục `firmware/` của repo — **không cần** tự tay chạy `python -m http.server` mỗi lần OTA nữa. Build xong firmware mới chỉ việc copy `.bin` vào `firmware/` là các node tải được.
 
 Vào **http://localhost:8080**, đăng nhập tenant mặc định:
 - User: `tenant@thingsboard.org`
@@ -153,7 +153,7 @@ Sửa `components/bmt_config/bmt_config.h` của từng app (trong `apps/gateway
 | `BMT_WIFI_SSID` / `BMT_WIFI_PASS` | Gateway, Scanner, Relay | WiFi 2.4GHz (ESP32 không bắt được 5GHz) |
 | `BMT_TB_IP` | Gateway | **IP LAN của máy chạy Docker** (xem bằng `ipconfig` — ví dụ `192.168.1.50`) |
 | `BMT_TB_GATEWAY_TOKEN` | Gateway | Token copy ở bước 4.2 |
-| `BMT_OTA_SCANNER_URL` v.v. | Gateway, Scanner, Relay | `http://<IP đó>:8081/<Tên>.bin` — cổng **8081** = server OTA tự động trong Docker (nginx, service `ota-fileserver`), KHÔNG dùng 8080 vì đó là Web UI của ThingsBoard |
+| `BMT_OTA_SCANNER_URL` v.v. | Gateway, Scanner, Relay | `https://<IP đó>:8443/<Tên>.bin` — cổng **8443** HTTPS = server OTA tự động trong Docker (nginx, service `ota-fileserver`), dùng chung self-signed CA với MQTTS. KHÔNG dùng 8080 vì đó là Web UI của ThingsBoard |
 
 **Tại sao IP phải sửa mà cert thì không?** IP nướng cứng trong firmware (thiết bị nhúng không có DNS nội bộ tin cậy), nên đổi máy server = build + flash lại Gateway. Cert thì verify theo CN nên giữ nguyên được. Tag không có WiFi — không phải sửa gì.
 
