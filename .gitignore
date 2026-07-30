@@ -11,3 +11,6 @@ dependencies.lock
 Thumbs.db
 *.swp
 *.swo
+
+# Accidental drag-and-drop uploads
+*.zip
