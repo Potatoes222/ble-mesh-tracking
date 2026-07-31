@@ -1,78 +1,89 @@
-# Hướng dẫn mở ThingsBoard (dùng hằng ngày)
+# ThingsBoard everyday operation
 
-> File này là guide vận hành nhanh. Cài đặt lần đầu từ số 0 (tạo profile, import rule chain, dashboard...) xem `thingsboard/SETUP.md`.
+> Quick-run guide. For the first-time setup from zero (create profiles,
+> import rule chain, import dashboard, etc.), see `thingsboard/SETUP.md`.
 
 ---
 
-## Cách 1 — Mở qua app Docker Desktop (dễ nhất, đang dùng)
+## Option 1 — Open through the Docker Desktop app (easiest)
 
-1. Mở app **Docker Desktop** (Start Menu gõ "Docker Desktop", hoặc icon ngoài desktop)
-   - Đường dẫn thật trên máy này: `C:\Users\ADMIN\AppData\Local\Programs\DockerDesktop\Docker Desktop.exe`
-2. Đợi icon cá voi ở góc taskbar hết chạy loading (~30–60s)
-3. **Không cần làm gì thêm** — 2 container `thingsboard` + `tb-postgres` tự khởi động lại theo restart policy
-4. Đợi thêm ~1–2 phút cho ThingsBoard boot xong → vào **http://localhost:8080**
+1. Open the **Docker Desktop** app (Start menu, type "Docker Desktop",
+   or use the desktop icon).
+2. Wait for the whale icon in the taskbar to stop spinning (~30-60 s).
+3. **Nothing else to do** — the two containers `thingsboard` and
+   `tb-postgres` auto-start via their restart policy.
+4. Give ThingsBoard another 1-2 minutes to boot, then open
+   **http://localhost:8080**.
 
-Trong app Docker Desktop, tab **Containers** phải thấy 2 dòng màu xanh:
+In the Docker Desktop app, the **Containers** tab should show two
+green rows:
+
 - `thingsboard` — Running
 - `tb-postgres` — Running
 
-Nếu container không tự chạy (hiếm): bấm nút ▶ (Start) ngay trên dòng đó trong app.
+If a container did not auto-start (rare): press ▶ (Start) on its row
+inside the app.
 
-## Cách 2 — Mở qua terminal (PowerShell / CMD)
+## Option 2 — Open from the terminal (PowerShell / CMD)
 
 ```powershell
-# Bật Docker Desktop nếu chưa chạy:
-Start-Process "C:\Users\ADMIN\AppData\Local\Programs\DockerDesktop\Docker Desktop.exe"
+# Start Docker Desktop if it is not already running:
+Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"
 
-# Đợi daemon sẵn sàng (lệnh này hết báo lỗi là được):
+# Wait for the daemon (this command should stop erroring):
 docker info
 
-# Bật ThingsBoard (chỉ cần khi container không tự chạy):
-cd g:\Thesis\thingsboard
+# Start ThingsBoard (only if the containers did not auto-start):
+cd <path>\thingsboard
 docker compose up -d
 ```
 
 ---
 
-## Địa chỉ truy cập
+## Access URLs
 
-| Cái gì | Địa chỉ |
+| What | Address |
 |---|---|
-| Web UI (dashboard) | http://localhost:8080 — máy khác trong LAN: http://192.168.2.23:8080 |
-| MQTTS (Gateway ESP32 kết nối vào) | `192.168.2.23:8883` (TLS) |
-| Đăng nhập tenant | `tenant@thingsboard.org` |
+| Web UI (dashboard) | http://localhost:8080 — from another LAN machine: `http://<host-ip>:8080` |
+| MQTTS (Gateway ESP32 connects here) | `<host-ip>:8883` (TLS) |
+| Tenant login | `tenant@thingsboard.org` |
 
-Gateway ESP32 **tự reconnect** khi ThingsBoard sống lại — không cần reset board.
+Gateway ESP32 **auto-reconnects** once ThingsBoard is back up — no
+board reset needed.
 
 ---
 
-## Lệnh hay dùng (chạy trong `g:\Thesis\thingsboard`)
+## Common commands (run inside your `thingsboard/` directory)
 
 ```powershell
-docker compose ps           # xem trạng thái
-docker compose logs -f tb   # xem log ThingsBoard realtime (Ctrl+C thoát)
-docker compose stop         # tắt tạm (GIỮ dữ liệu)
-docker compose start        # bật lại
-docker compose restart      # khởi động lại (khi TB đơ)
+docker compose ps           # status of the containers
+docker compose logs -f tb   # live ThingsBoard log (Ctrl+C to exit)
+docker compose stop         # stop (KEEPS the data)
+docker compose start        # start again
+docker compose restart      # restart (when TB is stuck)
 ```
 
-> ⚠️ **TUYỆT ĐỐI không chạy `docker compose down -v`** — cờ `-v` xoá volume = mất sạch database (device, rule chain, dashboard, toàn bộ telemetry). `down` không có `-v` thì an toàn.
+> **NEVER run `docker compose down -v`** — the `-v` flag wipes the
+> volume, which erases the database (devices, rule chain, dashboard,
+> every telemetry row). `down` without `-v` is safe.
 
 ---
 
-## Lỗi thường gặp
+## Common problems
 
-| Triệu chứng | Nguyên nhân | Xử lý |
+| Symptom | Cause | Fix |
 |---|---|---|
-| Serial Gateway báo `esp-tls: select() timeout` + `MQTT disconnected` | ThingsBoard đang tắt (Docker chưa chạy) | Mở Docker Desktop, đợi 2 phút — Gateway tự nối lại |
-| `docker: failed to connect to the docker API...` | Docker Desktop chưa bật | Mở app Docker Desktop trước, rồi mới gõ lệnh docker |
-| Web 8080 quay mãi không lên | TB đang boot (nhất là sau khi bật máy) | Đợi 1–2 phút, xem tiến độ: `docker compose logs -f tb` |
-| Dashboard không có dữ liệu mới nhưng web vẫn vào được | Gateway mất WiFi/MQTT hoặc mesh chết | Xem serial Gateway: gõ `3` (thống kê MQTT/mesh), `1` (bảng node) |
+| Gateway serial prints `esp-tls: select() timeout` + `MQTT disconnected` | ThingsBoard is down (Docker not running) | Open Docker Desktop, wait 2 minutes — the Gateway reconnects on its own |
+| `docker: failed to connect to the docker API...` | Docker Desktop is not running | Launch Docker Desktop first, then run docker commands |
+| Web UI on 8080 spins forever | TB is still booting (especially just after power-on) | Wait 1-2 minutes; watch progress with `docker compose logs -f tb` |
+| Dashboard has no new data but the web UI works | Gateway lost WiFi / MQTT, or the mesh died | Check the Gateway serial: press `3` (MQTT / mesh stats), `1` (node table) |
 
 ---
 
-## Mẹo: tự động hoàn toàn
+## Tip: full auto-start
 
-Docker Desktop → ⚙️ **Settings → General → tick "Start Docker Desktop when you sign in"**
+Docker Desktop -> **Settings -> General -> tick "Start Docker Desktop
+when you sign in"**.
 
-Từ đó: bật máy → Docker tự chạy → ThingsBoard tự sống → Gateway tự kết nối. Không phải mở gì bằng tay nữa.
+After that: power on the machine -> Docker starts -> ThingsBoard comes
+up -> Gateway reconnects. Nothing to launch by hand.

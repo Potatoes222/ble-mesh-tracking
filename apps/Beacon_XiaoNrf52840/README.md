@@ -1,10 +1,11 @@
 # Beacon — XIAO nRF52840 (Seeed Studio)
 
-Firmware BLE beacon cho tag, ban danh cho board **Seeed XIAO nRF52840**.
+BLE beacon tag firmware for the **Seeed XIAO nRF52840** board.
 
-Ban song song: [`../Beacon_ProMicroNrf52840`](../Beacon_ProMicroNrf52840) cho board
-ProMicro/nice!nano v2. **Logic beacon/auth giong het nhau**, chi khac phan phu
-thuoc phan cung (dia chi partition, cach doc pin, cau hinh nguon).
+Sister app: [`../Beacon_ProMicroNrf52840`](../Beacon_ProMicroNrf52840)
+for the ProMicro / nice!nano v2 board. **The beacon and auth logic is
+identical byte-for-byte**; only the hardware-dependent parts differ
+(partition layout, battery-read path, power configuration).
 
 ---
 
@@ -16,72 +17,78 @@ west build -b xiao_ble/nrf52840 -d build . --pristine
 
 ---
 
-## 2. Flash — DOC KY PHAN NAY
+## 2. Flash — READ THIS SECTION CAREFULLY
 
-Bootloader la **MCUboot** (verify chu ky ECDSA-P256). **KHONG duoc flash thang
-file `zephyr.uf2` cua app** — do la ban **CHUA KY**, MCUboot se tu choi va board
-khong bao gio boot len app.
+The bootloader is **MCUboot** with ECDSA-P256 signature verification.
+**Do NOT flash the app's raw `zephyr.uf2`** — that file is **UNSIGNED**;
+MCUboot silently rejects it and the board never boots the app.
 
-Trieu chung khi flash nham file chua ky (rat de hieu nham la "board hong"):
+Symptoms of flashing an unsigned file (easy to mistake for "board is
+dead"):
 
-- Drive `XIAO-SENSE` bien mat binh thuong sau khi copy (tuong nhu thanh cong)
-- **Nhung khong co COM port cua app**, khong phat BLE, khong log gi ca
-- Ly do khong co log: `mcuboot.conf` da tat console cua bootloader nen no tu
-  choi app trong im lang
+- The `XIAO-SENSE` drive disappears normally after copy (looks like
+  a successful flash).
+- **But no app COM port appears**, no BLE, no log at all.
+- Reason for the silence: `mcuboot.conf` disables the bootloader's
+  console, so it rejects the app without printing anything.
 
-> Loi nay da lam mat nhieu gio debug ngay 24-25/07/2026. Da tung nghi oan cho:
-> code timer, viec disable SPI2, build incremental, va ca phan cung board.
-
-### Cach dung
+### How to flash
 
 ```powershell
 .\make_uf2.ps1
 ```
 
-Script tao `tag_Xiao_SIGNED.uf2`. Sau do:
+The script produces `tag_Xiao_SIGNED.uf2`. Then:
 
-1. **Double-tap nut RESET** de vao bootloader.
-2. Drive `XIAO-SENSE` hien len -> copy file `.uf2` vao.
-3. Drive tu bien mat = board da reset va dang chay firmware.
-4. Kiem tra: co COM port moi hien ra + nRF Connect thay `Test beacon`.
+1. **Double-tap RESET** to enter the bootloader.
+2. The `XIAO-SENSE` drive appears -> copy the `.uf2` onto it.
+3. The drive disappears on its own = the board reset and is now
+   running the firmware.
+4. Verify: a new COM port shows up + `Test beacon` is visible in
+   nRF Connect.
 
-### Tu kiem tra file truoc khi flash
+### Sanity-check the file before flashing
 
-| Dau hieu | Dung | Sai |
+| Check | Correct | Wrong |
 |---|---|---|
-| Kich thuoc | ~329 KB (gop) | ~270 KB (chi app, chua ky) |
-| Dia chi block dau | `0x27000` (MCUboot) | `0x33000` (app) |
+| File size | ~329 KB (merged) | ~270 KB (app only, unsigned) |
+| First data block address | `0x27000` (MCUboot) | `0x33000` (app) |
 
-### Neu board khong boot / bootloader "lo do"
+### If the board does not boot / the bootloader is stuck
 
-Neu drive khong bien mat sau khi copy, hoac double-tap khong an: **cat nguon
-hoan toan** (rut USB **va** thao pin) ~10s roi cam lai. Reset am (double-tap)
-khong xoa duoc trang thai ket cua bootloader; chi cold-boot moi xoa duoc.
+If the drive does not disappear after copy, or double-tap does not
+work: **cut power completely** (unplug USB **and** disconnect the
+battery) for ~10 s, then reconnect. A soft reset (double-tap) does
+not clear the bootloader's stuck state; only a cold boot does.
 
 ---
 
-## 3. File firmware da luu
+## 3. Saved firmware files
 
-| File | Noi dung |
+| File | Contents |
 |---|---|
-| `_fw_backup/tag_WORKING_v5equiv_SIGNED.uf2` | **Ban an toan** — chay duoc chac chan (tuong duong v5, chua toi uu timer) |
-| `tag_OPTIMIZED_SIGNED.uf2` | Ban toi uu (timer fix + tat SPI2) — da xac nhan boot OK |
+| `_fw_backup/tag_WORKING_v5equiv_SIGNED.uf2` | **Safe baseline** — guaranteed to boot (equivalent to v5, no timer optimisation) |
+| `tag_OPTIMIZED_SIGNED.uf2` | Optimised build (timer fix + SPI2 disabled) — verified to boot |
 
-Cac file `tag_v5rebuild_*.uf2` la ban trung gian luc debug, **khong dung de
-flash** (ban `_app`/`_mcuboot` la file roi chua ky).
+Files named `tag_v5rebuild_*.uf2` are intermediate debug builds.
+**Do not flash them** (the `_app` / `_mcuboot` files are the raw
+unsigned pieces).
 
 ---
 
-## 4. Trang thai phan cung (25/07/2026)
+## 4. Hardware status (as of 2026-07-25)
 
-> **Board XIAO hien tai da HONG IC sac (BQ25101).** Trieu chung: den LED sac
-> sang lien tuc sai ca khi chi cam pin lan chi cam USB, board tu nong len, do
-> duoc dong ro bat thuong ~88 mA (binh thuong chi ~12-20 µA).
+> **The current XIAO board has a BLOWN CHARGER IC (BQ25101).** Symptoms:
+> the charge LED is on constantly whether powered by battery only or by
+> USB only, the board heats up on its own, and abnormally high current
+> is measured (~88 mA vs the expected ~12-20 uA).
 >
-> Nguyen nhan: do dong tren duong BAT+ **trong khi USB van dang cam** — luc do
-> IC sac dang bom dong sac qua dung duong dang do, gay qua tai lam hong die.
+> Cause: current was measured on the BAT+ rail **while USB was still
+> connected** — the charger IC was pushing charge current through the
+> same wire being measured, overloading and destroying the die.
 >
-> **BAI HOC: luon rut USB truoc khi cam dong ho do dong vao duong pin.**
+> **LESSON: always unplug USB before wiring a multimeter into the
+> battery rail.**
 >
-> Board nay khong nen cam nguon (ca pin lan USB) cho den khi thay duoc IC sac.
-> Cong viec da chuyen sang board ProMicro.
+> This board should not be powered (by battery or USB) until the
+> charger IC is replaced. Development has moved to the ProMicro board.
