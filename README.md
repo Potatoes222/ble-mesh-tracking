@@ -63,19 +63,33 @@ Shared code (relay and scanner OTA) lives at repo root under `components/bmt_ota
 
 ## Data flow
 
-```text
-[Tag BLE Beacon]
-      |  BLE ADV (HMAC-16, key rotates every 24h)
-      v
-[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32-S3]  --BLE Mesh-->  [Gateway ESP32-S3]
- reads RSSI                         forwards only                  provisioner + WiFi
-                                                                        |  MQTTS
-                                                                        v
-                                                              [ThingsBoard CE]
-                                                               Rule chain picks a room
-                                                                        |
-                                                                        v
-                                                              [Indoor Tracking dashboard]
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'18px','primaryColor':'#1565c0','primaryTextColor':'#ffffff','primaryBorderColor':'#0d47a1','lineColor':'#90a4ae','signalColor':'#ffc107','signalTextColor':'#ffc107','actorBkg':'#1565c0','actorBorder':'#0d47a1','actorTextColor':'#ffffff','actorLineColor':'#90caf9','noteBkgColor':'#fff59d','noteTextColor':'#000000','noteBorderColor':'#f57f17','activationBkgColor':'#66bb6a','activationBorderColor':'#2e7d32','sequenceNumberColor':'#ffffff','loopTextColor':'#ffc107','labelBoxBkgColor':'#37474f','labelBoxBorderColor':'#90a4ae','labelTextColor':'#ffffff'},'sequence':{'actorMargin':90,'messageFontSize':16,'noteFontSize':14,'actorFontSize':16,'boxMargin':12,'boxTextMargin':6,'noteMargin':10,'useMaxWidth':true}}}%%
+sequenceDiagram
+    autonumber
+    participant T as Tag<br/>(ESP32-S3)
+    participant S as Scanner<br/>(ESP32 x3)
+    participant R as Relay<br/>(ESP32-S3)
+    participant G as Gateway<br/>(ESP32-S3)
+    participant TB as ThingsBoard CE<br/>(Docker)
+    participant D as Dashboard
+
+    loop Every 500 ms
+        T->>S: BLE ADV 24 B<br/>UUID + seq + HMAC-16
+    end
+    Note over T,S: Signed with epoch key<br/>(master + hour, rotates every 1 h)
+
+    S->>S: Verify HMAC<br/>Kalman filter RSSI (adaptive R)
+    S->>R: BLE Mesh<br/>vendor opcode TAG_STATUS
+    R->>G: Forward at Network Layer<br/>(no app-layer processing)
+    G->>G: Enqueue to MQTT worker<br/>(64-slot queue)
+    G->>TB: MQTTS port 8883<br/>v1/gateway/telemetry<br/>{tag_id, rssi_filtered, scanner_id}
+
+    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse and map zone<br/>2) fetch tag state<br/>3) hysteresis 8 dBm<br/>4) debounce 2 confirms
+
+    TB->>TB: Save attribute<br/>current_zone = "room_1"
+    TB-->>D: WebSocket push<br/>attribute update
+    D->>D: Highlight room<br/>on floor plan
 ```
 
 ## License
