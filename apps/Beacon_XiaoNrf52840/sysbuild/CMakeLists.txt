@@ -1,17 +1,20 @@
-# [SECURITY] Copy cua zephyr/share/sysbuild/template/CMakeLists.txt.
+# [SECURITY] Copy of zephyr/share/sysbuild/template/CMakeLists.txt.
 #
-# MCUboot chay nhu 1 Zephyr app RIENG (khong phai app "beacon" chinh), nen no
-# KHONG tu doc boards/xiao_ble_nrf52840.overlay cua app beacon. Phai truyen
-# tay overlay do vao build cua MCUboot qua bien CMake mcuboot_EXTRA_DTC_OVERLAY_FILE
-# TRUOC khi find_package(Sysbuild) chay (no la thu tao ra target "mcuboot").
+# MCUboot runs as its own Zephyr app (separate from the "beacon" app),
+# so it does NOT automatically read boards/xiao_ble_nrf52840.overlay
+# from the beacon app. Pass that overlay into the MCUboot build
+# explicitly via the CMake variable mcuboot_EXTRA_DTC_OVERLAY_FILE
+# BEFORE find_package(Sysbuild) runs (that call creates the "mcuboot"
+# target).
 set(mcuboot_EXTRA_DTC_OVERLAY_FILE
     ${CMAKE_CURRENT_LIST_DIR}/../boards/mcuboot_partitions.overlay
     CACHE INTERNAL ""
 )
 
-# Board mac dinh chon USB CDC-ACM lam console, nhung MCUboot khong bat USB
-# stack -> link error "undefined reference to __device_dts_ord_N". MCUboot
-# khong can console (chi verify + boot), xem mcuboot.conf.
+# The board's default serial backend is USB CDC-ACM, but MCUboot does
+# not enable the USB stack -> link error "undefined reference to
+# __device_dts_ord_N". MCUboot has no need for a console (just verify
+# and boot), see mcuboot.conf.
 set(mcuboot_EXTRA_CONF_FILE
     ${CMAKE_CURRENT_LIST_DIR}/../mcuboot.conf
     CACHE INTERNAL ""

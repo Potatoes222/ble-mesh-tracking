@@ -19,8 +19,9 @@ static void bt_ready(int err)
 	}
 	LOG_INF("Bluetooth initialized");
 
-	/* PHAI goi truoc bmt_beacon_start() — beacon can HMAC key da san sang
-	 * de tinh mac16 cho goi ADV dau tien. */
+	/* MUST be called before bmt_beacon_start() — the beacon needs
+	 * the HMAC key ready so it can compute mac16 for the very
+	 * first ADV. */
 	bmt_auth_init();
 
 	err = bmt_beacon_start();
@@ -36,7 +37,8 @@ int main(void)
 {
 	printk("=== BMT Tag (nRF52840) starting ===\n");
 
-	/* Doc pin khong lien quan BLE, khoi dong doc lap voi bt_enable */
+	/* Battery reading has nothing to do with BLE, start it in
+	 * parallel with bt_enable. */
 	int batt_err = bmt_battery_init();
 	if (batt_err)
 	{

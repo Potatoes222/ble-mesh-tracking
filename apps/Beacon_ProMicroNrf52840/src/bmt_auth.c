@@ -8,31 +8,34 @@
 
 LOG_MODULE_REGISTER(bmt_auth, LOG_LEVEL_INF);
 
-/* [SECURITY] Master key — KHONG con dung truc tiep de ky payload. Dung de
- * derive 1 key rieng cho tung epoch (xoay vong theo thoi gian, "TOTP-style"
- * receiver-less — Tag khong co mesh/WiFi nen khong the nhan key rotate day
- * xuong nhu OTA-beacon key ben Scanner). Neu key nay bi doc trom tu flash,
- * ke tan cong van phai tu tinh lai epoch key hien hanh — khong the "replay
- * mai mai" 1 key tinh duy nhat.
- * PHAI GIONG HET BMT_TAG_MASTER_KEY ben ESP32 Tag (khong duoc lech 1 byte). */
+/* [SECURITY] Master key — NOT used directly to sign the payload. It
+ * derives a separate key per epoch (rotated over time, TOTP-style,
+ * receiver-less: Tag has no mesh / WiFi, so it cannot receive a
+ * pushed rotation like the OTA-beacon key does on Scanner). If this
+ * key is stolen from flash, the attacker still has to recompute the
+ * current epoch key — they cannot "replay a single static key
+ * forever".
+ * MUST match BMT_TAG_MASTER_KEY on the ESP32 Tag byte-for-byte. */
 static const uint8_t BMT_TAG_MASTER_KEY[16] = {
     0x2C, 0x5C, 0xBE, 0x42, 0x87, 0xAE, 0x95, 0x4A,
     0xDE, 0xEE, 0x0C, 0x6C, 0x8B, 0x74, 0x9C, 0x45};
 
-/* Epoch tick = 1h. Tag KHONG co RTC/WiFi nen epoch la bo dem CUC BO tinh tu
- * luc boot (k_uptime_get(), khong phai wall-clock) — reset ve 0 moi lan mat
- * nguon (thay pin CR2032). Scanner xu ly lech nay bang windowed resync.
- * PHAI GIONG HET gia tri o Scanner (ESP32). */
+/* Epoch tick = 1 h. Tag has no RTC / WiFi, so the epoch is a LOCAL
+ * counter measured from boot (k_uptime_get(), not wall-clock) —
+ * resets to 0 on every power loss (CR2032 swap). Scanner deals with
+ * the drift via windowed resync. MUST match the value on the
+ * Scanner (ESP32). */
 #define BMT_EPOCH_TICK_SEC 3600
 
 static psa_key_id_t s_master_key_id = 0;
 static psa_key_id_t s_epoch_key_id = 0;
-static uint16_t s_cached_epoch = 0xFFFF; /* gia tri khong hop le -> ep derive lan dau */
+static uint16_t s_cached_epoch = 0xFFFF; /* invalid value -> forces derivation on first use */
 
 static uint16_t current_epoch(void)
 {
-	/* k_uptime_get() tra ve mili-giay (int64_t) tu luc boot — khac
-	 * esp_timer_get_time() cua ESP-IDF (micro-giay), can chinh he so. */
+	/* k_uptime_get() returns milliseconds (int64_t) since boot —
+	 * different from ESP-IDF's esp_timer_get_time() which is
+	 * microseconds. Adjust the scale factor accordingly. */
 	return (uint16_t)(k_uptime_get() / (1000LL * BMT_EPOCH_TICK_SEC));
 }
 

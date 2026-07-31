@@ -1,21 +1,24 @@
-# [SECURITY] Copy cua zephyr/share/sysbuild/template/CMakeLists.txt.
+# [SECURITY] Copy of zephyr/share/sysbuild/template/CMakeLists.txt.
 #
-# MCUboot chay nhu 1 Zephyr app RIENG (khong phai app "beacon" chinh), nen no
-# KHONG tu doc boards/promicro_nrf52840_nrf52840_uf2.overlay cua app beacon.
-# Phai truyen tay overlay partition rieng cho MCUboot qua bien CMake
-# mcuboot_EXTRA_DTC_OVERLAY_FILE TRUOC khi find_package(Sysbuild) chay (no la
-# thu tao ra target "mcuboot").
+# MCUboot runs as its own Zephyr app (separate from the "beacon" app),
+# so it does NOT automatically read boards/promicro_nrf52840_nrf52840_uf2.overlay
+# from the beacon app. Pass the MCUboot-specific partition overlay
+# explicitly via the CMake variable mcuboot_EXTRA_DTC_OVERLAY_FILE
+# BEFORE find_package(Sysbuild) runs (that call creates the "mcuboot"
+# target).
 #
-# LUU Y: partition o ban ProMicro bat dau tu 0x26000 (KHAC ban XIAO la
-# 0x27000) — xem giai thich trong boards/promicro_nrf52840_nrf52840_uf2.overlay.
+# NOTE: partitions on the ProMicro variant start at 0x26000 (different
+# from XIAO at 0x27000) — see the explanation in
+# boards/promicro_nrf52840_nrf52840_uf2.overlay.
 set(mcuboot_EXTRA_DTC_OVERLAY_FILE
     ${CMAKE_CURRENT_LIST_DIR}/../boards/mcuboot_partitions.overlay
     CACHE INTERNAL ""
 )
 
-# Board mac dinh chon USB CDC-ACM lam console, nhung MCUboot khong bat USB
-# stack -> link error "undefined reference to __device_dts_ord_N". MCUboot
-# khong can console (chi verify + boot), xem mcuboot.conf.
+# The board's default serial backend is USB CDC-ACM, but MCUboot does
+# not enable the USB stack -> link error "undefined reference to
+# __device_dts_ord_N". MCUboot has no need for a console (just verify
+# and boot), see mcuboot.conf.
 set(mcuboot_EXTRA_CONF_FILE
     ${CMAKE_CURRENT_LIST_DIR}/../mcuboot.conf
     CACHE INTERNAL ""

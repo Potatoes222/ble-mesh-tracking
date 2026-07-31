@@ -11,11 +11,13 @@
 
 LOG_MODULE_REGISTER(bmt_main, LOG_LEVEL_INF);
 
-/* [POWER] Cong tac mem cat nguon ra chan VCC ngoai (P0.13) — xem giai thich
- * day du trong boards/promicro_nrf52840_nrf52840_uf2.overlay.
- * Tom tat: nhanh VCC 3.3V dua ra ngoai mac dinh LUON CO DIEN (Zephyr khong
- * khai bao chan dieu khien nen no o trang thai reset), ton ~1mA du app khong
- * cap nguon cho thiet bi ngoai nao. */
+/* [POWER] Soft switch that cuts power to the external VCC pin
+ * (P0.13) — full explanation in
+ * boards/promicro_nrf52840_nrf52840_uf2.overlay.
+ * Summary: the 3.3 V branch routed to the external pin is powered
+ * by default (Zephyr does not declare a control pin, so it stays
+ * in its reset state), wasting ~1 mA even when the app powers
+ * nothing external. */
 static const struct gpio_dt_spec ext_vcc =
     GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), ext_vcc_gpios);
 
@@ -23,20 +25,20 @@ static void ext_vcc_off(void)
 {
 	if (!gpio_is_ready_dt(&ext_vcc))
 	{
-		LOG_ERR("ext-vcc GPIO chua san sang");
+		LOG_ERR("ext-vcc GPIO not ready");
 		return;
 	}
 
-	/* INACTIVE + active-high = drive LOW = tat MOSFET.
-	 * An toan cho MCU: MOSFET nay chi nam tren duong ra chan VCC ngoai,
-	 * ban than nRF52840 an nguon rieng qua VDDH. */
+	/* INACTIVE + active-high = drive LOW = MOSFET off.
+	 * Safe for the MCU: this MOSFET only sits on the external VCC
+	 * rail; the nRF52840 itself is powered separately via VDDH. */
 	int err = gpio_pin_configure_dt(&ext_vcc, GPIO_OUTPUT_INACTIVE);
 	if (err)
 	{
-		LOG_ERR("Tat VCC ngoai that bai (err %d)", err);
+		LOG_ERR("Failed to turn off external VCC (err %d)", err);
 		return;
 	}
-	LOG_INF("Da tat nguon ra chan VCC ngoai (P0.13)");
+	LOG_INF("External VCC pin (P0.13) turned off");
 }
 
 static void bt_ready(int err)
@@ -48,8 +50,9 @@ static void bt_ready(int err)
 	}
 	LOG_INF("Bluetooth initialized");
 
-	/* PHAI goi truoc bmt_beacon_start() — beacon can HMAC key da san sang
-	 * de tinh mac16 cho goi ADV dau tien. */
+	/* MUST be called before bmt_beacon_start() — the beacon needs
+	 * the HMAC key ready so it can compute mac16 for the very
+	 * first ADV. */
 	bmt_auth_init();
 
 	err = bmt_beacon_start();
@@ -65,10 +68,12 @@ int main(void)
 {
 	printk("=== BMT Tag (nRF52840) starting ===\n");
 
-	/* Lam SOM NHAT co the — moi ms tre la ngan do dien chay phi tren nhanh VCC */
+	/* As EARLY as possible — every millisecond of delay lets current
+	 * waste on the external VCC rail. */
 	ext_vcc_off();
 
-	/* Doc pin khong lien quan BLE, khoi dong doc lap voi bt_enable */
+	/* Battery reading has nothing to do with BLE, start it in
+	 * parallel with bt_enable. */
 	int batt_err = bmt_battery_init();
 	if (batt_err)
 	{

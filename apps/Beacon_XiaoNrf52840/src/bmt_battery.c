@@ -9,37 +9,43 @@
 
 LOG_MODULE_REGISTER(bmt_battery, LOG_LEVEL_INF);
 
-/* [POWER] Doc pin cho duong BAT+/BAT- (LIR2032 3.6V hoac LiPo).
+/* [POWER] Read the battery over the BAT+ / BAT- rail (LIR2032 3.6 V
+ * or LiPo).
  *
- * Vi sao KHONG do VDD noi: khi pin di qua BAT+ -> bo dieu ap on-board,
- * VDD bi ghim ~3.3V bat ke pin dang 4.2V hay 3.4V -> do VDD vo nghia.
- * Phai doc dien ap tai node BAT+ qua bo chia ap on-board 1M/510k dua
- * ra chan P0.31 (AIN7). Cong thuc + tri so dien tro tham khao thu vien
- * cong dong Tjoms99/xiao_sense_nrf52840_battery_lib (da verify tren HW).
+ * Why NOT read VDD directly: when the cell feeds through the
+ * on-board regulator, VDD is pinned at ~3.3 V regardless of whether
+ * the cell is at 4.2 V or 3.4 V — so reading VDD tells us nothing
+ * useful. Read the voltage at the BAT+ node through the on-board
+ * 1M/510k divider brought out to P0.31 (AIN7). Formula and resistor
+ * values follow the Tjoms99/xiao_sense_nrf52840_battery_lib
+ * community library (verified on real hardware).
  *
- * (Neu sau nay quay lai CR2032 cap thang 3V3 thi doi lai thanh do
- * NRF_SAADC_VDD trong overlay + bo phan chia ap o day — 2 duong nguon
- * khac nhau, 2 cach do khac nhau.) */
+ * (If later switching back to a CR2032 wired straight to 3V3,
+ * change this to read NRF_SAADC_VDD in the overlay and drop the
+ * divider — different supply, different measurement path.) */
 static const struct adc_dt_spec battery_adc = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 
-/* Bo chia ap on-board: BAT+ --[R1]-- P0.31 --[R2]-- (P0.14 keo GND).
- * V_bat = V_adc * (R1 + R2) / R2. Tri so danh dinh 1M/510k; R1 lay 1037k
- * theo hieu chinh thuc te cua thu vien tham khao (sai so dien tro). Neu
- * muon chinh xac hon nua: do V_bat that bang VOM roi tinh lai R1. */
+/* On-board divider: BAT+ --[R1]-- P0.31 --[R2]-- (P0.14 pulls GND).
+ * V_bat = V_adc * (R1 + R2) / R2. Nominal 1M / 510k; R1 is set to
+ * 1037k per the empirical calibration from the reference library
+ * (resistor tolerance). For higher accuracy, measure real V_bat
+ * with a DMM and recompute R1. */
 #define BMT_BATT_R1_KOHM 1037
 #define BMT_BATT_R2_KOHM 510
 
-/* P0.14 = VBAT_ENABLE (active-low): keo LOW de dong bo chia ap vao mach
- * do. P0.17 = charge status (LOW khi dang sac). */
+/* P0.14 = VBAT_ENABLE (active-low): drive LOW to close the divider
+ * into the measurement path.
+ * P0.17 = charge status (LOW while charging). */
 static const struct device* gpio0 = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 #define BMT_BATT_ENABLE_PIN 14
 #define BMT_BATT_CHARGE_STAT_PIN 17
 
-/* Bang tra dien ap -> % cho Li-ion (LIR2032/LiPo). Duong cong SoC-vs-ap
- * cua Li-ion PHI TUYEN manh, khong the dung 1 cong thuc tuyen tinh -> tra
- * bang + noi suy giua 2 diem. Moc 4200mV=100% (day), 3300mV=0% (nguong an
- * toan toi thieu, duoi nua hong pin). Tham khao Tjoms99 lib + Nordic SoC
- * blog. */
+/* Voltage -> percent lookup for Li-ion (LIR2032 / LiPo). The Li-ion
+ * SoC-vs-voltage curve is strongly non-linear, so a single linear
+ * formula would be wrong across the range — use a table and
+ * interpolate between adjacent points. 4200 mV = 100% (full),
+ * 3300 mV = 0% (safe cutoff; below this the cell degrades).
+ * Curve from the Tjoms99 library and the Nordic SoC blog. */
 typedef struct
 {
 	uint16_t mv;
@@ -66,8 +72,9 @@ static const batt_point_t BATT_CURVE[] = {
 static struct k_timer batt_log_timer;
 static struct k_work batt_log_work;
 
-/* % pin cache — beacon doc cai nay nhet vao payload (khong doc ADC moi goi ADV).
- * Cap nhat boi work handler (30s) + 1 lan dong bo trong init. */
+/* Cached % — the beacon reads this and embeds it in each ADV
+ * (instead of hitting the ADC per packet). Refreshed by the work
+ * handler (30 s) and once synchronously during init. */
 static uint8_t s_last_percent = 0;
 
 uint8_t bmt_battery_last_percent(void)
@@ -105,7 +112,7 @@ int bmt_battery_read_mv(void)
 		return err;
 	}
 
-	/* Nhan nguoc lai ti so chia ap de ra dien ap pin that tai BAT+ */
+	/* Reverse the divider ratio to recover the real BAT+ voltage. */
 	int32_t vbat = (adc_mv * (BMT_BATT_R1_KOHM + BMT_BATT_R2_KOHM)) / BMT_BATT_R2_KOHM;
 	return vbat;
 }
@@ -123,7 +130,7 @@ uint8_t bmt_battery_percent(int mv)
 		uint16_t lo = BATT_CURVE[i + 1].mv;
 		if (mv <= hi && mv >= lo)
 		{
-			/* Noi suy tuyen tinh giua 2 diem lan can */
+			/* Linear interpolation between the two adjacent points. */
 			int pct_hi = BATT_CURVE[i].pct;
 			int pct_lo = BATT_CURVE[i + 1].pct;
 			return (uint8_t)(pct_lo + ((mv - lo) * (pct_hi - pct_lo)) / (hi - lo));
@@ -134,7 +141,7 @@ uint8_t bmt_battery_percent(int mv)
 
 bool bmt_battery_is_charging(void)
 {
-	/* P0.17 LOW = dang sac (chip sac keo xuong) */
+	/* P0.17 LOW = charging (charger IC pulls it down). */
 	return gpio_pin_get(gpio0, BMT_BATT_CHARGE_STAT_PIN) == 0;
 }
 
@@ -155,7 +162,8 @@ static void batt_log_work_handler(struct k_work* work)
 
 static void batt_log_timer_handler(struct k_timer* timer)
 {
-	/* k_timer callback chay ISR context, adc_read block -> day sang workqueue */
+	/* k_timer callback runs in ISR context; adc_read may block,
+	 * so hand it off to the workqueue. */
 	ARG_UNUSED(timer);
 	k_work_submit(&batt_log_work);
 }
@@ -168,10 +176,11 @@ int bmt_battery_init(void)
 		return -ENODEV;
 	}
 
-	/* P0.14 VBAT_ENABLE active-low: OUTPUT_ACTIVE -> keo LOW -> dong bo
-	 * chia ap vao mach do. Giu LOW ca doi (xem ghi chu overlay) — KHONG
-	 * duoc de HIGH (du chi mot phan thoi gian), Seeed canh bao chinh thuc
-	 * P0.31 co the vot qua gioi han dien ap neu P0.14 o muc HIGH. */
+	/* P0.14 VBAT_ENABLE active-low: OUTPUT_ACTIVE -> drive LOW ->
+	 * close the divider into the measurement path. Keep LOW for
+	 * the whole lifetime (see the overlay note) — MUST NOT be
+	 * HIGH (even briefly): Seeed officially warns that P0.31 can
+	 * overshoot the ADC input limit when P0.14 is HIGH. */
 	int err = gpio_pin_configure(gpio0, BMT_BATT_ENABLE_PIN,
 	                             GPIO_OUTPUT_ACTIVE | GPIO_ACTIVE_LOW);
 	if (err < 0)
@@ -180,7 +189,7 @@ int bmt_battery_init(void)
 		return err;
 	}
 
-	/* P0.17 charge-status: INPUT de doc trang thai sac */
+	/* P0.17 charge-status: INPUT to read the charge state. */
 	err = gpio_pin_configure(gpio0, BMT_BATT_CHARGE_STAT_PIN, GPIO_INPUT);
 	if (err < 0)
 	{
@@ -203,8 +212,9 @@ int bmt_battery_init(void)
 
 	LOG_INF("Battery ADC (BAT+ on-board divider) ready");
 
-	/* Doc dong bo 1 lan de s_last_percent co gia tri hop le TRUOC khi beacon
-	 * bat dau phat (beacon build_adv_data doc bmt_battery_last_percent). */
+	/* Synchronous read once so s_last_percent has a valid value
+	 * BEFORE the beacon starts advertising (build_adv_data reads
+	 * bmt_battery_last_percent). */
 	int mv0 = bmt_battery_read_mv();
 	if (mv0 >= 0)
 		s_last_percent = bmt_battery_percent(mv0);
@@ -214,7 +224,7 @@ int bmt_battery_init(void)
 	k_timer_start(&batt_log_timer, K_SECONDS(BMT_BATT_LOG_INTERVAL_SEC),
 	              K_SECONDS(BMT_BATT_LOG_INTERVAL_SEC));
 
-	/* Doc + in ngay 1 lan luc khoi dong */
+	/* Print once at boot as well. */
 	k_work_submit(&batt_log_work);
 
 	return 0;

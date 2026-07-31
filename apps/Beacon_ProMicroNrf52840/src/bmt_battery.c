@@ -8,19 +8,23 @@
 
 LOG_MODULE_REGISTER(bmt_battery, LOG_LEVEL_INF);
 
-/* Pin noi THANG vao VDDH cua nRF52840 (nice!nano v2 high-voltage mode). Doc
- * qua VDDHDIV5 noi bo cua SAADC — khong can chia ap ngoai va khong can GPIO
- * enable (khac ban XIAO dung P0.31 + P0.14). */
+/* Battery wires directly into nRF52840's VDDH (nice!nano v2
+ * high-voltage mode). Read via the SAADC's internal VDDHDIV5 —
+ * no external divider and no GPIO enable needed (unlike XIAO,
+ * which needs P0.31 + P0.14). */
 static const struct adc_dt_spec battery_adc = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 
-/* VDDHDIV5: gia tri doc duoc = VDDH / 5 -> nhan lai 5 de ra dien ap pin that.
- * (Thay cho cong thuc (R1+R2)/R2 cua bo chia ap ngoai ben XIAO.) */
+/* VDDHDIV5: raw reading = VDDH / 5, so multiply by 5 to recover the
+ * actual battery voltage. Replaces the (R1+R2)/R2 external-divider
+ * ratio used on XIAO. */
 #define BMT_BATT_VDDH_DIVIDER 5
 
-/* Bang tra dien ap -> % cho Li-ion/LiPo. Duong cong SoC-vs-ap cua Li-ion PHI
- * TUYEN manh, khong the dung 1 cong thuc tuyen tinh -> tra bang + noi suy giua
- * 2 diem. Moc 4200mV=100% (day), 3300mV=0% (nguong an toan toi thieu, duoi nua
- * hong pin). GIU NGUYEN y het ban XIAO — cung hoa hoc pin, duong cong khong doi. */
+/* Voltage -> percent lookup for Li-ion / LiPo. The Li-ion SoC-vs-
+ * voltage curve is strongly non-linear, so a single linear formula
+ * would be wrong across the range — use a table and interpolate
+ * between adjacent points. 4200 mV = 100% (full), 3300 mV = 0%
+ * (safe lower cutoff; below this the cell degrades). Identical to
+ * the XIAO variant — same battery chemistry, same curve. */
 typedef struct
 {
 	uint16_t mv;
@@ -47,8 +51,9 @@ static const batt_point_t BATT_CURVE[] = {
 static struct k_timer batt_log_timer;
 static struct k_work batt_log_work;
 
-/* % pin cache — beacon doc cai nay nhet vao payload (khong doc ADC moi goi ADV).
- * Cap nhat boi work handler (30s) + 1 lan dong bo trong init. */
+/* Cached % — the beacon reads this and embeds it in each ADV
+ * (instead of hitting the ADC per packet). Refreshed by the work
+ * handler (30 s) and once synchronously during init. */
 static uint8_t s_last_percent = 0;
 
 uint8_t bmt_battery_last_percent(void)
@@ -86,7 +91,7 @@ int bmt_battery_read_mv(void)
 		return err;
 	}
 
-	/* Nhan lai he so cua VDDHDIV5 de ra dien ap pin that tai VDDH */
+	/* Multiply by the VDDHDIV5 ratio to recover the real VDDH voltage. */
 	return adc_mv * BMT_BATT_VDDH_DIVIDER;
 }
 
@@ -103,7 +108,7 @@ uint8_t bmt_battery_percent(int mv)
 		uint16_t lo = BATT_CURVE[i + 1].mv;
 		if (mv <= hi && mv >= lo)
 		{
-			/* Noi suy tuyen tinh giua 2 diem lan can */
+			/* Linear interpolation between the two adjacent points. */
 			int pct_hi = BATT_CURVE[i].pct;
 			int pct_lo = BATT_CURVE[i + 1].pct;
 			return (uint8_t)(pct_lo + ((mv - lo) * (pct_hi - pct_lo)) / (hi - lo));
@@ -114,12 +119,14 @@ uint8_t bmt_battery_percent(int mv)
 
 bool bmt_battery_is_charging(void)
 {
-	/* Board nay KHONG dua chan bao sac (~CHG cua IC sac) ra GPIO nao doc
-	 * duoc — khac XIAO (co P0.17). Tra false de giu API chung voi ban XIAO.
+	/* This board does NOT route the charger IC's ~CHG pin to any
+	 * readable GPIO — unlike XIAO (P0.17). Return false to keep the
+	 * API parity with the XIAO variant.
 	 *
-	 * Neu sau nay can biet co dang sac hay khong: co the suy gian tiep tu
-	 * chinh VDDH — khi cam USB, VDDH bi keo len ~5V, cao hon han muc pin
-	 * day 4.2V. Chua lam vi chua co board that de xac minh nguong. */
+	 * Could be inferred indirectly from VDDH itself: when USB is
+	 * connected, VDDH climbs to ~5 V, well above a full battery
+	 * (4.2 V). Not implemented — need a real board to calibrate
+	 * the threshold first. */
 	return false;
 }
 
@@ -139,7 +146,8 @@ static void batt_log_work_handler(struct k_work* work)
 
 static void batt_log_timer_handler(struct k_timer* timer)
 {
-	/* k_timer callback chay ISR context, adc_read block -> day sang workqueue */
+	/* k_timer callback runs in ISR context; adc_read may block,
+	 * so hand it off to the workqueue. */
 	ARG_UNUSED(timer);
 	k_work_submit(&batt_log_work);
 }
@@ -159,10 +167,11 @@ int bmt_battery_init(void)
 		return err;
 	}
 
-	LOG_INF("Battery ADC (VDDHDIV5 noi bo) ready");
+	LOG_INF("Battery ADC (internal VDDHDIV5) ready");
 
-	/* Doc dong bo 1 lan de s_last_percent co gia tri hop le TRUOC khi beacon
-	 * bat dau phat (beacon build_adv_data doc bmt_battery_last_percent). */
+	/* Synchronous read once so s_last_percent has a valid value
+	 * BEFORE the beacon starts advertising (build_adv_data reads
+	 * bmt_battery_last_percent). */
 	int mv0 = bmt_battery_read_mv();
 	if (mv0 >= 0)
 		s_last_percent = bmt_battery_percent(mv0);
@@ -172,7 +181,7 @@ int bmt_battery_init(void)
 	k_timer_start(&batt_log_timer, K_SECONDS(BMT_BATT_LOG_INTERVAL_SEC),
 	              K_SECONDS(BMT_BATT_LOG_INTERVAL_SEC));
 
-	/* Doc + in ngay 1 lan luc khoi dong */
+	/* Print once at boot as well. */
 	k_work_submit(&batt_log_work);
 
 	return 0;
