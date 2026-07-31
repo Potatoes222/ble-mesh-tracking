@@ -18,7 +18,7 @@ Before `git commit`:
 ## Pre-commit docs
 
 - [ ] No emoji or icon characters. Sanity check: `grep -Pn "[\x{1F300}-\x{1FAFF}]" docs/ README.md` returns nothing.
-- [ ] No AI-style phrasing (`In this section we will explore how...`, `robust and elegant solution...`).
+- [ ] No filler or marketing phrasing (`In this section we will explore how...`, `robust and elegant solution...`). Direct sentences only.
 - [ ] Links to other docs use the numbered filenames (`01-architecture.md`, not `architecture.md`).
 - [ ] Any new algorithm has a code pointer (file + function).
 - [ ] Any UART command mentioned exists in [08-uart-commands.md](08-uart-commands.md).
