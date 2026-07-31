@@ -1,14 +1,14 @@
 # ThingsBoard CE setup for BMT (self-hosted, MQTTS)
 
-Local README for the `thingsboard/` directory. Full step-by-step guide with troubleshooting is in [../docs/04-thingsboard-setup.md](../docs/04-thingsboard-setup.md).
+Directory-local README for `thingsboard/`. Condensed English setup below — for the full step-by-step with troubleshooting see [../docs/04-thingsboard-setup.md](../docs/04-thingsboard-setup.md); for the full Vietnamese deployment walkthrough see [import.md](import.md); for daily operations (start/stop) see [Thingboards.md](Thingboards.md).
 
 ## Folder contents
 
 ```
-docker-compose.yml  — ThingsBoard CE 3.7 + PostgreSQL
+docker-compose.yml  — ThingsBoard CE 3.7 + PostgreSQL + nginx OTA (port 8443)
 dashboard/          — dashboard export, ready to import (6 widgets, includes OTA panel)
 rulechain/          — rule chain exports (zone hysteresis + OTA attribute persist)
-tls/                — CA + server cert (dev bundle, SAN = bmt-tb.local)
+tls/                — CA + server cert (dev bundle, CN + SAN both = bmt-tb.local; firmware verifies CN)
 ```
 
 ## Manual UI steps
