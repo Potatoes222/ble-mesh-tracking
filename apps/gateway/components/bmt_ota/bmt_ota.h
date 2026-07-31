@@ -10,7 +10,8 @@ esp_err_t bmt_ota_trigger_all_scanners(void);
 
 bool bmt_ota_is_running(void);
 
-/* Gọi 1 lần lúc boot (main.c), trước khi UART/RPC có thể trigger OTA scanner */
+/* Call once at boot (from main.c), before UART or RPC can trigger a
+ * scanner OTA. */
 void bmt_ota_beacon_key_init(void);
 void bmt_ota_start_auto_check(void);
 void bmt_ota_start_key_rotation(void);

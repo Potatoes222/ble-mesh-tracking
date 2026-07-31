@@ -40,8 +40,9 @@ static const char* TAG = "BMT_MESH";
 static uint16_t s_net_key_idx = 0x0000;
 static uint16_t s_app_key_idx = 0x0000;
 
-/* Sinh random lúc first-boot bởi bmt_mesh_generate_keys_if_needed(),
- * sau đó mesh stack tự lưu vào NVS nội bộ — KHÔNG phải "const" vì được ghi runtime. */
+/* Randomised at first boot by bmt_mesh_generate_keys_if_needed(); the
+ * mesh stack then persists them in its own NVS. NOT const because
+ * written at runtime. */
 static uint8_t s_net_key[16];
 static uint8_t s_app_key[16];
 
@@ -398,7 +399,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 		{
 			n->is_relay = true;
 			n->is_scan = false;
-			n->config_done = false; /* chờ relay_config_task hoàn tất */
+			n->config_done = false; /* wait for relay_config_task to finish */
 			snprintf(n->name, sizeof(n->name), "Relay_0x%04x", addr);
 			ESP_LOGI(TAG, "Node 0x%04x = RELAY, launching config task...", addr);
 			bmt_node_table_save();
@@ -492,8 +493,9 @@ static void cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
 	ESP_LOGI(TAG, "Config server event: %d", event);
 }
 
-/* Increment s_mesh_received khi nhận TAG_STATUS từ scanner — counter
- * ở tầng BLE Mesh, watchdog dùng để phân biệt "mesh chết" vs "chỉ MQTT chết" */
+/* Increment s_mesh_received when a TAG_STATUS is received from a
+ * scanner. This counter is at the BLE Mesh layer; the watchdog uses it
+ * to tell "mesh dead" apart from "only MQTT dead". */
 static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
                           esp_ble_mesh_model_cb_param_t* param)
 {
@@ -552,8 +554,9 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 		return;
 	}
 
-	/* Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
-	 * trước đây không biết được kết quả thật. */
+	/* Node reports its own OTA result — replaces the earlier
+	 * "fire-and-wait-fixed-time" approach that never actually learned
+	 * whether the update succeeded. */
 	if (opcode == BMT_OP_VND_OTA_RESULT)
 	{
 		if (len < sizeof(bmt_ota_result_t))

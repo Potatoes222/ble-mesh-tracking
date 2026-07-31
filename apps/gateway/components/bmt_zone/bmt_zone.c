@@ -59,7 +59,7 @@ bmt_tag_track_t* bmt_zone_track_get_or_add(uint16_t tag_id, uint8_t battery)
 	bmt_tag_track_t* t = bmt_zone_track_find(tag_id);
 	if (t)
 	{
-		t->battery = battery; /* cap nhat % pin moi lan bao cao */
+		t->battery = battery; /* refresh battery % on every report */
 		return t;
 	}
 	for (int i = 0; i < BMT_MAX_TRACKED_TAGS; i++)
@@ -107,7 +107,7 @@ void bmt_zone_log_tracked(void)
 		if (!t->active)
 			continue;
 		any = true;
-		printf("Tag 0x%04x (pin %u%%)\n", t->tag_id, t->battery);
+		printf("Tag 0x%04x (battery %u%%)\n", t->tag_id, t->battery);
 		printf("  Zone       : %s (0x%02x)\n", bmt_zone_name(t->current_zone_id), t->current_zone_id);
 		if (t->last_zone_change_ms > 0)
 			printf("  Zone since : %" PRIu32 "s ago\n", (now - t->last_zone_change_ms) / 1000);
