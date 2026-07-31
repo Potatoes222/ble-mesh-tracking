@@ -1,5 +1,5 @@
 #pragma once
 
-/* Khởi tạo WiFi STA, block cho tới khi kết nối xong (portMAX_DELAY) — Gateway
- * cần WiFi thường trực cho MQTT/ThingsBoard nên không cần timeout ở đây. */
+/* Initialise WiFi STA and block until connected (portMAX_DELAY). Gateway
+ * needs WiFi permanently up for MQTT / ThingsBoard, so no timeout here. */
 void bmt_wifi_init(void);

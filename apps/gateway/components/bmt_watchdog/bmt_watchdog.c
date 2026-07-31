@@ -88,8 +88,8 @@ static void data_watchdog_task(void* arg)
 
 		if (sent_ok == 0)
 		{
-			ESP_LOGE(TAG, "RESET_CMD that bai ca %d lan — mesh/radio co ve chua san sang, "
-			              "retry sau %ds",
+			ESP_LOGE(TAG, "RESET_CMD failed all %d attempts — mesh/radio not ready, "
+			              "retry after %ds",
 			         BMT_WDG_RESET_TRIES, BMT_WDG_TIMEOUT_MS / 1000);
 			continue;
 		}
