@@ -7,19 +7,20 @@
 #define BMT_VND_MODEL_ID 0x0000
 
 #define BMT_OP_VND_TAG_STATUS ESP_BLE_MESH_MODEL_OP_3(0x00, BMT_CID_ESP)
-#define BMT_OP_VND_OTA_TRIGGER ESP_BLE_MESH_MODEL_OP_3(0x06, BMT_CID_ESP) /* lệnh bật WiFi OTA */
+#define BMT_OP_VND_OTA_TRIGGER ESP_BLE_MESH_MODEL_OP_3(0x06, BMT_CID_ESP) /* WiFi OTA command */
 #define BMT_OP_VND_RESET_CMD ESP_BLE_MESH_MODEL_OP_3(0x05, BMT_CID_ESP)
-#define BMT_OP_VND_OTA_RESULT ESP_BLE_MESH_MODEL_OP_3(0x07, BMT_CID_ESP)   /* báo cáo OTA thành công/thất bại về Gateway */
-#define BMT_OP_VND_OTA_KEY_PUSH ESP_BLE_MESH_MODEL_OP_3(0x08, BMT_CID_ESP) /* [SECURITY] key HMAC beacon moi tu Gateway, da duoc mesh AppKey ma hoa */
+#define BMT_OP_VND_OTA_RESULT ESP_BLE_MESH_MODEL_OP_3(0x07, BMT_CID_ESP)   /* reports OTA success/failure back to Gateway */
+#define BMT_OP_VND_OTA_KEY_PUSH ESP_BLE_MESH_MODEL_OP_3(0x08, BMT_CID_ESP) /* [SECURITY] new HMAC beacon key from Gateway, already encrypted by mesh AppKey */
 
-#define BMT_NODE_TYPE 0x01 /* scanner (dùng để lọc target trong OTA-beacon) */
+#define BMT_NODE_TYPE 0x01 /* scanner (used to filter the target in the OTA-beacon) */
 
 #pragma pack(1)
 typedef struct
 {
 	uint8_t scanner_id;
-	uint8_t battery; /* % pin cua tag (0-100). Truoc day la tag_type PERSON/ASSET,
-	                  * da bo — giu nguyen vi tri/kich thuoc de mesh msg khong doi. */
+	uint8_t battery; /* tag battery % (0-100). Was tag_type PERSON/ASSET,
+	                  * removed — position and size kept so the mesh
+	                  * message layout does not change. */
 	uint16_t tag_id;
 	int8_t rssi;
 	int16_t distance_dm;
@@ -28,7 +29,7 @@ typedef struct
 
 typedef struct
 {
-	uint8_t status; /* 0 = OTA thành công, khác 0 = thất bại */
+	uint8_t status; /* 0 = OTA success, non-zero = failure */
 } bmt_ota_result_t;
 #pragma pack()
 #define BMT_TAG_TYPE_PERSON 0x01
@@ -43,7 +44,7 @@ typedef struct
 typedef struct
 {
 	uint8_t uuid[16];
-	uint16_t battery; /* Truoc la major (PERSON/ASSET), gio la % pin 0-100 */
+	uint16_t battery; /* Was major (PERSON/ASSET); now battery % 0-100. */
 	uint16_t minor;
 	int8_t tx_power;
 	uint8_t sequence;
@@ -52,7 +53,7 @@ typedef struct
 
 typedef struct
 {
-	uint8_t battery; /* % pin tag (0-100), truoc la tag_type */
+	uint8_t battery; /* tag battery % (0-100). Was tag_type before. */
 	uint16_t tag_id;
 	int8_t tx_power;
 	uint8_t sequence;

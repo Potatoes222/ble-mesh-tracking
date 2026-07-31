@@ -140,8 +140,9 @@ void bmt_tag_table_update(int idx, int8_t rssi, uint8_t sequence, uint8_t batter
 
 	int8_t diff = (int8_t)(sequence - t->last_sequence);
 
-	/* [SECURITY] Anti-replay lớp 1: loại bỏ gói lùi lại gần đây trong cửa sổ
-	 * nhỏ (đến trễ do overlap kênh quảng cáo, hoặc replay 1 gói vừa capture) */
+	/* [SECURITY] Anti-replay layer 1: drop small-backward-jump packets
+	 * (either late arrivals from adv-channel overlap, or a replay of a
+	 * packet that was just captured). */
 	if (diff < 0 && diff > -10)
 		return;
 

@@ -2,6 +2,7 @@
 
 #include "esp_err.h"
 
-/* Đăng ký GAP callback, cấu hình scan params, khởi động radio_manager_task
- * (time-division GAP scan / mesh publish) và timeout_check_task */
+/* Register the GAP callback, configure scan params, start the
+ * radio_manager_task (time-division between GAP scan and mesh publish)
+ * and the timeout_check_task. */
 esp_err_t bmt_scan_start(void);

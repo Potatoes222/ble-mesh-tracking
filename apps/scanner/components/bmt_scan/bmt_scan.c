@@ -24,7 +24,7 @@ static uint16_t s_last_ota_beacon_mac = 0;
 static int64_t s_last_ota_beacon_us = -((int64_t)BMT_OTA_BEACON_COOLDOWN_US);
 #define BMT_GAP_SCAN_DURATION_MS 800
 #define BMT_MESH_PUBLISH_DURATION_MS 700
-/* Scan window < interval → chừa khe cho mesh bearer RX nhận ANNOUNCE
+/* Scan window < interval -> leave a gap for the mesh bearer to RX ANNOUNCE
  * window=0x30 (30ms), interval=0x50 (50ms) → 60% duty, 40% cho mesh */
 #define BMT_SCAN_INTERVAL_UNITS 0x0050
 #define BMT_SCAN_WINDOW_UNITS 0x0030
@@ -220,7 +220,7 @@ static void radio_manager_task(void* arg)
 
 	while (1)
 	{
-		/* OTA active: dừng GAP scan để WiFi OTA có toàn bộ radio */
+		/* OTA active: stop GAP scan so WiFi OTA gets the whole radio. */
 		if (bmt_ota_is_triggered())
 		{
 			if (s_phase == PHASE_GAP_SCAN)
