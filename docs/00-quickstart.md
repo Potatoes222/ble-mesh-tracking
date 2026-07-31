@@ -8,8 +8,9 @@ Common flow first, then OS-specific notes. Assumes you have a workstation on the
 - Docker (Desktop on Windows, native on Linux).
 - Python 3.
 - Git.
-- 1x ESP32-S3 (gateway) and 5x ESP32 (3 scanners, 1 relay, 1 tag).
+- **3x ESP32-S3** (gateway + relay + tag) and **3x ESP32** (3 scanners). Six boards total. See the hardware table in the [README](../README.md#hardware) for the reasoning behind the split (S3 for BLE + WiFi coexistence on gateway/relay/tag; plain ESP32 is enough for the scanner role).
 - One USB-serial cable per board.
+- Optional: 1x nRF52840 board (nice!nano v2, XIAO BLE Sense) if you want to run the coin-cell battery Beacon variant of the tag — see [14-nrf52840-beacon.md](14-nrf52840-beacon.md).
 
 ## 1. Clone
 
