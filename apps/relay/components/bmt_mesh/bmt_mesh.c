@@ -50,7 +50,8 @@ static esp_ble_mesh_cfg_srv_t s_cfg_server = {
     .default_ttl = 7,
 };
 
-/* Vendor server model — nhận RESET_CMD/OTA_TRIGGER, publish OTA_RESULT */
+/* Vendor server model — receives RESET_CMD / OTA_TRIGGER and
+ * publishes OTA_RESULT. */
 ESP_BLE_MESH_MODEL_PUB_DEFINE(s_vnd_pub, sizeof(bmt_ota_result_t) + 4, ROLE_NODE);
 
 static esp_ble_mesh_model_op_t s_vnd_ops[] = {

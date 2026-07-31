@@ -5,7 +5,7 @@
 
 typedef struct
 {
-	const char* url;                 /* URL .bin trên OTA HTTP server */
+	const char* url;                 /* URL of the .bin on the OTA HTTP server */
 	const char* wifi_ssid;           /* SSID WiFi (dung cho OTA) */
 	const char* wifi_pass;           /* Password WiFi */
 	const char* nvs_namespace;       /* Namespace NVS de luu co "OTA vua thanh cong, doi bao Gateway" */

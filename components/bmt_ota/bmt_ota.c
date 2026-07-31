@@ -18,7 +18,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 
-#include "bmt_mesh.h" /* bmt_mesh_report_ota_result — mỗi app tự có */
+#include "bmt_mesh.h" /* bmt_mesh_report_ota_result — provided by each app */
 
 static const char* TAG = "BMT_OTA";
 

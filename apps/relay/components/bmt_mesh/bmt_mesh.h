@@ -17,8 +17,10 @@ uint16_t bmt_mesh_net_idx(void);
 uint16_t bmt_mesh_app_idx(void);
 bool bmt_mesh_relay_enabled(void);
 
-/* Báo cáo kết quả OTA (0=thành công, khác 0=thất bại) về Gateway qua mesh */
+/* Report an OTA result back to the Gateway over mesh
+ * (0 = success, non-zero = failure). */
 esp_err_t bmt_mesh_report_ota_result(uint8_t status);
 
-/* Reset mesh provisioning (dùng cho lệnh UART 'r' và RESET_CMD nhận từ Gateway) */
+/* Reset mesh provisioning (used by UART 'r' and by RESET_CMD from
+ * the Gateway). */
 void bmt_mesh_local_reset(void);
