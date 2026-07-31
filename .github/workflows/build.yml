@@ -6,14 +6,27 @@ on:
     paths:
       - 'apps/**'
       - 'components/**'
+      - 'tests/**'
       - '.github/workflows/build.yml'
   pull_request:
     paths:
       - 'apps/**'
       - 'components/**'
+      - 'tests/**'
       - '.github/workflows/build.yml'
 
 jobs:
+  reference-tests:
+    name: reference tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pytest
+      - run: pytest tests/ -v
+
   esp-idf:
     name: esp-idf / ${{ matrix.app }} (${{ matrix.target }})
     runs-on: ubuntu-latest

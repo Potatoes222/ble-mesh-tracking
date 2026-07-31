@@ -17,3 +17,5 @@ Thumbs.db
 
 # OTA payloads — build locally, CMake POST_BUILD copies them here
 firmware/*.bin
+__pycache__/
+*.pyc
