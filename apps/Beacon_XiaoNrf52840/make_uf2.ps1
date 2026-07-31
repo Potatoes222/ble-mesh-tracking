@@ -11,14 +11,18 @@
 
 $ErrorActionPreference = "Stop"
 
-$Toolchain = "C:\ncs\toolchains\dcbdc366a1"
-$Py        = "$Toolchain\opt\bin\python.exe"
-$Uf2Conv   = "G:\Nrf_SDK\v3.4.0\zephyr\scripts\build\uf2conv.py"
+# Requires the Zephyr / nRF Connect SDK environment to be activated first
+# (so ZEPHYR_BASE is set and `python` + `intelhex` are on PATH). Typical:
+#   & "$env:USERPROFILE\ncs\vX.Y.Z\zephyr\zephyr-env.ps1"
+if (-not $env:ZEPHYR_BASE) {
+    throw "ZEPHYR_BASE not set. Activate your Zephyr environment before running this script."
+}
+
+$Py        = "python"
+$Uf2Conv   = "$env:ZEPHYR_BASE\scripts\build\uf2conv.py"
 $Proj      = $PSScriptRoot
 $Family    = "0xADA52840"                # nRF52840 - Adafruit UF2 family ID
 $OutUf2    = "$Proj\tag_Xiao_SIGNED.uf2"
-
-$env:PYTHONPATH = "$Toolchain\opt\bin;$Toolchain\opt\bin\Lib;$Toolchain\opt\bin\Lib\site-packages"
 
 # Ten thu muc domain trong build/ = ten thu muc project (sysbuild dat theo do).
 $AppDomain = Split-Path $Proj -Leaf
