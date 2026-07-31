@@ -38,6 +38,7 @@ New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
 | [docs/11-checklist.md](docs/11-checklist.md) | Pre-commit, pre-release, deployment checklists. |
 | [docs/12-changelog.md](docs/12-changelog.md) | Change log. |
 | [docs/13-secure-boot.md](docs/13-secure-boot.md) | Secure Boot V2 and Flash Encryption: concept, fleet signing key, first-flash caveats. |
+| [docs/14-nrf52840-beacon.md](docs/14-nrf52840-beacon.md) | Optional coin-cell tag variant on nRF52840 (ProMicro / XIAO). Build via Zephyr / west. |
 
 ## Hardware
 
