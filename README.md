@@ -68,28 +68,39 @@ Shared code (relay and scanner OTA) lives at repo root under `components/bmt_ota
 sequenceDiagram
     autonumber
     participant T as Tag<br/>(ESP32-S3)
-    participant S as Scanner<br/>(ESP32 x3)
-    participant R as Relay<br/>(ESP32-S3)
-    participant G as Gateway<br/>(ESP32-S3)
+    participant S as Scanner<br/>(ESP32)
+    participant R as Relay<br/>(ESP32-S3, optional hop)
+    participant G as Gateway<br/>(ESP32-S3, addr 0x0001)
     participant TB as ThingsBoard CE<br/>(Docker)
-    participant D as Dashboard
+    participant D as Dashboard<br/>(browser)
 
     loop Every 500 ms
-        T->>S: BLE ADV 24 B<br/>UUID + seq + HMAC-16
+        T->>S: BLE ADV 24 B<br/>UUID + major + minor + tx_power + seq + HMAC-16
     end
-    Note over T,S: Signed with epoch key<br/>(master + hour, rotates every 1 h)
+    Note over T,S: HMAC key derived from<br/>master + epoch (1 h, TOTP-style)
 
-    S->>S: Verify HMAC<br/>Kalman filter RSSI (adaptive R)
-    S->>R: BLE Mesh<br/>vendor opcode TAG_STATUS
-    R->>G: Forward at Network Layer<br/>(no app-layer processing)
-    G->>G: Enqueue to MQTT worker<br/>(64-slot queue)
-    G->>TB: MQTTS port 8883<br/>v1/gateway/telemetry<br/>{tag_id, rssi_filtered, scanner_id}
+    S->>S: Verify HMAC + anti-replay (seq)<br/>Kalman filter RSSI (adaptive R)
 
-    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse and map zone<br/>2) fetch tag state<br/>3) hysteresis 8 dBm<br/>4) debounce 2 confirms
+    alt Scanner within direct mesh range of Gateway
+        S->>G: BLE Mesh unicast<br/>vendor opcode TAG_STATUS
+    else Scanner out of direct range
+        S->>R: BLE Mesh TAG_STATUS
+        R->>G: Network Layer forward<br/>(TTL - 1, no app processing)
+    end
 
-    TB->>TB: Save attribute<br/>current_zone = "room_1"
-    TB-->>D: WebSocket push<br/>attribute update
-    D->>D: Highlight room<br/>on floor plan
+    G->>G: Parse {tag_id, rssi, scanner_id}<br/>Enqueue to MQTT worker (64-slot queue)
+    G->>TB: MQTTS port 8883<br/>publish v1/gateway/telemetry
+
+    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse + map scanner_id -> room<br/>2) fetch tag state (current_zone, candidate)<br/>3) hysteresis 8 dBm vs current room<br/>4) leaky-bucket debounce (2 confirms)
+
+    par Save attribute (state)
+        TB->>TB: current_zone = "room_X"<br/>current_scanner, candidate_count
+    and Save timeseries (history)
+        TB->>TB: rssi_scan_01..03 for charts
+    end
+
+    TB-->>D: WebSocket push<br/>(attribute + timeseries update)
+    D->>D: Highlight room on floor plan<br/>update RSSI chart
 ```
 
 ## License
