@@ -15,7 +15,7 @@ on:
 
 jobs:
   esp-idf:
-    name: ${{ matrix.app }} (${{ matrix.target }})
+    name: esp-idf / ${{ matrix.app }} (${{ matrix.target }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -36,3 +36,28 @@ jobs:
           esp_idf_version: latest
           target: ${{ matrix.target }}
           path: apps/${{ matrix.app }}
+
+  zephyr:
+    name: zephyr / ${{ matrix.app }} (${{ matrix.board }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: Beacon_ProMicroNrf52840
+            board: promicro_nrf52840/nrf52840/uf2
+          - app: Beacon_XiaoNrf52840
+            board: xiao_ble/nrf52840
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bmt
+
+      - uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: bmt/apps/${{ matrix.app }}
+          toolchains: arm-zephyr-eabi
+
+      - name: west build
+        working-directory: bmt/apps/${{ matrix.app }}
+        run: west build -b ${{ matrix.board }} --pristine
