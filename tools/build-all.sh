@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build lan luot 4 project firmware bang ESP-IDF.
-# Yeu cau: da source $IDF_PATH/export.sh truoc khi chay.
+# Build the four firmware projects sequentially with ESP-IDF.
+# Requires $IDF_PATH/export.sh to have been sourced first.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 if ! command -v idf.py >/dev/null 2>&1; then
-    echo "idf.py khong co san. Source ESP-IDF export.sh truoc khi chay:" >&2
+    echo "idf.py not on PATH. Source the ESP-IDF export script first:" >&2
     echo "  . \$IDF_PATH/export.sh" >&2
     exit 1
 fi
@@ -18,4 +18,4 @@ for app in "${apps[@]}"; do
     (cd "apps/$app" && idf.py build)
 done
 
-echo "Tat ca $(( ${#apps[@]} )) project build xong."
+echo "All $(( ${#apps[@]} )) projects built."

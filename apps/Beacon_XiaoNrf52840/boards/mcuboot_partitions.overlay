@@ -1,18 +1,21 @@
 /*
- * [SECURITY] Ban sao cua xiao_ble_nrf52840.overlay, danh RIENG cho build cua
- * chinh MCUboot (khong phai app "beacon").
+ * [SECURITY] Partition copy of xiao_ble_nrf52840.overlay, dedicated
+ * to MCUboot's own build (not the "beacon" app).
  *
- * LY DO CAN FILE RIENG: Zephyr chi tu dong ap dung boards/xiao_ble_nrf52840.overlay
- * cho app chinh (beacon). MCUboot la 1 Zephyr app HOAN TOAN RIENG duoc sysbuild
- * build o thu muc khac (bootloader/mcuboot/boot/zephyr), nen phai truyen tay
- * qua bien mcuboot_EXTRA_DTC_OVERLAY_FILE (xem sysbuild/CMakeLists.txt).
+ * WHY A SEPARATE FILE: Zephyr auto-applies boards/xiao_ble_nrf52840.overlay
+ * only to the main app (beacon). MCUboot is a COMPLETELY SEPARATE
+ * Zephyr app that sysbuild builds in its own directory
+ * (bootloader/mcuboot/boot/zephyr), so the overlay must be passed
+ * explicitly via mcuboot_EXTRA_DTC_OVERLAY_FILE (see
+ * sysbuild/CMakeLists.txt).
  *
- * KHONG DUOC dung chung 1 file voi app: "chosen { zephyr,code-partition }"
- * phai KHAC NHAU giua 2 ben — MCUboot phai link vao boot_partition (0x27000),
- * con app phai link vao slot0_partition (0x33000). Dung chung file (voi cung
- * 1 dong chosen) se lam MCUboot tu link nham vao slot0_partition, khien no
- * ghi de len chinh app — da gap loi nay khi build thu (địa chỉ 0x33000 bị
- * trung giữa 2 file .hex).
+ * DO NOT share a file with the app: "chosen { zephyr,code-partition }"
+ * must DIFFER between the two — MCUboot must link into boot_partition
+ * (0x27000) while the app must link into slot0_partition (0x33000).
+ * Sharing (a single chosen line) would make MCUboot link into
+ * slot0_partition and overwrite the app itself — this actually
+ * happened during a test build (0x33000 collision between the two
+ * .hex files).
  */
 
 /delete-node/ &reserved_partition_0;

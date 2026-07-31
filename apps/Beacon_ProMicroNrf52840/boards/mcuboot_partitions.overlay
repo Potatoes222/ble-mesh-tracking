@@ -1,22 +1,25 @@
 /*
- * [SECURITY] Ban sao partition cua promicro_nrf52840_nrf52840_uf2.overlay,
- * danh RIENG cho build cua chinh MCUboot (khong phai app "beacon").
+ * [SECURITY] Partition copy of promicro_nrf52840_nrf52840_uf2.overlay,
+ * dedicated to MCUboot's own build (not the "beacon" app).
  *
- * LY DO CAN FILE RIENG: Zephyr chi tu dong ap dung boards/<board>.overlay cho
- * app chinh. MCUboot la 1 Zephyr app HOAN TOAN RIENG duoc sysbuild build o thu
- * muc khac, nen phai truyen tay qua bien mcuboot_EXTRA_DTC_OVERLAY_FILE
- * (xem sysbuild/CMakeLists.txt).
+ * WHY A SEPARATE FILE: Zephyr auto-applies boards/<board>.overlay only
+ * to the main app. MCUboot is a COMPLETELY SEPARATE Zephyr app that
+ * sysbuild builds in its own directory, so the overlay must be passed
+ * explicitly via mcuboot_EXTRA_DTC_OVERLAY_FILE (see
+ * sysbuild/CMakeLists.txt).
  *
- * KHONG DUOC dung chung 1 file voi app: "chosen { zephyr,code-partition }"
- * phai KHAC NHAU giua 2 ben — MCUboot phai link vao boot_partition (0x26000),
- * con app phai link vao slot0_partition (0x32000). Dung chung se lam MCUboot
- * tu link nham vao slot0 va ghi de len chinh app.
+ * DO NOT share a file with the app: "chosen { zephyr,code-partition }"
+ * must DIFFER between the two — MCUboot must link into boot_partition
+ * (0x26000) while the app must link into slot0_partition (0x32000).
+ * Sharing would make MCUboot link into slot0 and overwrite the app
+ * itself.
  *
- * (Luu y dia chi 0x26000 — KHAC ban XIAO la 0x27000. Xem giai thich day du
- * trong promicro_nrf52840_nrf52840_uf2.overlay.)
+ * (Note the 0x26000 base — DIFFERENT from XIAO at 0x27000. See the
+ * full explanation in promicro_nrf52840_nrf52840_uf2.overlay.)
  *
- * File nay CHI khai bao partition, KHONG khai bao ADC/zephyr,user — MCUboot
- * khong doc pin, them vao chi lam phinh bootloader vo ich.
+ * This file ONLY declares partitions; no ADC / zephyr,user node —
+ * MCUboot does not read the battery, adding one would only bloat the
+ * bootloader.
  */
 
 /delete-node/ &reserved_partition_0;

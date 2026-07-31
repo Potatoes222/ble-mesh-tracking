@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 
-# [OTA] Version = thời gian SỬA ĐỔI file mã nguồn mới nhất (KHÔNG phải giờ
-# bấm build) — build lại mà không sửa gì thì version giữ nguyên (không tự OTA
-# vô ích dù nội dung .bin giống hệt); chỉ khi thực sự sửa 1 file .c/.h thì
-# version mới nhảy lên. So sánh 2 chuỗi YYYYMMDDHHMMSS bằng strncmp trong
-# bmt_ota.c là biết ngay cái nào MỚI HƠN, tránh downgrade nhầm.
+# [OTA] Version = MOST RECENT modification time of any source file (NOT
+# the build wall-clock). Rebuilding without editing anything keeps the
+# same version (no pointless OTA even though the .bin bytes may match);
+# the version only bumps when a real .c / .h edit lands. bmt_ota.c
+# strncmp's two YYYYMMDDHHMMSS strings to tell which side is NEWER —
+# blocks accidental downgrades.
 set(PROJECT_VER "00000000000000")
 file(GLOB_RECURSE BMT_VER_SRC_FILES
     "${CMAKE_CURRENT_LIST_DIR}/main/*.c"
@@ -22,10 +23,11 @@ foreach(_bmt_src_file ${BMT_VER_SRC_FILES})
 endforeach()
 message(STATUS "PROJECT_VER (newest source mtime) = ${PROJECT_VER}")
 
-# Bắt buộc: báo cho CMake biết "nếu bất kỳ file nào trong danh sách trên đổi
-# mtime thì phải chạy lại configure" — thiếu dòng này thì sửa nội dung .c/.h
-# xong build lại, ninja chỉ biên dịch lại file đó chứ KHÔNG tự tính lại
-# PROJECT_VER (CMake configure không tự re-run chỉ vì nội dung 1 file đổi).
+# Required: tell CMake "re-run configure if any listed file's mtime
+# changes". Without this line, editing a .c / .h and rebuilding lets
+# ninja recompile just that file but does NOT recompute PROJECT_VER
+# (CMake configure does not re-run just because one file's contents
+# changed).
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${BMT_VER_SRC_FILES})
 
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
@@ -33,8 +35,8 @@ set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(Relay)
 
-# Copy .bin ra thu muc firmware/ cua repo de phuc vu OTA server.
-# Override bang: idf.py -DBMT_OTA_DIR=/duong/dan/khac build
+# Copy the .bin into the repo's firmware/ directory for the OTA server.
+# Override with: idf.py -DBMT_OTA_DIR=/some/other/path build
 if(NOT DEFINED BMT_OTA_DIR)
     set(BMT_OTA_DIR "${CMAKE_CURRENT_LIST_DIR}/../../firmware")
 endif()

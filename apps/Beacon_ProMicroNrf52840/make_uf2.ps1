@@ -1,12 +1,15 @@
-# Tao file UF2 flash duoc cho ProMicro nRF52840.
+# Produce a UF2 file that is flashable on ProMicro nRF52840.
 #
-# TAI SAO CAN SCRIPT NAY (khong flash thang zephyr.uf2 duoc):
-#   Bootloader la MCUboot co verify chu ky. File "build/<app>/zephyr/zephyr.uf2"
-#   la ban CHUA KY -> MCUboot tu choi -> board khong boot len app (trieu chung:
-#   khong co COM cua app, khong phat BLE, khong log gi vi console bootloader da tat).
-#   Phai gop: mcuboot.hex + app DA KY (zephyr.signed.hex) -> uf2conv.
+# WHY THIS SCRIPT IS NEEDED (cannot just flash zephyr.uf2 directly):
+#   The bootloader is MCUboot with signature verification. The file
+#   "build/<app>/zephyr/zephyr.uf2" is UNSIGNED -> MCUboot rejects it
+#   -> the board never boots the app (symptoms: no app COM port, no
+#   BLE advertisement, no log because the bootloader's console is
+#   disabled).
+#   You must merge: mcuboot.hex + the SIGNED app (zephyr.signed.hex)
+#   -> then run uf2conv.
 #
-# Dung: .\make_uf2.ps1      (chay sau khi "west build" thanh cong)
+# Usage: .\make_uf2.ps1      (run after a successful `west build`)
 
 $ErrorActionPreference = "Stop"
 
@@ -20,7 +23,7 @@ if (-not $env:ZEPHYR_BASE) {
 $Py        = "python"
 $Uf2Conv   = "$env:ZEPHYR_BASE\scripts\build\uf2conv.py"
 $Proj      = $PSScriptRoot
-$AppDomain = "Beacon_ProMicroNrf52840"   # ten thu muc domain trong build/
+$AppDomain = "Beacon_ProMicroNrf52840"   # domain folder under build/
 $Family    = "0xADA52840"                # nRF52840 - Adafruit UF2 family ID
 $OutUf2    = "$Proj\tag_ProMicro_SIGNED.uf2"
 
@@ -29,28 +32,28 @@ $AppHex = "$Proj\build\$AppDomain\zephyr\zephyr.signed.hex"
 $Merged = "$Proj\build\merged.hex"
 
 foreach ($f in @($McuHex, $AppHex)) {
-    if (-not (Test-Path $f)) { throw "Khong tim thay: $f  (da chay 'west build' chua?)" }
+    if (-not (Test-Path $f)) { throw "Not found: $f  (did you run 'west build' first?)" }
 }
 
-# Gop 2 vung flash roi biet dia chi tung vung de tu kiem tra
+# Merge the two flash regions and print each region for a sanity check.
 & $Py -c @"
 from intelhex import IntelHex
 mb  = IntelHex(r'$McuHex')
 app = IntelHex(r'$AppHex')
 if mb.maxaddr() >= app.minaddr():
-    raise SystemExit('LOI: mcuboot va app CHONG LAN dia chi!')
+    raise SystemExit('ERROR: mcuboot and app addresses OVERLAP!')
 m = IntelHex(); m.merge(mb, overlap='replace'); m.merge(app, overlap='replace')
 m.write_hex_file(r'$Merged')
-print('  mcuboot   0x%05x - 0x%05x  (mong doi bat dau 0x26000)' % (mb.minaddr(), mb.maxaddr()))
-print('  app (ky)  0x%05x - 0x%05x  (mong doi bat dau 0x32000)' % (app.minaddr(), app.maxaddr()))
+print('  mcuboot   0x%05x - 0x%05x  (expected to start at 0x26000)' % (mb.minaddr(), mb.maxaddr()))
+print('  app (signed)  0x%05x - 0x%05x  (expected to start at 0x32000)' % (app.minaddr(), app.maxaddr()))
 "@
-if ($LASTEXITCODE -ne 0) { throw "Gop hex that bai" }
+if ($LASTEXITCODE -ne 0) { throw "hex merge failed" }
 
 & $Py $Uf2Conv -c -f $Family -o $OutUf2 $Merged
-if ($LASTEXITCODE -ne 0) { throw "uf2conv that bai" }
+if ($LASTEXITCODE -ne 0) { throw "uf2conv failed" }
 
 $size = (Get-Item $OutUf2).Length
 Write-Output ""
 Write-Output "OK -> $OutUf2  ($size bytes)"
 Write-Output ""
-Write-Output "Flash: chap nhanh 2 lan RST-GND de vao bootloader, roi copy file tren vao drive USB hien ra."
+Write-Output "Flash: double-tap RST-GND to enter the bootloader, then copy the file above into the USB drive that appears."
