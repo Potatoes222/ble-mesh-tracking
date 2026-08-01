@@ -29,7 +29,7 @@ Notes:
 --------------------------------------------------------------------------------
 
 TB_HOST_IP           = 192.168.1.247   e.g. "192.168.1.50"  (LAN IP of the Docker host)
-TB_GATEWAY_TOKEN     = <FILL_IN>   e.g. "AbCdEfGh12345..."  (Devices -> bmt_gateway -> Details -> Copy access token)
+TB_GATEWAY_TOKEN     = ArQWMnc5ia7v7uoaKyhf   e.g. "AbCdEfGh12345..."  (Devices -> bmt_gateway -> Details -> Copy access token)
 
 TB_CN              = bmt-tb.local  [OPTIONAL — only change if you regen certs with a different hostname]
 
