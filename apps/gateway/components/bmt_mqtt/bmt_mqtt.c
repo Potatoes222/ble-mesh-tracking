@@ -121,6 +121,7 @@ static void mqtt_event_handler(void* args, esp_event_base_t base, int32_t id, vo
 		ESP_LOGI(TAG, "MQTT connected to ThingsBoard");
 		esp_mqtt_client_subscribe(s_client, "v1/devices/me/rpc/request/+", 1);
 		ESP_LOGI(TAG, "Subscribed to RPC topic");
+		bmt_tb_pub_gateway_online();
 		bmt_tb_reconnect_all_devices();
 		break;
 

@@ -103,7 +103,6 @@ void app_main(void)
 	printf("===================================================\n");
 
 	bmt_node_table_print();
-	bmt_tb_pub_gateway_online();
 
 	bmt_uart_start();
 
