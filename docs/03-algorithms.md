@@ -154,7 +154,9 @@ Where: `apps/gateway/components/bmt_watchdog/bmt_watchdog.c`.
 Protects against "mesh looks up but no data flows":
 
 - 15 s stabilize after boot.
-- Snapshot `s_mesh_received`, sleep 30 s, compare. Unchanged = mesh dead.
+- After at least one scanner is configured, repeatedly snapshot
+  `s_mesh_received`, sleep 30 s, and compare. Unchanged = mesh dead; changed =
+  begin the next monitoring window.
 - Broadcast `RESET_CMD` x5 with 1.5 s gap.
 - Any send succeeded: wait 12 s, wipe, reboot.
 - All 5 sends failed: retry loop (radio might have been busy).

@@ -25,7 +25,11 @@ Numbers behind the filters (Kalman, path loss, anti-replay, HMAC-16) are in [03-
 ## Self-healing
 
 - The gateway loses power? On boot, NVS restores the mesh keys and the node table. Data flows again on its own.
-- The data watchdog waits 15 seconds after boot. After that, if the node table is not empty but no real mesh traffic arrives for 30 seconds, it broadcasts `RESET_CMD` five times and re-provisions. If all five sends fail, it does not wipe.
+- The data watchdog waits 15 seconds after boot, then stays active for the
+  lifetime of the gateway. It waits while no scanner is configured and checks
+  each 30-second window once a scanner is available. If no real mesh traffic
+  or successful node heartbeat arrives in a window, it broadcasts `RESET_CMD`
+  five times and re-provisions. If all five sends fail, it does not wipe.
 - A node reboots and sends an unprovisioned beacon again. The gateway drops the old entry and re-provisions it.
 - The gateway pings every configured scanner and relay every 20 seconds. This
   heartbeat is independent of tag traffic, drives node online/offline state,

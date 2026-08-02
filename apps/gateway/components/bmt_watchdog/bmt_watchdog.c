@@ -24,43 +24,46 @@ static const char* TAG = "BMT_WDG";
 #define BMT_WDG_NODE_WAIT_MS 12000
 #define BMT_WDG_STABILIZE_MS 15000
 
+static bool has_configured_scanner(void)
+{
+	for (int i = 0; i < bmt_node_table_capacity(); i++)
+	{
+		const bmt_node_t* n = bmt_node_table_get(i);
+		if (n && n->used && n->is_scan && n->config_done)
+			return true;
+	}
+	return false;
+}
+
 static void data_watchdog_task(void* arg)
 {
 	(void)arg;
 
 	vTaskDelay(pdMS_TO_TICKS(BMT_WDG_STABILIZE_MS));
 
-	bool has_scan = false;
-	for (int i = 0; i < bmt_node_table_capacity(); i++)
-	{
-		const bmt_node_t* n = bmt_node_table_get(i);
-		if (n && n->used && n->is_scan && n->config_done)
-		{
-			has_scan = true;
-			break;
-		}
-	}
-	if (!has_scan)
-	{
-		ESP_LOGI(TAG, "Fresh boot — no configured nodes, watchdog exit");
-		vTaskDelete(NULL);
-		return;
-	}
-
 	while (1)
 	{
+		/* Provisioning can finish after this task starts. Stay alive and begin
+		 * monitoring as soon as the first configured scanner is available. */
+		if (!has_configured_scanner())
+		{
+			ESP_LOGI(TAG, "No configured scanner — watchdog waiting");
+			vTaskDelay(pdMS_TO_TICKS(BMT_WDG_TIMEOUT_MS));
+			continue;
+		}
+
 		uint32_t snap = bmt_mesh_get_received_count();
-		ESP_LOGI(TAG, "NVS nodes detected — watching %ds... (snap=%" PRIu32 ")",
+		ESP_LOGI(TAG, "Configured scanner detected — watching %ds... (snap=%" PRIu32 ")",
 		         BMT_WDG_TIMEOUT_MS / 1000, snap);
 
 		vTaskDelay(pdMS_TO_TICKS(BMT_WDG_TIMEOUT_MS));
 
-		if (bmt_mesh_get_received_count() > snap)
+		uint32_t current = bmt_mesh_get_received_count();
+		if (current != snap)
 		{
-			ESP_LOGI(TAG, "Mesh OK (%" PRIu32 " -> %" PRIu32 ") — watchdog done",
-			         snap, bmt_mesh_get_received_count());
-			vTaskDelete(NULL);
-			return;
+			ESP_LOGI(TAG, "Mesh OK (%" PRIu32 " -> %" PRIu32 ") — continue monitoring",
+			         snap, current);
+			continue;
 		}
 
 		ESP_LOGW(TAG, "============================================");
