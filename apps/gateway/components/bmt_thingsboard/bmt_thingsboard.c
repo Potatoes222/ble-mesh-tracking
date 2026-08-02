@@ -38,6 +38,20 @@ static void tb_set_role(const char* dev, const char* role)
 	esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/attributes", json, 0, 1, 0);
 }
 
+static bool tb_publish_tag_out_of_range(uint16_t tag_id)
+{
+	if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
+		return false;
+
+	char dev[32], json[192];
+	snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, tag_id);
+	snprintf(json, sizeof(json),
+	         "{\"%s\":{\"current_zone\":\"out_of_range\",\"current_zone_num\":0}}",
+	         dev);
+	return esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/attributes",
+	                               json, 0, 1, 0) >= 0;
+}
+
 void bmt_tb_reconnect_all_devices(void)
 {
 	int reannounced = 0;
@@ -65,6 +79,11 @@ void bmt_tb_reconnect_all_devices(void)
 		snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, t->tag_id);
 		tb_connect_device(dev, BMT_PROFILE_TAG);
 		tb_set_role(dev, BMT_ROLE_TAG);
+		if (t->out_of_range_pending && tb_publish_tag_out_of_range(t->tag_id))
+		{
+			t->out_of_range_pending = false;
+			ESP_LOGI("BMT_TB", "Replayed pending out_of_range for tag 0x%04x", t->tag_id);
+		}
 		reannounced++;
 	}
 	bmt_zone_unlock();
@@ -129,6 +148,9 @@ void bmt_tb_pub_tag_report(const bmt_tag_report_t* r, const uint8_t* scanner_mac
 		bmt_zone_unlock();
 		return;
 	}
+	/* A fresh report supersedes an out-of-range update that could not be sent
+	 * while MQTT was disconnected. */
+	t->out_of_range_pending = false;
 	if (r->scanner_id >= 1 && r->scanner_id <= BMT_MAX_SCANNERS)
 	{
 		int sidx = r->scanner_id - 1;
@@ -223,17 +245,12 @@ static void zone_timeout_task(void* arg)
 				continue;
 			ESP_LOGW("BMT_TB", "Tag 0x%04x OUT OF RANGE", t->tag_id);
 			t->current_zone_id = BMT_ZONE_UNKNOWN;
+			t->out_of_range_pending = true;
 			t->last_zone_change_ms = now;
 			for (int j = 0; j < BMT_MAX_SCANNERS; j++)
 				t->valid_by_scanner[j] = false;
-			if (!bmt_mqtt_is_connected() || !bmt_mqtt_get_client())
-				continue;
-			char dev[32], json[192];
-			snprintf(dev, sizeof(dev), BMT_DEV_NAME_TAG_FMT, t->tag_id);
-			snprintf(json, sizeof(json),
-			         "{\"%s\":{\"current_zone\":\"out_of_range\",\"current_zone_num\":0}}",
-			         dev);
-			esp_mqtt_client_publish(bmt_mqtt_get_client(), "v1/gateway/attributes", json, 0, 0, 0);
+			if (tb_publish_tag_out_of_range(t->tag_id))
+				t->out_of_range_pending = false;
 		}
 		bmt_zone_unlock();
 	}

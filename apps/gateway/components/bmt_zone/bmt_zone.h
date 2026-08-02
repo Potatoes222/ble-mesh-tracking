@@ -18,6 +18,7 @@ typedef struct
 	uint32_t ts_by_scanner[BMT_MAX_SCANNERS];
 	bool valid_by_scanner[BMT_MAX_SCANNERS];
 	uint8_t current_zone_id;
+	bool out_of_range_pending;
 	uint32_t last_zone_change_ms, last_any_report_ms;
 } bmt_tag_track_t;
 

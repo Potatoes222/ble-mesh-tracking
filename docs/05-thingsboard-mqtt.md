@@ -185,6 +185,10 @@ During disconnects:
   without publishing because the MQTT client is disconnected.
 - Removed reports are not retained or replayed after reconnect. This is
   intentional for live RSSI data, which becomes stale quickly.
+- State transitions are handled separately: if a tag becomes `out_of_range`
+  while MQTT is disconnected, the gateway marks that attribute update as
+  pending and replays it after reconnect. A fresh tag report cancels the
+  pending update before it can become stale.
 
 The 64-slot queue decouples the BLE Mesh callback from the MQTT worker during
 normal operation; it is not an offline buffer. If incoming reports temporarily
