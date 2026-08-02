@@ -65,12 +65,20 @@ In the "Apply hysteresis" node, edit `ZONE_MAP`. Pair each scanner MAC with a ro
 
 Menu Dashboards > `+ Import dashboard` > pick `thingsboard/dashboard/indoor_tracking.json`.
 
-Map the two Entity Aliases:
+Verify the four Entity Aliases:
 
-- `Tag Device` — filter by `Device profile = ble_tag`.
+- `Selected Tag` — `Entity from dashboard state`; the tracked-tags table
+  supplies the selected tag when a row is clicked.
+- `All Tags` — filter by `Device profile = ble_tag`, resolving multiple
+  entities for the tracked-tags table.
 - `All Mesh Devices` — include the `default`, `ble_tag`, and
   `ble_mesh_node` profiles so the entities table shows the gateway and every
   child device.
+- `Mesh Nodes` — include the `ble_mesh_node` and `default` profiles.
+
+The detail widgets are empty until a tag is selected. Click a row in
+**Tracked Tags** to update the floor plan, current-zone card, RSSI charts, and
+diagnostic widgets for that tag.
 
 ### 9. Rebuild the gateway
 

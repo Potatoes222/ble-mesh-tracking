@@ -187,6 +187,12 @@ computed. This is the easiest step to forget.
 **Dashboards → ⬆ Import dashboard** → pick
 `thingsboard/dashboard/indoor_tracking.json`.
 
+The dashboard supports multiple tags through two aliases: `All Tags` resolves
+every device in the `ble_tag` profile for the summary table, while `Selected
+Tag` resolves the entity passed through dashboard state. In view mode, click a
+row in **Tracked Tags** to update the floor plan, current-zone card, RSSI
+charts, and diagnostics for that tag.
+
 ### 4.6. Update ZONE_MAP with real scanner MACs
 
 Open the rule chain → double-click **"Apply hysteresis"** → find the

@@ -62,11 +62,17 @@ Menu Dashboards > `+ Import dashboard` > pick `dashboard/indoor_tracking.json`.
 
 Map the entity aliases:
 
-- `Tag Device` — filter by `Device profile = ble_tag`.
+- `Selected Tag` — `Entity from dashboard state`; populated when a row in
+  the tracked-tags table is clicked.
+- `All Tags` — filter by `Device profile = ble_tag` and resolve multiple
+  entities.
 - `All Mesh Devices` — include the `default`, `ble_tag`, and
   `ble_mesh_node` profiles (used by the all-devices table).
 - `Mesh Nodes` — include the `ble_mesh_node` and `default` profiles so the
   node-status table also includes the gateway.
+
+In dashboard view mode, click a row in **Tracked Tags** to load that tag into
+all current-zone, floor-plan, RSSI, and diagnostic widgets.
 
 ### 8. Rebuild and flash the gateway
 
