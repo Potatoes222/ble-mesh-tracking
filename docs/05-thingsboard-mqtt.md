@@ -81,10 +81,10 @@ The gateway uses the ThingsBoard Gateway MQTT API. All topics are relative to th
 |-----------|------------------------------------|---------------------------------------------------------------------|---------------------------------------------|
 | pub       | `v1/devices/me/telemetry`          | `{"status":"ONLINE"}`                                               | gateway self telemetry                      |
 | pub       | `v1/devices/me/attributes`         | `{"role":"gateway"}`                                                | gateway self attributes                     |
-| pub       | `v1/gateway/connect`               | `{"device":"scan_0x0002","type":"ble_mesh_node"}`                   | register sub-device                         |
-| pub       | `v1/gateway/disconnect`            | `{"device":"scan_0x0002"}`                                          | remove sub-device                           |
-| pub       | `v1/gateway/attributes`            | `{"scan_0x0002":{"role":"scan"}}`                                   | sub-device attributes                       |
-| pub       | `v1/gateway/telemetry`             | `{"tag_0xAB01":[{"scanner_id":"scan_01","rssi":-58}]}`              | tag / node telemetry                        |
+| pub       | `v1/gateway/connect`               | `{"device":"bmt_node_765ca3077000","type":"ble_mesh_node"}`          | register sub-device                         |
+| pub       | `v1/gateway/disconnect`            | `{"device":"bmt_node_765ca3077000"}`                                 | remove sub-device                           |
+| pub       | `v1/gateway/attributes`            | `{"bmt_node_765ca3077000":{"role":"scan"}}`                          | sub-device attributes                       |
+| pub       | `v1/gateway/telemetry`             | `{"bmt_tag_0x0001":[{"scanner_id":"765ca3077000","rssi":-58}]}`     | tag / node telemetry                        |
 | sub       | `v1/devices/me/rpc/request/+`      | `{"method":"ota_scanner"}`                                          | OTA and other server-side calls             |
 
 Sources:

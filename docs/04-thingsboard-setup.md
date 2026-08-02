@@ -68,7 +68,9 @@ Menu Dashboards > `+ Import dashboard` > pick `thingsboard/dashboard/indoor_trac
 Map the two Entity Aliases:
 
 - `Tag Device` — filter by `Device profile = ble_tag`.
-- `All Mesh Devices` — filter by `Device profile = ble_mesh_node`.
+- `All Mesh Devices` — include the `default`, `ble_tag`, and
+  `ble_mesh_node` profiles so the entities table shows the gateway and every
+  child device.
 
 ### 9. Rebuild the gateway
 
@@ -87,5 +89,7 @@ Rebuild the gateway. `EMBED_TXTFILES` bakes the new `ca.pem` into the firmware.
 ## Quick check
 
 - Gateway serial log prints `MQTT connected to ThingsBoard`.
-- ThingsBoard Devices tab shows `bmt_gateway` online. Sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) show up as scanners, relays, and tags come online.
+- ThingsBoard Devices tab shows `bmt_gateway` online. Sub-devices
+  (`bmt_node_<12-hex-MAC>`, `bmt_tag_0x<4-hex-ID>`) show up as scanners,
+  relays, and tags come online.
 - The Indoor Tracking dashboard updates in real time.

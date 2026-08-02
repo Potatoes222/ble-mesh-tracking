@@ -274,7 +274,7 @@ anything is off, stop and fix it there:
 3. Regular `[VND] src=... MAC=... tag=0x0001 rssi=...` lines flow →
    mesh + tag OK.
 4. In ThingsBoard **Entities → Devices**: `bmt_tag_0x0001` and
-   `bmt_node_0x000X` appear automatically (Gateway self-declares, as
+   `bmt_node_<12-hex-MAC>` appear automatically (Gateway self-declares, as
    explained in 4.1).
 5. Open the tag device → **Attributes** → `current_zone` changes as
    you carry the tag to another room.

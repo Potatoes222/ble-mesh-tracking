@@ -63,8 +63,10 @@ Menu Dashboards > `+ Import dashboard` > pick `dashboard/indoor_tracking.json`.
 Map the entity aliases:
 
 - `Tag Device` — filter by `Device profile = ble_tag`.
-- `All Mesh Devices` — filter by `Device profile` includes `ble_tag` and `ble_mesh_node`.
-- `Mesh Nodes` — filter by `Device profile = ble_mesh_node` (used by the OTA table).
+- `All Mesh Devices` — include the `default`, `ble_tag`, and
+  `ble_mesh_node` profiles (used by the all-devices table).
+- `Mesh Nodes` — include the `ble_mesh_node` and `default` profiles so the
+  node-status table also includes the gateway.
 
 ### 8. Rebuild and flash the gateway
 
@@ -83,5 +85,7 @@ Rebuild the gateway. `EMBED_TXTFILES` bundles the new `ca.pem` into the firmware
 ## Quick check after everything is up
 
 - Gateway serial log prints `MQTTS -> mqtts://<ip>:8883 (verify CN=bmt-tb.local)` then `MQTT connected to ThingsBoard`. TLS handshake errors show up here as mbedTLS messages.
-- TB UI Devices tab shows `bmt_gateway` online. Sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) appear as scanners, relays, and tags come online.
+- TB UI Devices tab shows `bmt_gateway` online. Sub-devices
+  (`bmt_node_<12-hex-MAC>`, `bmt_tag_0x<4-hex-ID>`) appear as scanners,
+  relays, and tags come online.
 - Indoor Tracking dashboard updates in real time. The OTA Status table lists each mesh node with online state and last OTA result.
