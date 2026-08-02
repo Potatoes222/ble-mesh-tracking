@@ -49,7 +49,7 @@ The `ble_tag_zone_detection` rule chain runs on every tag telemetry event:
 
 1. Read the last state from server attributes.
 2. Pick the scanner with the strongest RSSI among fresh samples (under 10 seconds old).
-3. Only switch zone if the new one beats the current one by at least 8 dBm (hysteresis) and holds for two updates in a row (debounce).
+3. Only switch zone if the new one beats the current one by at least 5 dBm (hysteresis) and holds for two updates in a row (debounce).
 4. Save `current_zone` and `current_rssi`.
 
 To move a scanner to a different room, edit `ZONE_MAP` on the server. No reflash needed.

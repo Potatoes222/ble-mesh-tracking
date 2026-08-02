@@ -9,7 +9,7 @@ The full step-by-step sequence (Tag ADV → HMAC verify → mesh → MQTTS → r
 ## Rules
 
 - The gateway only forwards data. It does not pick a room. Room logic runs in the ThingsBoard rule chain.
-- The rule chain uses 8 dBm hysteresis, leaky-bucket debounce, and a `MAC -> room` map. You edit the map on the server, not in firmware.
+- The rule chain uses 5 dBm hysteresis, leaky-bucket debounce, and a `MAC -> room` map. You edit the map on the server, not in firmware.
 - Every scanner runs the same firmware. Each one uses its own Bluetooth MAC as its ID.
 - The Tag beacon key rotates hourly (TOTP-style derivation from the master key). The OTA-beacon key rotates every 24 h and is pushed to scanners over mesh — these are two independent keys.
 

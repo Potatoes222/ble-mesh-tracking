@@ -38,7 +38,7 @@ Goal: hysteresis and debounce prevent zone flapping.
 
 1. Stand next to scanner 1. Wait for dashboard = room 1.
 2. Walk slowly toward scanner 2. RSSIs get close at midpoint.
-3. Expect: no per-second zone flip. Switch commits only when new zone beats current by >=8 dBm for 2 telemetry frames in a row.
+3. Expect: no per-second zone flip. Switch commits only when new zone beats current by >=5 dBm for 2 telemetry frames in a row.
 
 If it flaps: raise `HYSTERESIS_DBM` (see [03-algorithms.md](03-algorithms.md)).
 

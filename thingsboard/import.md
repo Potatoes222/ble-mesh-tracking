@@ -167,7 +167,7 @@ Open the imported rule chain — 7 nodes, main flow:
 in firmware. The **"Apply hysteresis"** node holds the whole
 algorithm (TBEL script): pick the scanner with the strongest RSSI
 among samples < 10 s old, only switch rooms when the new one wins by
-≥ 8 dBm (hysteresis — prevents flapping when two scanners are close)
+≥ 5 dBm (hysteresis — prevents flapping when two scanners are close)
 AND holds for 2 consecutive samples leaky-bucket-style (debounce —
 tolerates isolated noise).
 

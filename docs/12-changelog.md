@@ -14,7 +14,7 @@ Opensource release preparation. Scope: docs, comments, licensing, community file
 
 25. New `docs/14-nrf52840-beacon.md` explains the previously undocumented `apps/Beacon_{ProMicro,Xiao}Nrf52840` variants (coin-cell tag on Zephyr/west) and links to the per-board READMEs.
 26. `docs/01-architecture.md` gained a **Physical layout** section (scanner placement rules, when to add a relay) and a **Where the layers live in the repo** table. The duplicated ASCII data flow is removed in favor of the Mermaid diagram in the root README.
-27. Root README data flow rewritten as a Mermaid `sequenceDiagram` (accurate to source: 1 h epoch key, 8 dBm hysteresis, `v1/gateway/telemetry`, optional Relay hop as `alt` block, parallel attribute/timeseries save as `par` block).
+27. Root README data flow rewritten as a Mermaid `sequenceDiagram` (accurate to source: 1 h epoch key, 5 dBm hysteresis, `v1/gateway/telemetry`, optional Relay hop as `alt` block, parallel attribute/timeseries save as `par` block).
 28. `docs/00-quickstart.md` — fixed hardware list (was wrong: 1x S3 + 5x ESP32; actual: 3x S3 + 3x ESP32) and added explicit "Where OTA `.bin` files come from" section.
 29. `docs/03-algorithms.md` Kalman description now matches the code: `q` is fixed, `r` is adaptive (EMA α=0.1, clamped `[1.0, 20.0]`).
 30. `docs/04-thingsboard-setup.md` and `docs/05-thingsboard-mqtt.md` clarified that firmware verifies **CN**, not SAN; the server cert has both set to `bmt-tb.local`.

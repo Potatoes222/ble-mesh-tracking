@@ -92,7 +92,7 @@ sequenceDiagram
     G->>G: Parse {tag_id, rssi, scanner_id}<br/>Enqueue to MQTT worker (64-slot queue)
     G->>TB: MQTTS port 8883<br/>publish v1/gateway/telemetry
 
-    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse + map scanner_id -> room<br/>2) fetch tag state (current_zone, candidate)<br/>3) hysteresis 8 dBm vs current room<br/>4) leaky-bucket debounce (2 confirms)
+    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse + map scanner_id -> room<br/>2) fetch tag state (current_zone, candidate)<br/>3) hysteresis 5 dBm vs current room<br/>4) leaky-bucket debounce (2 confirms)
 
     par Save attribute (state)
         TB->>TB: current_zone = "room_X"<br/>current_scanner, candidate_count

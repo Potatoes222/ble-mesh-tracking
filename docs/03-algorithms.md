@@ -97,7 +97,7 @@ The OTA-beacon key does not use epoch derivation because the gateway has the who
 
 Where: rule chain node `Apply hysteresis` in `thingsboard/rulechain/ble_tag_zone_detection.json`.
 
-To switch zone, the new best scanner must beat the current one by at least `HYSTERESIS_DBM = 8` dBm. Otherwise stay. Raise to 10-12 dBm if you see jitter; lower to 5 if switching feels too slow.
+To switch zone, the new best scanner must beat the current one by at least `HYSTERESIS_DBM = 5` dBm. Otherwise stay. Raise to 8-12 dBm if you see jitter; lower it if switching feels too slow.
 
 ## 7. Leaky-bucket debounce
 
