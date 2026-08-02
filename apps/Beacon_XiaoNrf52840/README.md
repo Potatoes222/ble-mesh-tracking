@@ -45,7 +45,7 @@ The script produces `tag_Xiao_SIGNED.uf2`. Then:
 3. The drive disappears on its own = the board reset and is now
    running the firmware.
 4. Verify: a new COM port shows up + `Test beacon` is visible in
-   nRF Connect.
+   **RNF Digital Innovation Beacon Toolkit** on iOS.
 
 ### Sanity-check the file before flashing
 

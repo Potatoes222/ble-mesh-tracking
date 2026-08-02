@@ -29,8 +29,8 @@ after the USB cable is unplugged — see section 4.
 
 Consequence after flashing: **no COM port, no log**. This is correct,
 not a bug. To confirm the tag is alive, watch the **Scanner** log
-(`BMT_TAGTBL: New tag: 0x0001`) or scan with nRF Connect and look for
-`Test beacon`.
+(`BMT_TAGTBL: New tag: 0x0001`) or scan with **RNF Digital Innovation
+Beacon Toolkit** on iOS and look for `Test beacon`.
 
 ### When you need logs for debug
 
