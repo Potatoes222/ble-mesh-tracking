@@ -33,8 +33,8 @@
 
 static const char* TAG = "BMT_MESH";
 
-#define BMT_RELAY_PING_INTERVAL_MS 20000
-#define BMT_RELAY_OFFLINE_TIMEOUT_MS 60000
+#define BMT_NODE_PING_INTERVAL_MS 20000
+#define BMT_NODE_OFFLINE_TIMEOUT_MS 60000
 #define BMT_SCAN_STATUS_REFRESH_MS 30000
 
 static uint16_t s_net_key_idx = 0x0000;
@@ -472,15 +472,16 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 			         addr, param->error_code);
 			return;
 		}
-		if (n && n->is_relay)
+		if (n && n->config_done && (n->is_scan || n->is_relay))
 		{
 			n->last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
 			s_mesh_received++;
 			if (!n->online)
 			{
 				n->online = true;
-				ESP_LOGI(TAG, "Relay 0x%04x ONLINE (ping)", addr);
-				bmt_tb_pub_node_status(addr, n->mac, BMT_ROLE_RELAY, true);
+				const char* role = n->is_scan ? BMT_ROLE_SCAN : BMT_ROLE_RELAY;
+				ESP_LOGI(TAG, "%s 0x%04x ONLINE (ping)", role, addr);
+				bmt_tb_pub_node_status(addr, n->mac, role, true);
 			}
 		}
 	}
@@ -586,11 +587,10 @@ static void node_ping_task(void* arg)
 	vTaskDelay(pdMS_TO_TICKS(30000));
 	while (1)
 	{
-		uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 		for (int i = 0; i < bmt_node_table_capacity(); i++)
 		{
 			bmt_node_t* n = bmt_node_table_get(i);
-			if (!n || !n->used || !n->is_relay)
+			if (!n || !n->used || !n->config_done || (!n->is_scan && !n->is_relay))
 				continue;
 			esp_ble_mesh_client_common_param_t common = {0};
 			esp_ble_mesh_cfg_client_get_state_t get = {0};
@@ -610,18 +610,20 @@ static void node_ping_task(void* arg)
 				wait_cfg_ack(n->addr, ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET); /* cho het round-trip roi moi nha mutex */
 			if (s_cfg_mutex)
 				xSemaphoreGive(s_cfg_mutex);
-			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS)
+			uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_NODE_OFFLINE_TIMEOUT_MS)
 			{
 				if (n->online)
 				{
 					n->online = false;
-					ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-					bmt_tb_pub_node_status(n->addr, n->mac, BMT_ROLE_RELAY, false);
+					const char* role = n->is_scan ? BMT_ROLE_SCAN : BMT_ROLE_RELAY;
+					ESP_LOGW(TAG, "%s 0x%04X OFFLINE", role, n->addr);
+					bmt_tb_pub_node_status(n->addr, n->mac, role, false);
 				}
 			}
 			vTaskDelay(pdMS_TO_TICKS(500));
 		}
-		vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
+		vTaskDelay(pdMS_TO_TICKS(BMT_NODE_PING_INTERVAL_MS));
 	}
 }
 esp_err_t bmt_mesh_init(void)

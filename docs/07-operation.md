@@ -27,7 +27,10 @@ Numbers behind the filters (Kalman, path loss, anti-replay, HMAC-16) are in [03-
 - The gateway loses power? On boot, NVS restores the mesh keys and the node table. Data flows again on its own.
 - The data watchdog waits 15 seconds after boot. After that, if the node table is not empty but no real mesh traffic arrives for 30 seconds, it broadcasts `RESET_CMD` five times and re-provisions. If all five sends fail, it does not wipe.
 - A node reboots and sends an unprovisioned beacon again. The gateway drops the old entry and re-provisions it.
-- The gateway pings the relay every 20 seconds. Only ACKs with `error_code == 0` count as "mesh alive".
+- The gateway pings every configured scanner and relay every 20 seconds. This
+  heartbeat is independent of tag traffic, drives node online/offline state,
+  and keeps an idle-but-healthy mesh from being mistaken for a dead one. Only
+  ACKs with `error_code == 0` count as "mesh alive".
 - Manual escape hatch: hold the BOOT button (GPIO0) on any provisioned node for 10 seconds. `bmt_factory_reset` erases all NVS (mesh keys, node table, auth state) and reboots. The node comes back unprovisioned; the gateway re-provisions on the next beacon. Firmware image is untouched.
 
 Watchdog exercise procedure: [09-testing.md](09-testing.md) test 7.
