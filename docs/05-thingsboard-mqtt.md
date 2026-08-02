@@ -180,8 +180,13 @@ The MQTT client is configured with `reconnect_timeout_ms = 5000`. On disconnect 
 During disconnects:
 
 - The gateway continues to receive mesh messages.
-- Publishes are dropped in `bmt_mqtt_publish` (returns `-1`).
-- Tag reports enqueued in the MQTT queue keep piling up.
-- The worker task drains them once the connection is back, subject to the `BMT_MQTT_QUEUE_SIZE` cap of 64 slots.
+- The MQTT worker still removes tag reports from its queue.
+- `bmt_tb_pub_tag_report()` updates the gateway's local tag state, then returns
+  without publishing because the MQTT client is disconnected.
+- Removed reports are not retained or replayed after reconnect. This is
+  intentional for live RSSI data, which becomes stale quickly.
 
-Beyond the cap, new tag reports are dropped and counted. The drop counter is visible on the gateway with UART command `3`.
+The 64-slot queue decouples the BLE Mesh callback from the MQTT worker during
+normal operation; it is not an offline buffer. If incoming reports temporarily
+outpace the worker and fill the queue, new reports are dropped and counted. The
+drop counter is visible on the gateway with UART command `3`.
