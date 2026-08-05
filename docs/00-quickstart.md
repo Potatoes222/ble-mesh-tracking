@@ -8,8 +8,9 @@ Common flow first, then OS-specific notes. Assumes you have a workstation on the
 - Docker (Desktop on Windows, native on Linux).
 - Python 3.
 - Git.
-- 1x ESP32-S3 (gateway) and 5x ESP32 (3 scanners, 1 relay, 1 tag).
+- **3x ESP32-S3** (gateway + relay + tag) and **3x ESP32** (3 scanners). Six boards total. See the hardware table in the [README](../README.md#hardware) for the reasoning behind the split (S3 for BLE + WiFi coexistence on gateway/relay/tag; plain ESP32 is enough for the scanner role).
 - One USB-serial cable per board.
+- Optional: 1x nRF52840 board (nice!nano v2, XIAO BLE Sense) if you want to run the coin-cell battery Beacon variant of the tag — see [14-nrf52840-beacon.md](14-nrf52840-beacon.md).
 
 ## 1. Clone
 
@@ -96,6 +97,28 @@ If a node never reaches "fully configured", power-cycle just that node — it wi
 Full command list: [08-uart-commands.md](08-uart-commands.md). Test procedures: [09-testing.md](09-testing.md).
 
 ## 7. OTA
+
+### Where OTA `.bin` files come from
+
+The repo does **not** ship pre-built firmware images. `firmware/*.bin` is gitignored on purpose — pre-built binaries drift out of sync with source (private WiFi/IP baked in, wrong TLS keys, etc.) and are not safe to distribute in an opensource project.
+
+`.bin` files appear in `firmware/` automatically as a side-effect of building each app:
+
+```
+cd apps/gateway && idf.py build     # -> firmware/Gateway.bin
+cd apps/scanner && idf.py build     # -> firmware/Scanner.bin
+cd apps/relay   && idf.py build     # -> firmware/Relay.bin
+```
+
+The copy step is a CMake `POST_BUILD` command in each app (see `apps/*/CMakeLists.txt`). To send the `.bin` elsewhere, override:
+
+```
+idf.py -DBMT_OTA_DIR=/some/dir build
+```
+
+Rebuild any time you change config (`bmt_config.h`) or source — otherwise the node that boots after OTA still runs the old code.
+
+### Serving OTA over HTTPS
 
 The nginx OTA fileserver comes up automatically with `docker compose up -d` in step 3 (it is one of the services in the stack). It serves `firmware/` over HTTPS on port `8443` using the same TLS cert as MQTTS. To restart just it:
 

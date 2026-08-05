@@ -11,3 +11,13 @@ dependencies.lock
 Thumbs.db
 *.swp
 *.swo
+~$*.docx
+.~lock.*#
+
+# Accidental drag-and-drop uploads
+*.zip
+
+# OTA payloads — build locally, CMake POST_BUILD copies them here
+firmware/*.bin
+__pycache__/
+*.pyc

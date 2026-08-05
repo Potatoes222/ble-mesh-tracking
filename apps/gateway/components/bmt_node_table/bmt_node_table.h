@@ -14,7 +14,8 @@ typedef struct
 	char name[32];
 } bmt_node_t;
 
-/* Số ô tối đa trong bảng — dùng để vòng lặp từ module khác qua bmt_node_table_get(i) */
+/* Table capacity — used by callers that want to iterate through
+ * bmt_node_table_get(i). */
 int bmt_node_table_capacity(void);
 bmt_node_t* bmt_node_table_get(int idx);
 
@@ -25,7 +26,7 @@ int bmt_node_table_add(uint16_t addr, const uint8_t* uuid,
 
 void bmt_node_table_load(void);
 void bmt_node_table_save(void);
-void bmt_node_table_clear(void); /* xóa NVS + zero toàn bộ bảng trong RAM */
+void bmt_node_table_clear(void); /* wipe NVS and zero the in-RAM table */
 void bmt_node_table_print(void);
 
 bool bmt_uuid_is_relay(const uint8_t* uuid);

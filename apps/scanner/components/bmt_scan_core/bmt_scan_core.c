@@ -16,8 +16,8 @@ static const char* TAG = "BMT_CORE";
 
 #define SCANNER_NVS_KEY_ID "scanner_id"
 
-/* Scanner ID động — load từ NVS khi boot, set qua UART lệnh 'i'.
- * Default 0x01 nếu NVS chưa có giá trị (lần đầu flash) */
+/* Dynamic scanner ID — loaded from NVS at boot, set via UART 'i'.
+ * Defaults to 0x01 when NVS has no value (first flash). */
 static uint8_t s_scanner_id = 0x01;
 
 static void nvs_load_id(void)
@@ -71,8 +71,9 @@ esp_err_t bmt_scan_core_init(void)
 	nvs_load_id();
 	ESP_LOGI(TAG, "Scanner ID: 0x%02X", s_scanner_id);
 
-	/* [SECURITY] Import HMAC key vào PSA Crypto keystore 1 lần lúc boot,
-	 * PHẢI gọi trước khi bmt_scan bắt đầu nhận/verify ADV từ Tag */
+	/* [SECURITY] Import the HMAC key into the PSA Crypto keystore once
+	 * at boot. MUST be called before bmt_scan starts receiving or
+	 * verifying any Tag ADV. */
 	bmt_auth_init();
 
 	esp_err_t err = bluetooth_init();

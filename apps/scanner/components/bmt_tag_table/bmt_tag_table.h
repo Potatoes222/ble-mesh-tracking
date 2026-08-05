@@ -11,8 +11,9 @@
 #define BMT_LOG_RSSI_THRESHOLD_DBM 3
 #define BMT_LOG_MIN_INTERVAL_MS 2000
 
-/* [SECURITY] Anti-replay — ngưỡng nhảy sequence tối đa được coi là hợp lệ
- * trong khi đang track liên tục 1 tag. Xem giải thích đầy đủ trong bmt_tag_table.c */
+/* [SECURITY] Anti-replay — the maximum sequence jump treated as valid
+ * while continuously tracking a tag. See the full explanation in
+ * bmt_tag_table.c. */
 #define BMT_MAX_SEQ_JUMP 30
 
 typedef struct
@@ -46,6 +47,6 @@ void bmt_tag_table_set_epoch(int idx, int32_t epoch);
 void bmt_tag_table_check_timeouts(void);
 void bmt_tag_table_print(uint8_t scanner_id);
 
-/* Truy cập read-only cho module khác (vd bmt_mesh.c để publish) — trả về
- * NULL nếu idx ngoài phạm vi hoặc tag không active */
+/* Read-only accessor for other modules (e.g. bmt_mesh.c for publish).
+ * Returns NULL if idx is out of range or the tag is not active. */
 const bmt_scan_tag_info_t* bmt_tag_table_at(int idx);

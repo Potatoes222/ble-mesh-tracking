@@ -1,35 +1,43 @@
-# Tao file UF2 flash duoc cho XIAO nRF52840.
+# Produce a UF2 file that is flashable on XIAO nRF52840.
 #
-# TAI SAO CAN SCRIPT NAY (khong flash thang zephyr.uf2 duoc):
-#   Bootloader la MCUboot co verify chu ky. File "build/<app>/zephyr/zephyr.uf2"
-#   la ban CHUA KY -> MCUboot tu choi -> board khong boot len app (trieu chung:
-#   khong co COM cua app, khong phat BLE, khong log gi vi console bootloader da tat).
-#   Phai gop: mcuboot.hex + app DA KY (zephyr.signed.hex) -> uf2conv.
-#   >> Day chinh la loi da lam mat nhieu gio debug ngay 24-25/07.
+# WHY THIS SCRIPT IS NEEDED (cannot just flash zephyr.uf2 directly):
+#   The bootloader is MCUboot with signature verification. The file
+#   "build/<app>/zephyr/zephyr.uf2" is UNSIGNED -> MCUboot rejects it
+#   -> the board never boots the app (symptoms: no app COM port, no
+#   BLE advertisement, no log because the bootloader's console is
+#   disabled).
+#   You must merge: mcuboot.hex + the SIGNED app (zephyr.signed.hex)
+#   -> then run uf2conv.
 #
-# Dung: .\make_uf2.ps1      (chay sau khi "west build" thanh cong)
+# Usage: .\make_uf2.ps1      (run after a successful `west build`)
 
 $ErrorActionPreference = "Stop"
 
-$Toolchain = "C:\ncs\toolchains\dcbdc366a1"
-$Py        = "$Toolchain\opt\bin\python.exe"
-$Uf2Conv   = "G:\Nrf_SDK\v3.4.0\zephyr\scripts\build\uf2conv.py"
+# Requires the Zephyr / nRF Connect SDK environment to be activated first
+# (so ZEPHYR_BASE is set and `python` + `intelhex` are on PATH). Typical:
+#   & "$env:USERPROFILE\ncs\vX.Y.Z\zephyr\zephyr-env.ps1"
+if (-not $env:ZEPHYR_BASE) {
+    throw "ZEPHYR_BASE not set. Activate your Zephyr environment before running this script."
+}
+
+$Py        = "python"
+$Uf2Conv   = "$env:ZEPHYR_BASE\scripts\build\uf2conv.py"
 $Proj      = $PSScriptRoot
 $Family    = "0xADA52840"                # nRF52840 - Adafruit UF2 family ID
 $OutUf2    = "$Proj\tag_Xiao_SIGNED.uf2"
 
-$env:PYTHONPATH = "$Toolchain\opt\bin;$Toolchain\opt\bin\Lib;$Toolchain\opt\bin\Lib\site-packages"
-
-# Ten thu muc domain trong build/ = ten thu muc project (sysbuild dat theo do).
+# Domain folder under build/ = the project folder name (sysbuild names
+# it that way).
 $AppDomain = Split-Path $Proj -Leaf
 $AppHex = "$Proj\build\$AppDomain\zephyr\zephyr.signed.hex"
-# Truoc khi doi ten project, domain ten la "beacon" -> fallback cho build cu
+# Before the project was renamed the domain was "beacon" -> fallback
+# for older build trees.
 if (-not (Test-Path $AppHex)) { $AppHex = "$Proj\build\beacon\zephyr\zephyr.signed.hex" }
 $McuHex = "$Proj\build\mcuboot\zephyr\zephyr.hex"
 $Merged = "$Proj\build\merged.hex"
 
 foreach ($f in @($McuHex, $AppHex)) {
-    if (-not (Test-Path $f)) { throw "Khong tim thay: $f  (da chay 'west build' chua?)" }
+    if (-not (Test-Path $f)) { throw "Not found: $f  (did you run 'west build' first?)" }
 }
 
 & $Py -c @"
@@ -37,19 +45,19 @@ from intelhex import IntelHex
 mb  = IntelHex(r'$McuHex')
 app = IntelHex(r'$AppHex')
 if mb.maxaddr() >= app.minaddr():
-    raise SystemExit('LOI: mcuboot va app CHONG LAN dia chi!')
+    raise SystemExit('ERROR: mcuboot and app addresses OVERLAP!')
 m = IntelHex(); m.merge(mb, overlap='replace'); m.merge(app, overlap='replace')
 m.write_hex_file(r'$Merged')
-print('  mcuboot   0x%05x - 0x%05x  (mong doi bat dau 0x27000)' % (mb.minaddr(), mb.maxaddr()))
-print('  app (ky)  0x%05x - 0x%05x  (mong doi bat dau 0x33000)' % (app.minaddr(), app.maxaddr()))
+print('  mcuboot   0x%05x - 0x%05x  (expected to start at 0x27000)' % (mb.minaddr(), mb.maxaddr()))
+print('  app (signed)  0x%05x - 0x%05x  (expected to start at 0x33000)' % (app.minaddr(), app.maxaddr()))
 "@
-if ($LASTEXITCODE -ne 0) { throw "Gop hex that bai" }
+if ($LASTEXITCODE -ne 0) { throw "hex merge failed" }
 
 & $Py $Uf2Conv -c -f $Family -o $OutUf2 $Merged
-if ($LASTEXITCODE -ne 0) { throw "uf2conv that bai" }
+if ($LASTEXITCODE -ne 0) { throw "uf2conv failed" }
 
 $size = (Get-Item $OutUf2).Length
 Write-Output ""
 Write-Output "OK -> $OutUf2  ($size bytes)"
 Write-Output ""
-Write-Output "Flash: double-tap nut RESET de vao bootloader, roi copy file tren vao drive XIAO-SENSE."
+Write-Output "Flash: double-tap the RESET button to enter the bootloader, then copy the file above onto the XIAO-SENSE drive."

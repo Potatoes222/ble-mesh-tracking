@@ -14,17 +14,15 @@
 #include "bmt_config.h"
 #include "bmt_mesh.h"
 
-/* [ADD] In version/compile-time — thay vi phai cuon log cu len tim dong
- * "Compile time:" luc boot. Uptime da co san o RELAY HEALTH dinh ky, chi
- * them vao lenh '1' de xem duoc bat cu luc nao khong can doi 30s. */
 static void print_version(void)
 {
 	const esp_app_desc_t* desc = esp_app_get_description();
 	printf("Version   : %s (build %s %s)\n", desc->version, desc->date, desc->time);
 }
 
-/* In health log định kỳ ra UART — chỉ phục vụ giám sát trực quan khi
- * cắm cáp debug tại chỗ, không ảnh hưởng logic forward/OTA/reset của Relay */
+/* Periodically print a health log to UART — purely for on-site debug
+ * cable monitoring. Has no effect on the Relay's forward / OTA /
+ * reset logic. */
 #define BMT_RELAY_MONITOR_INTERVAL_MS 30000
 static void print_relay_mac(void)
 {
@@ -95,8 +93,9 @@ static void uart_cmd_task(void* arg)
 	}
 }
 
-/* Đợi provision xong mới bắt đầu đếm giờ + in health log mỗi
- * BMT_RELAY_MONITOR_INTERVAL_MS, phục vụ giám sát trực quan qua UART */
+/* Wait until provisioning is complete, then start counting uptime
+ * and print a health log every BMT_RELAY_MONITOR_INTERVAL_MS — for
+ * on-site UART monitoring only. */
 static void relay_monitor_task(void* arg)
 {
 	(void)arg;

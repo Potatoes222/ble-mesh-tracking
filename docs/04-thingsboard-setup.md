@@ -7,7 +7,7 @@ Run ThingsBoard CE on your own machine with Docker.
 - `docker-compose.yml` — ThingsBoard CE 3.7 and PostgreSQL.
 - `rulechain/` — rule chain exports (`ble_tag_zone_detection.json` plus backups).
 - `dashboard/indoor_tracking.json` — dashboard, ready to import.
-- `tls/` — CA and server certs (SAN `bmt-tb.local`).
+- `tls/` — CA and server certs (both CN and SAN = `bmt-tb.local`; firmware verifies CN).
 
 ## Steps
 
@@ -65,10 +65,20 @@ In the "Apply hysteresis" node, edit `ZONE_MAP`. Pair each scanner MAC with a ro
 
 Menu Dashboards > `+ Import dashboard` > pick `thingsboard/dashboard/indoor_tracking.json`.
 
-Map the two Entity Aliases:
+Verify the four Entity Aliases:
 
-- `Tag Device` — filter by `Device profile = ble_tag`.
-- `All Mesh Devices` — filter by `Device profile = ble_mesh_node`.
+- `Selected Tag` — `Entity from dashboard state`; the tracked-tags table
+  supplies the selected tag when a row is clicked.
+- `All Tags` — filter by `Device profile = ble_tag`, resolving multiple
+  entities for the tracked-tags table.
+- `All Mesh Devices` — include the `default`, `ble_tag`, and
+  `ble_mesh_node` profiles so the entities table shows the gateway and every
+  child device.
+- `Mesh Nodes` — include the `ble_mesh_node` and `default` profiles.
+
+The detail widgets are empty until a tag is selected. Click a row in
+**Tracked Tags** to update the floor plan, current-zone card, RSSI charts, and
+diagnostic widgets for that tag.
 
 ### 9. Rebuild the gateway
 
@@ -87,5 +97,7 @@ Rebuild the gateway. `EMBED_TXTFILES` bakes the new `ca.pem` into the firmware.
 ## Quick check
 
 - Gateway serial log prints `MQTT connected to ThingsBoard`.
-- ThingsBoard Devices tab shows `bmt_gateway` online. Sub-devices (`bmt_node_0x...`, `bmt_tag_0x...`) show up as scanners, relays, and tags come online.
+- ThingsBoard Devices tab shows `bmt_gateway` online. Sub-devices
+  (`bmt_node_<12-hex-MAC>`, `bmt_tag_0x<4-hex-ID>`) show up as scanners,
+  relays, and tags come online.
 - The Indoor Tracking dashboard updates in real time.

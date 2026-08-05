@@ -1,10 +1,16 @@
 <div align="center">
 
 ![Repo Traffic](https://komarev.com/ghpvc/?username=ble-mesh-tracking&label=Repo+Traffic&color=blue&style=flat-square)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.0.1-red?style=flat-square)
+![Target](https://img.shields.io/badge/target-ESP32%20%7C%20ESP32--S3-informational?style=flat-square)
 
 </div>
 
 # BLE Mesh Tracking
+
+<center><img width="1920" height="900" alt="BLE Mesh Tracking" src="resources/images/ble-mesh-tracking-banner.png" />
+</center>
 
 <hr>
 
@@ -12,7 +18,7 @@ Room-level indoor tracking on ESP32 / ESP32-S3 with BLE Mesh and a self-hosted T
 
 Tags send BLE beacons. Scanners read signal strength. A relay forwards mesh packets. The gateway pushes raw data to ThingsBoard over MQTTS. A ThingsBoard rule chain turns RSSI into a room name.
 
-New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
+New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md) (one-page). A more detailed step-by-step deployment walkthrough is at [thingsboard/import.md](thingsboard/import.md).
 
 ## Documentation
 
@@ -32,6 +38,7 @@ New to the project? Start with [docs/00-quickstart.md](docs/00-quickstart.md).
 | [docs/11-checklist.md](docs/11-checklist.md) | Pre-commit, pre-release, deployment checklists. |
 | [docs/12-changelog.md](docs/12-changelog.md) | Change log. |
 | [docs/13-secure-boot.md](docs/13-secure-boot.md) | Secure Boot V2 and Flash Encryption: concept, fleet signing key, first-flash caveats. |
+| [docs/14-nrf52840-beacon.md](docs/14-nrf52840-beacon.md) | Optional coin-cell tag variant on nRF52840 (ProMicro / XIAO). Build via Zephyr / west. |
 
 ## Hardware
 
@@ -57,20 +64,51 @@ Shared code (relay and scanner OTA) lives at repo root under `components/bmt_ota
 
 ## Data flow
 
-```text
-[Tag BLE Beacon]
-      |  BLE ADV (HMAC-16, key rotates every 24h)
-      v
-[Scanner ESP32 x3]  --BLE Mesh-->  [Relay ESP32-S3]  --BLE Mesh-->  [Gateway ESP32-S3]
- reads RSSI                         forwards only                  provisioner + WiFi
-                                                                        |  MQTTS
-                                                                        v
-                                                              [ThingsBoard CE]
-                                                               Rule chain picks a room
-                                                                        |
-                                                                        v
-                                                              [Indoor Tracking dashboard]
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'18px','primaryColor':'#1565c0','primaryTextColor':'#ffffff','primaryBorderColor':'#0d47a1','lineColor':'#90a4ae','signalColor':'#ffc107','signalTextColor':'#ffc107','actorBkg':'#1565c0','actorBorder':'#0d47a1','actorTextColor':'#ffffff','actorLineColor':'#90caf9','noteBkgColor':'#fff59d','noteTextColor':'#000000','noteBorderColor':'#f57f17','activationBkgColor':'#66bb6a','activationBorderColor':'#2e7d32','sequenceNumberColor':'#ffffff','loopTextColor':'#ffc107','labelBoxBkgColor':'#37474f','labelBoxBorderColor':'#90a4ae','labelTextColor':'#ffffff'},'sequence':{'actorMargin':90,'messageFontSize':16,'noteFontSize':14,'actorFontSize':16,'boxMargin':12,'boxTextMargin':6,'noteMargin':10,'useMaxWidth':true}}}%%
+sequenceDiagram
+    autonumber
+    participant T as Tag<br/>(ESP32-S3)
+    participant S as Scanner<br/>(ESP32)
+    participant R as Relay<br/>(ESP32-S3, optional hop)
+    participant G as Gateway<br/>(ESP32-S3, addr 0x0001)
+    participant TB as ThingsBoard CE<br/>(Docker)
+    participant D as Dashboard<br/>(browser)
+
+    loop Every 500 ms
+        T->>S: BLE ADV 24 B<br/>UUID + major + minor + tx_power + seq + HMAC-16
+    end
+    Note over T,S: HMAC key derived from<br/>master + epoch (1 h, TOTP-style)
+
+    S->>S: Verify HMAC + anti-replay (seq)<br/>Kalman filter RSSI (adaptive R)
+
+    alt Scanner within direct mesh range of Gateway
+        S->>G: BLE Mesh unicast<br/>vendor opcode TAG_STATUS
+    else Scanner out of direct range
+        S->>R: BLE Mesh TAG_STATUS
+        R->>G: Network Layer forward<br/>(TTL - 1, no app processing)
+    end
+
+    G->>G: Parse {tag_id, rssi, scanner_id}<br/>Enqueue to MQTT worker (64-slot queue)
+    G->>TB: MQTTS port 8883<br/>publish v1/gateway/telemetry
+
+    Note over TB: Rule chain ble_tag_zone_detection:<br/>1) parse + map scanner_id -> room<br/>2) fetch tag state (current_zone, candidate)<br/>3) hysteresis 5 dBm vs current room<br/>4) leaky-bucket debounce (2 confirms)
+
+    par Save attribute (state)
+        TB->>TB: current_zone = "room_X"<br/>current_scanner, candidate_count
+    and Save timeseries (history)
+        TB->>TB: rssi_scan_01..03 for charts
+    end
+
+    TB-->>D: WebSocket push<br/>(attribute + timeseries update)
+    D->>D: Highlight room on floor plan<br/>update RSSI chart
 ```
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) for the full text and [NOTICE](NOTICE) for third-party attributions.
+
+You are free to use, modify, and redistribute this project for any purpose, including commercial, as long as you keep the copyright and license notices. The Apache-2.0 patent grant applies.
 
 ## Contact
 

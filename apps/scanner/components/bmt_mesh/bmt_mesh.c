@@ -37,7 +37,7 @@ static uint8_t s_scan_uuid[16] = {
     0x53,
     0x43,
     0x41,
-    0x4E, /* "SCAN" — gateway dùng để nhận ra scanner */
+    0x4E, /* "SCAN" — Gateway looks at these bytes to identify a scanner. */
     0x00,
     0x00,
     0x00,
@@ -162,8 +162,9 @@ static void mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event,
 	uint32_t opcode = param->model_operation.opcode;
 	uint16_t src = param->model_operation.ctx->addr;
 
-	/* OTA_TRIGGER: nhận lệnh → nhờ bmt_ota spawn task bật WiFi
-	 * KHÔNG làm OTA trong callback (block BLE host task) */
+	/* OTA_TRIGGER: on receipt, have bmt_ota spawn its own WiFi task.
+	 * Do NOT do the OTA inside this callback — it would block the
+	 * BLE host task. */
 	if (opcode == BMT_OP_VND_OTA_TRIGGER)
 	{
 		ESP_LOGW(TAG, "[OTA] OTA_TRIGGER received from 0x%04x — starting WiFi OTA", src);

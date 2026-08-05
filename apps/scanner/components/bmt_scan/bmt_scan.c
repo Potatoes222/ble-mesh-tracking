@@ -24,7 +24,7 @@ static uint16_t s_last_ota_beacon_mac = 0;
 static int64_t s_last_ota_beacon_us = -((int64_t)BMT_OTA_BEACON_COOLDOWN_US);
 #define BMT_GAP_SCAN_DURATION_MS 800
 #define BMT_MESH_PUBLISH_DURATION_MS 700
-/* Scan window < interval → chừa khe cho mesh bearer RX nhận ANNOUNCE
+/* Scan window < interval -> leave a gap for the mesh bearer to RX ANNOUNCE
  * window=0x30 (30ms), interval=0x50 (50ms) → 60% duty, 40% cho mesh */
 #define BMT_SCAN_INTERVAL_UNITS 0x0050
 #define BMT_SCAN_WINDOW_UNITS 0x0030
@@ -72,12 +72,6 @@ static bool parse_tag_payload(uint8_t* adv_data, uint8_t adv_len, bmt_tag_payloa
 				if (!bmt_auth_verify_tag(p.minor, (uint8_t*)&p,
 				                         sizeof(p) - sizeof(p.mac16), p.mac16))
 				{
-					/* [TEST] Do ti le false-negative/false-accept HMAC (Chuong 5,
-					 * Test 6) — log lai tag_id + seq bi tu choi de sau grep dem.
-					 * Neu tag_id nam trong danh sach tag that dang test ma van
-					 * bi reject -> false-negative (nhieu RF lam sai 1 bit HMAC).
-					 * Neu tag_id la gia (beacon gia lap qua nRF Connect) ->
-					 * reject dung, tinh vao ty le chan gia mao thanh cong. */
 					ESP_LOGW(TAG, "[AUTH] reject tag_id=0x%04x seq=%u mac_rx=0x%04x",
 					         p.minor, p.sequence, p.mac16);
 					goto next_field;
@@ -226,7 +220,7 @@ static void radio_manager_task(void* arg)
 
 	while (1)
 	{
-		/* OTA active: dừng GAP scan để WiFi OTA có toàn bộ radio */
+		/* OTA active: stop GAP scan so WiFi OTA gets the whole radio. */
 		if (bmt_ota_is_triggered())
 		{
 			if (s_phase == PHASE_GAP_SCAN)

@@ -25,9 +25,16 @@ Numbers behind the filters (Kalman, path loss, anti-replay, HMAC-16) are in [03-
 ## Self-healing
 
 - The gateway loses power? On boot, NVS restores the mesh keys and the node table. Data flows again on its own.
-- The data watchdog waits 15 seconds after boot. After that, if the node table is not empty but no real mesh traffic arrives for 30 seconds, it broadcasts `RESET_CMD` five times and re-provisions. If all five sends fail, it does not wipe.
+- The data watchdog waits 15 seconds after boot, then stays active for the
+  lifetime of the gateway. It waits while no scanner is configured and checks
+  each 30-second window once a scanner is available. If no real mesh traffic
+  or successful node heartbeat arrives in a window, it broadcasts `RESET_CMD`
+  five times and re-provisions. If all five sends fail, it does not wipe.
 - A node reboots and sends an unprovisioned beacon again. The gateway drops the old entry and re-provisions it.
-- The gateway pings the relay every 20 seconds. Only ACKs with `error_code == 0` count as "mesh alive".
+- The gateway pings every configured scanner and relay every 20 seconds. This
+  heartbeat is independent of tag traffic, drives node online/offline state,
+  and keeps an idle-but-healthy mesh from being mistaken for a dead one. Only
+  ACKs with `error_code == 0` count as "mesh alive".
 - Manual escape hatch: hold the BOOT button (GPIO0) on any provisioned node for 10 seconds. `bmt_factory_reset` erases all NVS (mesh keys, node table, auth state) and reboots. The node comes back unprovisioned; the gateway re-provisions on the next beacon. Firmware image is untouched.
 
 Watchdog exercise procedure: [09-testing.md](09-testing.md) test 7.
@@ -49,7 +56,7 @@ The `ble_tag_zone_detection` rule chain runs on every tag telemetry event:
 
 1. Read the last state from server attributes.
 2. Pick the scanner with the strongest RSSI among fresh samples (under 10 seconds old).
-3. Only switch zone if the new one beats the current one by at least 8 dBm (hysteresis) and holds for two updates in a row (debounce).
+3. Only switch zone if the new one beats the current one by at least 5 dBm (hysteresis) and holds for two updates in a row (debounce).
 4. Save `current_zone` and `current_rssi`.
 
 To move a scanner to a different room, edit `ZONE_MAP` on the server. No reflash needed.

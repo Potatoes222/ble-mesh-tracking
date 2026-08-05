@@ -63,7 +63,7 @@ Two containers: PostgreSQL for TB storage, and ThingsBoard CE 3.7.0. The followi
 | 8080 | HTTP     | TB Web UI (`http://<host>:8080`) |
 | 1883 | MQTT     | plaintext MQTT (test / fallback) |
 | 8883 | MQTTS    | MQTT over TLS 1.2 (production)   |
-| 7070 | Edge RPC | optional, not used by BMT        |
+| 7070 | Edge RPC | optional, not used here          |
 
 Start the stack:
 
@@ -81,10 +81,10 @@ The gateway uses the ThingsBoard Gateway MQTT API. All topics are relative to th
 |-----------|------------------------------------|---------------------------------------------------------------------|---------------------------------------------|
 | pub       | `v1/devices/me/telemetry`          | `{"status":"ONLINE"}`                                               | gateway self telemetry                      |
 | pub       | `v1/devices/me/attributes`         | `{"role":"gateway"}`                                                | gateway self attributes                     |
-| pub       | `v1/gateway/connect`               | `{"device":"scan_0x0002","type":"ble_mesh_node"}`                   | register sub-device                         |
-| pub       | `v1/gateway/disconnect`            | `{"device":"scan_0x0002"}`                                          | remove sub-device                           |
-| pub       | `v1/gateway/attributes`            | `{"scan_0x0002":{"role":"scan"}}`                                   | sub-device attributes                       |
-| pub       | `v1/gateway/telemetry`             | `{"tag_0xAB01":[{"scanner_id":"scan_01","rssi":-58}]}`              | tag / node telemetry                        |
+| pub       | `v1/gateway/connect`               | `{"device":"bmt_node_765ca3077000","type":"ble_mesh_node"}`          | register sub-device                         |
+| pub       | `v1/gateway/disconnect`            | `{"device":"bmt_node_765ca3077000"}`                                 | remove sub-device                           |
+| pub       | `v1/gateway/attributes`            | `{"bmt_node_765ca3077000":{"role":"scan"}}`                          | sub-device attributes                       |
+| pub       | `v1/gateway/telemetry`             | `{"bmt_tag_0x0001":[{"scanner_id":"765ca3077000","rssi":-58}]}`     | tag / node telemetry                        |
 | sub       | `v1/devices/me/rpc/request/+`      | `{"method":"ota_scanner"}`                                          | OTA and other server-side calls             |
 
 Sources:
@@ -125,7 +125,7 @@ Root folder: [tls/](../tls/)
 | File                             | Purpose                                                              |
 |----------------------------------|----------------------------------------------------------------------|
 | `ca.key`, `ca.pem`               | self-signed CA (keep the key private)                                |
-| `server.key`, `server.pem`       | server key + cert used by TB (SAN = `bmt-tb.local`)                  |
+| `server.key`, `server.pem`       | server key + cert used by TB (CN = SAN = `bmt-tb.local`)             |
 | `server.csr`, `server_ext.cnf`   | CSR + config used to sign the server cert                            |
 | `gen_certs.sh`                   | script to regenerate all of the above                                |
 
@@ -140,11 +140,11 @@ extern const uint8_t bmt_ca_pem_end[]   asm("_binary_ca_pem_end");
 
 Used to build `esp_mqtt_client_config_t` in [apps/gateway/components/bmt_mqtt/bmt_mqtt.c](../apps/gateway/components/bmt_mqtt/bmt_mqtt.c).
 
-#### 2. SAN vs IP Verification
+#### 2. CN vs IP Verification
 
-TB is reached by IP address (`BMT_TB_IP`), but the server certificate has `bmt-tb.local` in its SubjectAltName.
+TB is reached by IP address (`BMT_TB_IP`), but the server certificate has `bmt-tb.local` as both its Common Name and Subject Alternative Name.
 
-The MQTT client uses `broker.verification.common_name = BMT_TB_CN` to tell mbedTLS to verify against that name instead of the IP. If the IP changes, no cert change is needed. If the SAN changes, both the cert and `BMT_TB_CN` must move together.
+The MQTT client uses `broker.verification.common_name = BMT_TB_CN` to tell mbedTLS to verify against that name instead of the IP. The firmware checks CN (not SAN) because ESP-IDF `esp-tls` maps `common_name` to CN verification. If the IP changes, no cert change is needed. If the CN changes, both the cert and `BMT_TB_CN` must move together.
 
 #### 3. Regenerating Certificates
 
@@ -180,8 +180,17 @@ The MQTT client is configured with `reconnect_timeout_ms = 5000`. On disconnect 
 During disconnects:
 
 - The gateway continues to receive mesh messages.
-- Publishes are dropped in `bmt_mqtt_publish` (returns `-1`).
-- Tag reports enqueued in the MQTT queue keep piling up.
-- The worker task drains them once the connection is back, subject to the `BMT_MQTT_QUEUE_SIZE` cap of 64 slots.
+- The MQTT worker still removes tag reports from its queue.
+- `bmt_tb_pub_tag_report()` updates the gateway's local tag state, then returns
+  without publishing because the MQTT client is disconnected.
+- Removed reports are not retained or replayed after reconnect. This is
+  intentional for live RSSI data, which becomes stale quickly.
+- State transitions are handled separately: if a tag becomes `out_of_range`
+  while MQTT is disconnected, the gateway marks that attribute update as
+  pending and replays it after reconnect. A fresh tag report cancels the
+  pending update before it can become stale.
 
-Beyond the cap, new tag reports are dropped and counted. The drop counter is visible on the gateway with UART command `3`.
+The 64-slot queue decouples the BLE Mesh callback from the MQTT worker during
+normal operation; it is not an offline buffer. If incoming reports temporarily
+outpace the worker and fill the queue, new reports are dropped and counted. The
+drop counter is visible on the gateway with UART command `3`.

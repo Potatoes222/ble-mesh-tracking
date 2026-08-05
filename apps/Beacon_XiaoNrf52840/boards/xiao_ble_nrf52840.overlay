@@ -1,30 +1,34 @@
 /*
  * [SECURITY] MCUboot partition layout — Tag nRF52840.
  *
- * XIAO nRF52840 xuat xuong tu factory da co san Adafruit UF2 bootloader
- * (khong dung SWD/J-Link duoc, chi co the flash lai qua UF2 mass-storage).
- * Bootloader nay nam CO DINH o dia chi cao (0xF4000-0x100000, xem
- * nrf52840_partition_uf2_sdv7.dtsi trong Zephyr) va duoc CPU nhay toi truc
- * tiep tu UICR.BOOTLOADERADDR ngay khi cap nguon — KHONG DUOC DUNG TOI
- * vung nay, day la duong lui duy nhat neu MCUboot/app bi loi (van co the
- * flash lai qua UF2 drag-and-drop nhu binh thuong).
+ * XIAO nRF52840 ships from the factory with the Adafruit UF2
+ * bootloader (no SWD / J-Link is exposed; the only way to reflash
+ * is UF2 mass storage). That bootloader lives at a FIXED high
+ * address (0xF4000-0x100000, see nrf52840_partition_uf2_sdv7.dtsi
+ * in Zephyr) and is jumped to directly by the CPU from
+ * UICR.BOOTLOADERADDR at power-on — DO NOT touch this region, it
+ * is the only recovery path if MCUboot / app is broken (you can
+ * still drag-and-drop a fresh UF2 as usual).
  *
- * Bootloader Adafruit sau khi chay xong se nhay toi dia chi 0x27000 (dia
- * chi "Application" hardcode san trong bootloader, von danh cho SoftDevice
- * s140 v7 — Zephyr khong dung SoftDevice nhung van phai boot dung cho nay).
- * Vi vay: thay vi dat app truc tiep tai 0x27000 nhu truoc, gio dat MCUboot
- * (boot_partition) tai day — MCUboot tro thanh "second-stage" bootloader,
- * duoc chain-load boi Adafruit bootloader, roi tu no verify chu ky + nhay
- * toi slot0_partition (app that).
+ * Once the Adafruit bootloader finishes it jumps to address
+ * 0x27000 (the "Application" address hardcoded in the bootloader,
+ * intended for SoftDevice s140 v7 — Zephyr does not use SoftDevice,
+ * but must still boot at that fixed offset). So instead of putting
+ * the app directly at 0x27000 as before, place MCUboot
+ * (boot_partition) there — MCUboot becomes the "second-stage"
+ * bootloader, chain-loaded by the Adafruit bootloader, then
+ * verifies the signature and jumps to slot0_partition (the real
+ * app).
  *
- * Layout moi:
- *   0x00000 - 0x27000  reserved        (khong dung, giu nguyen y nghia cu)
- *   0x27000 - 0x33000  boot_partition  (MCUboot, 48 KB)
- *   0x33000 - 0xEC000  slot0_partition (app, ~741 KB — single-slot mode,
- *                                       chua can slot1 vi chua lam OTA qua
- *                                       BLE, update = re-flash UF2 toan bo)
- *   0xEC000 - 0xF4000  storage_partition (32 KB, giu nguyen dia chi cu)
- *   0xF4000 - 0x100000 uf2_partition   (Adafruit bootloader — KHONG DUNG TOI)
+ * New layout:
+ *   0x00000 - 0x27000  reserved         (unused, kept for historical meaning)
+ *   0x27000 - 0x33000  boot_partition   (MCUboot, 48 KB)
+ *   0x33000 - 0xEC000  slot0_partition  (app, ~741 KB — single-slot
+ *                                        mode; no slot1 yet because
+ *                                        BLE OTA is not implemented,
+ *                                        updates = full UF2 reflash)
+ *   0xEC000 - 0xF4000  storage_partition (32 KB, kept at old address)
+ *   0xF4000 - 0x100000 uf2_partition    (Adafruit bootloader — UNTOUCHED)
  */
 
 /delete-node/ &reserved_partition_0;
@@ -37,18 +41,23 @@
 		zephyr,code-partition = &slot0_partition;
 	};
 
-	/* [POWER] Doc pin qua MACH DO PIN ON-BOARD (danh cho pin cam vao
-	 * BAT+/BAT- — LIR2032 3.6V hoac LiPo).
+	/* [POWER] Read battery via the ON-BOARD battery measurement
+	 * path (for a cell wired into BAT+ / BAT- — LIR2032 3.6 V or
+	 * LiPo).
 	 *
-	 * KHAC voi cach do VDD noi (chi dung cho CR2032 cap thang 3V3): khi
-	 * pin di qua duong BAT+ -> bo dieu ap on-board, VDD bi ghim ~3.3V,
-	 * KHONG phan anh dien ap pin thuc. Nen phai doc dien ap tai node
-	 * BAT+ qua bo chia ap on-board (1M/510k) -> chan P0.31 (AIN7).
+	 * Different from reading VDD (only valid for a CR2032 wired
+	 * straight to 3V3): when the cell feeds through BAT+ into the
+	 * on-board regulator, VDD is pinned at ~3.3 V and does NOT
+	 * reflect the true battery voltage. So the voltage at the
+	 * BAT+ node must be read through the on-board 1M / 510k
+	 * divider brought out to P0.31 (AIN7).
 	 *
-	 * P0.14 (VBAT_ENABLE, active-low) phai keo LOW de "dong" bo chia ap
-	 * vao mach do (xem bmt_battery.c). Giu LOW ca doi -> bo chia ap ri
-	 * ~2.6uA lien tuc, chap nhan duoc; KHONG de HIGH vi khi do P0.31 co
-	 * the vot len 3.6V (gioi han chan) — canh bao chinh thuc cua Seeed. */
+	 * P0.14 (VBAT_ENABLE, active-low) must be driven LOW to
+	 * "close" the divider into the measurement path (see
+	 * bmt_battery.c). Kept LOW for the whole lifetime — the
+	 * divider leaks ~2.6 uA continuously, acceptable. MUST NOT be
+	 * HIGH: P0.31 can then overshoot to 3.6 V (pin limit) — the
+	 * official Seeed warning. */
 	zephyr,user {
 		io-channels = <&adc 7>;
 	};
@@ -88,10 +97,12 @@
 	};
 };
 
-/* [POWER] Tat peripheral SPI2 (xiao_spi) — board bat mac dinh nhung firmware
- * khong dung SPI o dau. (Ghi chu: lan truoc tuong disable no gay treo, nhung
- * thuc te loi la do flash APP CHUA KY — mcuboot tu choi. Disable SPI2 that ra
- * vo hai. Nho flash bang signed-merge, xem _fw_backup.) */
+/* [POWER] Disable SPI2 (xiao_spi) — the board enables it by
+ * default but the firmware uses no SPI. (Historical note: first
+ * disable attempt was thought to have hung the board, but the real
+ * cause was flashing an UNSIGNED app image — MCUboot refused it.
+ * Disabling SPI2 is harmless. Remember to flash with the
+ * signed-merge output, see _fw_backup.) */
 &xiao_spi {
 	status = "disabled";
 };
@@ -100,17 +111,21 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 
-	/* Kenh 7 = P0.31 (AIN7) = dau ra bo chia ap BAT+ on-board.
-	 * Gain 1/6 + ref internal (0.6V) -> dai do 0..3.6V, du cho dien ap
-	 * SAU bo chia ap (BAT+ 4.2V / ~3.0 = ~1.4V, thoai mai trong dai). */
+	/* Channel 7 = P0.31 (AIN7) = output of the BAT+ on-board divider.
+	 * Gain 1/6 + internal reference (0.6 V) -> input range 0..3.6 V,
+	 * enough for the divided voltage (BAT+ 4.2 V / ~3.0 = ~1.4 V,
+	 * comfortably inside the range). */
 	channel@7 {
 		reg = <7>;
 		zephyr,gain = "ADC_GAIN_1_6";
 		zephyr,reference = "ADC_REF_INTERNAL";
-		/* Bo chia ap on-board tro khang nguon ~342k (1037k||510k) — RAT CAO
-		 * voi SAADC. PHAI de acquisition-time 40us (max cua SAADC) thi cap
-		 * sample-and-hold moi kip nap day -> doc chinh xac. De DEFAULT (10us)
-		 * doc sai lech vai tram mV (da thay: firmware 3.88V vs VOM 3.27V). */
+		/* The on-board divider has a source impedance of ~342 k
+		 * (1037k || 510k) — VERY HIGH for the SAADC. Acquisition
+		 * time MUST be 40 us (the SAADC maximum) so the
+		 * sample-and-hold cap can charge fully -> accurate
+		 * reading. At the DEFAULT 10 us, readings are off by
+		 * several hundred mV (observed: firmware 3.88 V vs DMM
+		 * 3.27 V). */
 		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
 		zephyr,input-positive = <NRF_SAADC_AIN7>;
 		zephyr,resolution = <12>;

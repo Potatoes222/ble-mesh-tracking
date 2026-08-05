@@ -10,11 +10,11 @@
 
 static const char* TAG = "BMT_FACTORY_RST";
 
-/* Nut BOOT (GPIO0) — co san tren hau het board dev ESP32/ESP32-S3, chi co
- * tac dung dac biet luc power-on (vao che do nap firmware), con khi app da
- * chay binh thuong thi doc duoc nhu 1 GPIO input thuong. KHONG dung nut
- * EN/RST cung duoc vi giu no la chip dang o trang thai reset, khong co
- * code nao chay de dem thoi gian ca. */
+/* BOOT button (GPIO0) — available on most ESP32 / ESP32-S3 dev boards.
+ * Only special at power-on (bootloader download mode); once the app is
+ * running, it reads as a plain GPIO input. The EN/RST button will not
+ * work for this because holding it keeps the chip in reset, so no code
+ * runs to count the hold time. */
 #define BMT_FACTORY_RESET_GPIO GPIO_NUM_0
 #define BMT_FACTORY_RESET_POLL_MS 100
 #define BMT_FACTORY_RESET_HOLD_MS 10000
@@ -23,12 +23,12 @@ static const char* TAG = "BMT_FACTORY_RST";
 static void do_factory_reset(void)
 {
 	ESP_LOGW(TAG, "==================================================");
-	ESP_LOGW(TAG, "[FACTORY RESET] Giu du 10s -> xoa toan bo NVS...");
+	ESP_LOGW(TAG, "[FACTORY RESET] Held 10s -> erasing all NVS...");
 	ESP_LOGW(TAG, "==================================================");
 	esp_err_t err = nvs_flash_erase();
 	if (err != ESP_OK)
-		ESP_LOGE(TAG, "nvs_flash_erase that bai: %s", esp_err_to_name(err));
-	ESP_LOGW(TAG, "[FACTORY RESET] Xong, dang reboot...");
+		ESP_LOGE(TAG, "nvs_flash_erase failed: %s", esp_err_to_name(err));
+	ESP_LOGW(TAG, "[FACTORY RESET] Done, rebooting...");
 	vTaskDelay(pdMS_TO_TICKS(300));
 	esp_restart();
 }
@@ -40,31 +40,31 @@ static void factory_reset_task(void* arg)
 
 	while (1)
 	{
-		/* Nut BOOT keo GPIO0 xuong GND khi bi giu (active-low) */
+		/* BOOT button pulls GPIO0 to GND while held (active-low). */
 		if (gpio_get_level(BMT_FACTORY_RESET_GPIO) == 0)
 		{
 			held_ticks++;
 			if (held_ticks == 1)
 			{
-				ESP_LOGI(TAG, "[FACTORY RESET] Dang giu nut BOOT...");
+				ESP_LOGI(TAG, "[FACTORY RESET] BOOT button held...");
 			}
 			else if (held_ticks % (1000 / BMT_FACTORY_RESET_POLL_MS) == 0)
 			{
 				int remain_s = (BMT_FACTORY_RESET_TICKS_NEEDED - held_ticks) * BMT_FACTORY_RESET_POLL_MS / 1000;
-				ESP_LOGW(TAG, "[FACTORY RESET] Con %ds se xoa toan bo NVS...", remain_s);
+				ESP_LOGW(TAG, "[FACTORY RESET] %ds until NVS is erased...", remain_s);
 			}
 
 			if (held_ticks >= BMT_FACTORY_RESET_TICKS_NEEDED)
 			{
 				do_factory_reset();
-				/* khong bao gio toi day, esp_restart() da reboot */
+				/* Never reaches here — esp_restart() already rebooted. */
 			}
 		}
 		else
 		{
-			/* Tha nut -> huy dem ngay lap tuc — vua la logic "phai giu LIEN
-			 * TUC du 10s", vua tu nhien chong nhieu (1 lan doc nhieu thoang
-			 * qua se khong lam mat dem that su vi con phai giu tiep). */
+			/* Released -> reset the counter immediately. Enforces "must be
+			 * held CONTINUOUSLY for 10 s" and naturally debounces a single
+			 * spurious low read (the counter has to grow through 10 s again). */
 			held_ticks = 0;
 		}
 
@@ -84,5 +84,5 @@ void bmt_factory_reset_init(void)
 	gpio_config(&io_conf);
 
 	xTaskCreate(factory_reset_task, "bmt_factory_rst", 2560, NULL, 3, NULL);
-	ESP_LOGI(TAG, "Factory reset watcher started (giu nut BOOT 10s de kich hoat)");
+	ESP_LOGI(TAG, "Factory reset watcher started (hold BOOT for 10 s to trigger)");
 }

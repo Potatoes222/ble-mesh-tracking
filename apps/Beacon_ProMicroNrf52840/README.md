@@ -1,11 +1,13 @@
 # Beacon — ProMicro nRF52840 (nice!nano v2 compatible)
 
-Firmware BLE beacon cho tag, ban danh cho board **ProMicro nRF52840** (vd "Nologo
-ProMicro nRF52840" ban tren hshop) — tuong thich chuan nice!nano v2.
+BLE beacon tag firmware for the **ProMicro nRF52840** board (e.g. the
+"Nologo ProMicro nRF52840" from hshop) — compatible with the
+nice!nano v2.
 
-Ban song song: [`../Beacon_XiaoNrf52840`](../Beacon_XiaoNrf52840) cho board XIAO
-nRF52840. **Logic beacon/auth giong het nhau**, chi khac phan phu thuoc phan cung
-(dia chi partition, cach doc pin, cau hinh nguon).
+Sister app: [`../Beacon_XiaoNrf52840`](../Beacon_XiaoNrf52840) for
+the XIAO nRF52840. **The beacon and auth logic is identical
+byte-for-byte**; only the hardware-dependent parts differ (partition
+layout, battery-read path, power configuration).
 
 ---
 
@@ -15,171 +17,193 @@ nRF52840. **Logic beacon/auth giong het nhau**, chi khac phan phu thuoc phan cun
 west build -b promicro_nrf52840/nrf52840/uf2 -d build . --pristine
 ```
 
-> Luu y board target phai co duoi **`/uf2`**. Bien the nay moi dung layout
-> partition cho Adafruit UF2 bootloader (`nrf52840_partition_uf2_sdv6.dtsi`).
+> The board target MUST end in **`/uf2`**. Only that variant uses the
+> partition layout expected by the Adafruit UF2 bootloader
+> (`nrf52840_partition_uf2_sdv6.dtsi`).
 
-### Ban CHAY THAT khong co COM port — day la CO Y
+### The production build has NO COM port — INTENTIONAL
 
-Ban mac dinh da **go han USB + console + log** vi chung ton ~0.8mA lien tuc
-(gan nua tong dong tieu thu) ke ca khi da rut day USB — xem muc 4.
+By default USB + console + log are **stripped out** because together
+they draw ~0.8 mA continuously (nearly half of the total current) even
+after the USB cable is unplugged — see section 4.
 
-Nghia la sau khi flash: **khong co COM port, khong co log**. Do la dung, khong
-phai loi. Muon biet tag con song hay khong thi xem log ben **Scanner**
-(`BMT_TAGTBL: New tag: 0x0001`), hoac quet bang nRF Connect thay `Test beacon`.
+Consequence after flashing: **no COM port, no log**. This is correct,
+not a bug. To confirm the tag is alive, watch the **Scanner** log
+(`BMT_TAGTBL: New tag: 0x0001`) or scan with **RNF Digital Innovation
+Beacon Toolkit** on iOS and look for `Test beacon`.
 
-### Khi can xem log de debug
+### When you need logs for debug
 
 ```powershell
 west build -b promicro_nrf52840/nrf52840/uf2 -d build_debug . --pristine `
     -- "-DBeacon_ProMicroNrf52840_EXTRA_CONF_FILE=debug.conf"
 ```
 
-`debug.conf` bat lai USB CDC-ACM console + log. **Dung dung ban nay de do dong**
-(se cao hon ban that ~0.8mA).
+`debug.conf` re-enables the USB CDC-ACM console and logs. **Do NOT
+measure current on this build** — it will be ~0.8 mA higher than the
+real firmware.
 
-> Tien to `Beacon_ProMicroNrf52840_` la bat buoc: day la build nhieu image kieu
-> sysbuild, thieu tien to se bao loi "CMake configure failed for Zephyr project".
+> The `Beacon_ProMicroNrf52840_` prefix is required: this is a
+> multi-image sysbuild; without the prefix CMake configure fails with
+> "CMake configure failed for Zephyr project".
 
 ---
 
-## 2. Flash — DOC KY PHAN NAY
+## 2. Flash — READ THIS SECTION CAREFULLY
 
-Bootloader la **MCUboot** (co verify chu ky ECDSA-P256). Nghia la **KHONG duoc
-flash file `zephyr.uf2` cua app**: file do la ban **CHUA KY**, MCUboot se tu choi
-va board se khong bao gio boot len app (bieu hien: drive UF2 bien mat binh thuong
-nhung **khong co COM port cua app**, khong phat BLE, khong log gi ca — vi
-`mcuboot.conf` da tat console cua bootloader).
+The bootloader is **MCUboot** with ECDSA-P256 signature verification.
+This means **you cannot flash the app's raw `zephyr.uf2`**: that file
+is **UNSIGNED**; MCUboot rejects it and the board never boots the app
+(symptom: the UF2 drive disappears normally after copy, but
+**no app COM port appears**, no BLE, no log — because `mcuboot.conf`
+disables the bootloader's console).
 
-> Loi nay tung lam mat nhieu gio debug o ban XIAO: cu tuong code sai / board hong,
-> thuc te chi la flash nham file chua ky.
+> The XIAO variant lost hours to this same mistake: it looked like
+> broken code or a broken board, but it was just an unsigned file.
 
-### Cach dung: gop MCUboot + app DA KY roi convert sang UF2
+### How to flash: merge MCUboot + SIGNED app, then convert to UF2
 
-Chay script co san:
+Run the helper script:
 
 ```powershell
 .\make_uf2.ps1
 ```
 
-Script se tao `tag_ProMicro_SIGNED.uf2`. Sau do:
+It produces `tag_ProMicro_SIGNED.uf2`. Then:
 
-1. Dua board vao bootloader: **chap nhanh 2 lan** giua pad **RST** va **GND**
-   (board nay khong co nut reset roi — khac XIAO).
-2. Drive USB hien len -> copy file `.uf2` vao.
-3. Drive tu bien mat = board da reset va dang chay firmware.
+1. Enter the bootloader: **short RST to GND twice quickly** (this
+   board has no reset button — different from XIAO).
+2. The USB drive appears -> copy the `.uf2` onto it.
+3. The drive disappears on its own = the board reset and is now
+   running the firmware.
 
-### Tu kiem tra file truoc khi flash
+### Sanity-check the file before flashing
 
-| Dau hieu | Dung | Sai |
+| Check | Correct | Wrong |
 |---|---|---|
-| Kich thuoc | ~321 KB (gop) | ~270 KB (chi app, chua ky) |
-| Dia chi block dau | `0x26000` (MCUboot) | `0x32000` (app) |
+| File size | ~321 KB (merged) | ~270 KB (app only, unsigned) |
+| First data block address | `0x26000` (MCUboot) | `0x32000` (app) |
 
 ---
 
-## 3. Khac biet so voi ban XIAO
+## 3. Differences vs the XIAO variant
 
 | | XIAO nRF52840 | ProMicro nRF52840 |
 |---|---|---|
-| Bootloader Adafruit | SoftDevice s140 **v7** | SoftDevice s140 **v6** |
-| MCUboot dat tai | `0x27000` | **`0x26000`** |
-| App (slot0) tai | `0x33000` | **`0x32000`** |
-| Vao bootloader | double-tap nut RESET | **chap RST-GND 2 lan** |
-| Duong nguon | pin -> BQ25101 -> LDO ngoai -> VDD | **pin -> thang vao VDDH** |
-| Doc dien ap pin | chia ap ngoai 1M/510k -> P0.31, phai keo P0.14 LOW | **VDDHDIV5 noi bo**, khong can GPIO |
-| Bao dang sac | doc P0.17 | **khong co** (`is_charging()` luon false) |
-| DC/DC | board tu bat san (reg0+reg1) | **chua bat** — xem `prj.conf` |
+| Adafruit bootloader | SoftDevice s140 **v7** | SoftDevice s140 **v6** |
+| MCUboot placed at | `0x27000` | **`0x26000`** |
+| App (slot0) at | `0x33000` | **`0x32000`** |
+| Enter bootloader | double-tap RESET button | **short RST-GND twice** |
+| Power path | battery -> BQ25101 -> external LDO -> VDD | **battery -> straight into VDDH** |
+| Battery-voltage read | external 1M/510k divider -> P0.31, P0.14 must be LOW | **internal VDDHDIV5**, no GPIO needed |
+| Charging status | read P0.17 | **none** (`is_charging()` always false) |
+| DC/DC | board enables both (reg0 + reg1) | **not enabled** — see `prj.conf` |
 
-Chi tiet + ly do day du: doc comment trong
-`boards/promicro_nrf52840_nrf52840_uf2.overlay`, `src/bmt_battery.c`, `prj.conf`.
+Full details and reasoning: see the comments in
+`boards/promicro_nrf52840_nrf52840_uf2.overlay`, `src/bmt_battery.c`,
+and `prj.conf`.
 
 ---
 
-## 4. Ket qua do dong tieu thu (25/07/2026)
+## 4. Current-draw measurement (as of 2026-07-25)
 
-Dieu kien do: pin cap qua chan B+, **da rut USB**, dong ho DT-9205A thang
-200mA DC (do phan giai 0.1mA), do noi tiep tren duong B+.
+Measurement setup: battery on the B+ pin, **USB unplugged**, DT-9205A
+on the 200 mA DC range (0.1 mA resolution), meter in series on the
+B+ rail.
 
-> ⚠️ **LUON RUT USB TRUOC KHI CAM DONG HO VAO DUONG PIN.** Do dong luc dang
-> sac da lam **chet IC sac** cua board XIAO — xem `../Beacon_XiaoNrf52840/README.md`.
+> **ALWAYS UNPLUG USB BEFORE PUTTING A METER ON THE BATTERY RAIL.**
+> Measuring current while charging destroyed the charger IC on the
+> XIAO board — see `../Beacon_XiaoNrf52840/README.md`.
 
-### Qua trinh loai tru (moi dong = 1 lan build + flash + do lai)
+### Elimination log (each row = one build + flash + remeasure)
 
-| # | Cau hinh | Do duoc | Ket luan |
+| # | Config | Reading | Conclusion |
 |---|---|---|---|
-| 1 | Ban dau (co USB + log) | 1.9 mA | Cao gap ~100x ly thuyet |
-| 2 | Tang buffer USB (`UDC_BUF_*`) | 1.9 mA | Het loi `net_buf` nhung dong khong doi |
-| 3 | `CONFIG_LOG=n` | 1.9 mA | Tat log KHONG an — no chi chan viec *in ra* |
-| 4 | Tat uart0/i2c0/i2c1/spi2 | 1.8 mA | Chan tha noi khong phai thu pham |
-| 5 | Tat chan VCC ngoai (P0.13 LOW) | 1.7 mA | Co tac dung, nhung chi 0.1mA |
-| 6 | Firmware **TRONG** (khong BLE/ADC) | 1.0 mA | Con lai la phan cung + USB |
-| 7 | Firmware trong + P0.13 LOW | 0.9 mA | **San** |
-| 8 | **Ban that: go han USB, giu BLE+ADC** | **0.9 mA** | ⬅️ **Ket qua cuoi** |
+| 1 | Initial (USB + log on) | 1.9 mA | ~100x above theory |
+| 2 | Bigger USB buffers (`UDC_BUF_*`) | 1.9 mA | Fixes `net_buf` errors, no current change |
+| 3 | `CONFIG_LOG=n` | 1.9 mA | Disabling log does NOTHING — only stops printing |
+| 4 | Disable uart0 / i2c0 / i2c1 / spi2 | 1.8 mA | Floating pins are not the culprit |
+| 5 | Turn off external VCC pin (P0.13 LOW) | 1.7 mA | Helps, but only 0.1 mA |
+| 6 | **EMPTY** firmware (no BLE / ADC) | 1.0 mA | Remainder is hardware + USB |
+| 7 | Empty firmware + P0.13 LOW | 0.9 mA | **Hardware floor** |
+| 8 | **Production: strip USB, keep BLE + ADC** | **0.9 mA** | ⬅ **Final result** |
 
-**Giam duoc 1.9 -> 0.9 mA (53%).**
+**Cut from 1.9 mA -> 0.9 mA (53%).**
 
-### Doc ket qua
+### Reading the numbers
 
-Dong #7 va #8 **bang nhau** — day la bang chung chinh: firmware day du (BLE
-quang ba 1s + doc pin) tieu thu **duoi nguong do duoc** cua dong ho (0.1mA),
-dung nhu ly thuyet Nordic Online Power Profiler (~12 µA @ interval 1000ms,
-TX -4dBm). Tuc **phan firmware da toi uu xong, khong con gi de cat**.
+Rows #7 and #8 are **equal** — that is the key evidence: the full
+firmware (BLE advertising at 1 s + battery reading) draws **under
+the meter's resolution** (0.1 mA), consistent with the Nordic Online
+Power Profiler estimate (~12 uA at 1000 ms interval, TX -4 dBm).
+Meaning: **the firmware side is optimised as far as it can be**.
 
-0.9 mA con lai la **ro ri phan cung cua board clone** — firmware khong dong
-toi duoc (chung minh bang dong #7: firmware TRONG cung van 0.9mA).
+The remaining 0.9 mA is **on-board leakage of the clone board** —
+firmware cannot touch it (evidence: row #7, empty firmware still
+reads 0.9 mA).
 
-### Bai hoc quan trong nhat: USB khong tat bang cach tat log
+### The most important lesson: turning off "log" does not turn off USB
 
-Khoan tiet kiem lon nhat (**~0.8mA, gan mot nua tong dong**) la go tang USB.
-Nhung phai go **dung cho**:
+The biggest saving (**~0.8 mA, nearly half of the total**) is
+dropping the USB stack. But it has to be done via the RIGHT switch:
 
-- `CONFIG_LOG=n` -> **vo dung**, chi chan in ra, tang USB van chay.
-- `CONFIG_CONSOLE=n` + `SERIAL=n` -> **van chua du**: `.config` con
-  `USB_DEVICE_STACK_NEXT=y` + `UDC_NRF=y`, va `CDC_ACM_SERIAL_ENABLE_AT_BOOT`
-  mac dinh = y nghia la **USB duoc enable ngay luc boot** du app khong he goi
-  `usb_enable()`.
-- ✅ Dung: **`CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n`** — cong tac chinh thuc,
-  ca cum tu rung theo. Xem `prj.conf`.
+- `CONFIG_LOG=n` -> **useless**, only mutes prints; the USB stack
+  keeps running.
+- `CONFIG_CONSOLE=n` + `SERIAL=n` -> **still not enough**: `.config`
+  still has `USB_DEVICE_STACK_NEXT=y` + `UDC_NRF=y`, and
+  `CDC_ACM_SERIAL_ENABLE_AT_BOOT` defaults to `y`, so USB is
+  enabled at boot even though the app never called `usb_enable()`.
+- Correct: **`CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n`** — the
+  official switch; the whole cluster drops with it. See `prj.conf`.
 
-### Tuoi tho pin uoc tinh (o 0.9 mA)
+### Battery-life estimate (at 0.9 mA)
 
-| Pin | Dung luong | Thoi gian |
+| Battery | Capacity | Runtime |
 |---|---|---|
-| LiPo 1000mAh | 1000 mAh | ~46 ngay |
-| LiPo 500mAh | 500 mAh | ~23 ngay |
-| LIR2032 | ~40 mAh | ~2 ngay |
+| LiPo 1000 mAh | 1000 mAh | ~46 days |
+| LiPo 500 mAh | 500 mAh | ~23 days |
+| LIR2032 | ~40 mAh | ~2 days |
 
-Neu sua duoc phan cung (ve ~15-20 µA) thi LiPo 500mAh se chay duoc **~3 nam**
-(thuc te bi gioi han boi tu xa cua pin chu khong phai mach).
+If the hardware leak is fixed (down to ~15-20 uA), a 500 mAh LiPo
+would run for **~3 years** — in practice limited by the cell's
+self-discharge rather than the circuit.
 
-### Nguyen nhan 0.9 mA & tai sao KHONG sua
+### Where the 0.9 mA comes from and why NOT to fix it
 
-Theo repo reverse-engineer board nay
+Per the reverse-engineered notes for this board
 ([sasodoma/nrf52840-promicro](https://github.com/sasodoma/nrf52840-promicro)):
-cum power-path **NPQ2 (MOSFET) + NBD1 (diode) + NPR7**, va diode **W5** dang le
-phai la Schottky BAT60B nhung nhieu ban clone lap nham diode silicon thuong ->
-ro ri nguoc cao. Cach sua: thao 3 linh kien + cau chan 2-3 cua NPQ2.
+the power-path cluster is **NPQ2 (MOSFET) + NBD1 (diode) + NPR7**,
+and diode **W5** should be a Schottky BAT60B but many clones fit an
+ordinary silicon diode instead -> high reverse leakage. Fix: remove
+those three components and bridge pins 2-3 of NPQ2.
 
-**Quyet dinh: KHONG sua.** Ly do: hang SMD rat nho, rui ro hong board cao (da
-mat 1 board XIAO vi su co phan cung), trong khi 0.9mA da du chay ~23 ngay voi
-LiPo 500mAh — thua cho demo va lay so lieu thuc nghiem.
+**Decision: DO NOT fix.** The SMD parts are tiny, board-damage risk
+is real (already lost one XIAO board to a hardware incident), and
+0.9 mA already yields ~23 days on a 500 mAh LiPo — plenty for demos
+and for gathering experimental data.
 
-### Ghi chu ve pin
+### Battery notes
 
-- ⚠️ **KHONG cam pin CR (CR2032/CR2477...) vao chan B+.** "CR" la pin lithium
-  **so cap, KHONG sac lai duoc**; chan B+ co mach sac, cam USB vao la no bom
-  dong sac -> phong/xi/no. Ban sac lai duoc la **LIR**.
-- Coin cell **noi tro rat cao** (vai chuc Ω) -> xung TX cua BLE lam sut ap tuc
-  thoi -> ADC doc nham -> **% pin nhay lung tung**. Da gap thuc te voi LIR2032:
-  tut 100% -> 53% trong ~10 phut roi cam sac lai len 100% ngay (khong the sac
-  day that trong vai giay). **Dung LiPo**, noi tro ~0.1-0.3Ω, khong bi hien
-  tuong nay.
+- **DO NOT connect a CR primary cell (CR2032 / CR2477, etc.) to the
+  B+ pin.** "CR" cells are primary lithium — **not rechargeable**;
+  the B+ pin sits behind a charger, and USB power would push charge
+  current into it -> risk of swelling, venting, fire. Use **LIR**
+  cells for a rechargeable coin cell.
+- Coin cells have **very high internal resistance** (tens of ohms) ->
+  each BLE TX pulse drops the voltage briefly -> the ADC reads a
+  false low -> **battery % jumps around wildly**. Observed with a
+  LIR2032: went 100% -> 53% in ~10 minutes, then charging popped it
+  back to 100% immediately (obviously not fully charged in seconds).
+  Use a **LiPo cell** — ~0.1-0.3 ohm internal, no such artefact.
 
-### Con lai (khong uu tien)
+### Remaining (low priority)
 
-- [ ] Do lai o thang **2mA** (do phan giai 1µA thay vi 0.1mA) de co con so
-      chinh xac hon cho bao cao — 0.9mA nam gon trong thang nay.
-- [ ] Kiem tra `bmt_battery.c` doc dung dien ap pin that (so voi VOM).
-- [ ] ~~Thu bat DC/DC qua devicetree~~ — **bo qua**: o 0.9mA thi MCU khong con
-      la thanh phan chinh, bat DC/DC khong giai quyet duoc gi; hon nua so lieu
-      ZMK cho thay tren board clone no con LAM TANG dong (xem `prj.conf`).
+- [ ] Remeasure on the **2 mA** range (1 uA resolution instead of
+      0.1 mA) for a tighter number in reports — 0.9 mA fits inside
+      that range.
+- [ ] Verify that `bmt_battery.c` reads the real battery voltage
+      correctly (compare against a DMM).
+- [ ] ~~Try enabling DC/DC via devicetree~~ — **skipped**: at 0.9 mA
+      the MCU is no longer the dominant consumer, enabling DC/DC
+      cannot help; and ZMK community data on clone boards shows it
+      can actually INCREASE current (see `prj.conf`).

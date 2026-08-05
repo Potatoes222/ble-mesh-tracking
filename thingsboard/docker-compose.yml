@@ -34,23 +34,27 @@ services:
       MQTT_SSL_CREDENTIALS_TYPE: PEM
       MQTT_SSL_PEM_CERT: /config/mqttserver.pem
       MQTT_SSL_PEM_KEY: /config/mqttserver_key.pem
-      # server.key khong co passphrase nen de trong
+      # server.key has no passphrase, so leave this empty.
       MQTT_SSL_PEM_KEY_PASSWORD: ""
     volumes:
       - tb-data:/data
       - tb-logs:/var/log/thingsboard
-      # Mount cert vao container (path tuong doi tu thu muc chua docker-compose.yml)
+      # Mount cert into the container (path relative to the directory
+      # holding docker-compose.yml).
       - ./tls/server.pem:/config/mqttserver.pem:ro
       - ./tls/server.key:/config/mqttserver_key.pem:ro
     restart: unless-stopped
 
-  # [OTA] HTTPS server phuc vu file firmware .bin cho ESP32 tai ve — thay cho
-  # viec phai tu tay chay `python -m http.server` moi lan OTA. Mount thu muc
-  # firmware/ cua repo (read-only): build xong copy .bin vao do la node tai duoc.
-  # [SECURITY] Chi con HTTPS (8443) — bo han HTTP thuan (8081 cu) vi ai chung
-  # LAN cung tai duoc .bin ve doc plaintext secret (WiFi pass, TB token...)
-  # ma khong can dung toi vat ly board. Dung chung 1 cap CA/cert voi MQTTS
-  # (cung 1 server vat ly, khong can CA rieng).
+  # [OTA] HTTPS server that serves firmware .bin files for ESP32 to
+  # download — replaces the manual `python -m http.server` step
+  # before every OTA. Mounts the repo's firmware/ directory
+  # (read-only): build the app, the .bin lands there, nodes can
+  # download it.
+  # [SECURITY] Only HTTPS (8443) — the old plain HTTP (8081) was
+  # dropped: anyone on the LAN could pull the .bin and read
+  # plaintext secrets (WiFi password, ThingsBoard token, ...)
+  # without physical access to the board. Reuses the same CA / cert
+  # pair as MQTTS (single physical server, no separate CA needed).
   ota-fileserver:
     image: nginx:alpine
     container_name: bmt-ota-server

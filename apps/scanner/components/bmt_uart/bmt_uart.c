@@ -15,9 +15,6 @@
 #include "bmt_ota.h"
 #include "bmt_scan_core.h"
 
-/* [ADD] In version/compile-time + uptime tai cho — thay vi phai cuon log cu
- * len tim dong "Compile time:" luc boot (kho khi log da dai hang ngan dong),
- * gio go '1' bat cu luc nao la thay ngay dang chay ban nao, chay bao lau. */
 static void print_version_uptime(void)
 {
 	const esp_app_desc_t* desc = esp_app_get_description();

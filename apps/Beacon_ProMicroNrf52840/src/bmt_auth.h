@@ -3,8 +3,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Goi 1 lan luc boot, TRUOC lan build_adv_data() dau tien */
+/* Call once at boot, BEFORE the first build_adv_data(). */
 void bmt_auth_init(void);
 
-/* Tinh HMAC-16 tren payload — dung khi build goi ADV moi lan sequence++ */
+/* Compute HMAC-16 over the payload — used when building an ADV frame
+ * on each sequence bump. */
 uint16_t bmt_auth_hmac16(const uint8_t* data, size_t len);

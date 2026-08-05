@@ -27,8 +27,9 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(err);
 
-	/* [SECURITY] Import HMAC key vào PSA Crypto keystore 1 lần lúc boot,
-	 * PHẢI gọi trước bmt_beacon_start() (build_adv_data cần key sẵn sàng) */
+	/* [SECURITY] Import the HMAC key into the PSA Crypto keystore
+	 * once at boot. MUST be called before bmt_beacon_start()
+	 * (build_adv_data needs the key ready). */
 	bmt_auth_init();
 
 	ESP_ERROR_CHECK(bmt_beacon_start());

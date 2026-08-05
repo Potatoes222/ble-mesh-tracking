@@ -103,8 +103,6 @@ static void uart_cmd_task(void* arg)
 			{
 				uint8_t sel = 0;
 				int r;
-				/* [FIX] bo qua byte '\r'/'\n' con sot lai tu phim Enter cua lenh
-				 * 'u' truoc do — khong thi lan bam dau tien luon bi doc nham. */
 				do
 				{
 					r = uart_read_bytes(BMT_UART_NUM, &sel, 1, pdMS_TO_TICKS(5000));

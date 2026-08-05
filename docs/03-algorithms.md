@@ -6,18 +6,21 @@ Numeric tricks used by firmware and rule chain. Each has a code pointer.
 
 Where: `apps/scanner/components/bmt_tag_table/bmt_tag_table.c`.
 
-Raw RSSI is noisy. We smooth with a 1D Kalman filter, constants `q = 0.1`, `r = 2.0`.
+Raw RSSI is noisy. We smooth with a 1D Kalman filter. `q = 0.1` is a fixed process-noise constant. `r` is **adaptive**: seeded at `2.0`, updated each sample by an EMA of the measurement innovation squared (`BMT_KALMAN_R_ALPHA = 0.1`), clamped to `[BMT_KALMAN_R_MIN=1.0, BMT_KALMAN_R_MAX=20.0]`.
 
 Per sample:
 
 ```
-p = p + q
-k = p / (p + r)
-x = x + k * (rssi - x)
-p = (1 - k) * p
+innovation = rssi - x
+r_var = (1 - alpha) * r_var + alpha * innovation^2
+r     = clamp(r_var, R_MIN, R_MAX)
+p     = p + q
+k     = p / (p + r)
+x     = x + k * innovation
+p     = (1 - k) * p
 ```
 
-`x` is the smoothed value we send over mesh. Raise `r` to smooth harder, `q` to react faster.
+`x` is the smoothed value we send over mesh. Adaptive `r` filters harder when RSSI gets noisy (multipath, someone blocking the tag) and tracks new samples faster when RSSI is stable — no manual retuning per environment. The clamps prevent `k` from collapsing to 0 (frozen) or shooting to 1 (unfiltered) on a single outlier.
 
 ## 2. Distance from RSSI
 
@@ -94,7 +97,7 @@ The OTA-beacon key does not use epoch derivation because the gateway has the who
 
 Where: rule chain node `Apply hysteresis` in `thingsboard/rulechain/ble_tag_zone_detection.json`.
 
-To switch zone, the new best scanner must beat the current one by at least `HYSTERESIS_DBM = 8` dBm. Otherwise stay. Raise to 10-12 dBm if you see jitter; lower to 5 if switching feels too slow.
+To switch zone, the new best scanner must beat the current one by at least `HYSTERESIS_DBM = 5` dBm. Otherwise stay. Raise to 8-12 dBm if you see jitter; lower it if switching feels too slow.
 
 ## 7. Leaky-bucket debounce
 
@@ -151,7 +154,9 @@ Where: `apps/gateway/components/bmt_watchdog/bmt_watchdog.c`.
 Protects against "mesh looks up but no data flows":
 
 - 15 s stabilize after boot.
-- Snapshot `s_mesh_received`, sleep 30 s, compare. Unchanged = mesh dead.
+- After at least one scanner is configured, repeatedly snapshot
+  `s_mesh_received`, sleep 30 s, and compare. Unchanged = mesh dead; changed =
+  begin the next monitoring window.
 - Broadcast `RESET_CMD` x5 with 1.5 s gap.
 - Any send succeeded: wait 12 s, wipe, reboot.
 - All 5 sends failed: retry loop (radio might have been busy).

@@ -35,8 +35,8 @@ extern const uint8_t bmt_ota_ca_pem_start[] asm("_binary_ota_ca_pem_start");
 extern const uint8_t bmt_ota_ca_pem_end[] asm("_binary_ota_ca_pem_end");
 
 #define BMT_OTA_HTTP_TIMEOUT_MS 15000
-#define BMT_OTA_NODE_GAP_MS 90000        /* 90s mỗi node: đủ download ~840KB + reboot */
-#define BMT_OTA_BEACON_DURATION_MS 15000 /* 15s: đủ nhiều chu kỳ GAP scan để scanner chắc chắn bắt được */
+#define BMT_OTA_NODE_GAP_MS 90000        /* 90 s per node: enough to download ~840 KB and reboot */
+#define BMT_OTA_BEACON_DURATION_MS 15000 /* 15 s: enough GAP scan cycles for the scanner to catch the beacon */
 
 static atomic_bool s_running = false;
 
@@ -128,18 +128,12 @@ static void self_update_task(void* arg)
 	if (err == ESP_OK)
 	{
 		printf("[OTA] ===== OTA SUCCESS — rebooting =====\n");
-		/* [ADD] Bao cao thanh cong TRUOC khi reboot — publish xong con 1000ms
-		 * delay o duoi lam thoi gian cho MQTT flush qua TCP (ket noi da san
-		 * co san, chi la 1 goi nho nen thuong xong trong vai chuc ms). */
 		bmt_tb_pub_gateway_ota_result(true);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 		esp_restart();
 	}
 
 self_update_fail:
-	/* [ADD] Bao cao THAT BAI — CHI khi da thuc su thu OTA (khong phai 2 nhanh
-	 * "skip vi giong het/khong moi hon" o tren, vi do khong phai loi, tranh
-	 * spam FAILED moi 3 phut khi khong co ban moi de cap nhat). */
 	bmt_tb_pub_gateway_ota_result(false);
 	printf("[OTA] Gateway self-update FAILED: %s\n", esp_err_to_name(err));
 	atomic_store(&s_running, false);
@@ -248,8 +242,9 @@ static void beacon_hmac_key_init(void)
 	         (uint32_t)s_beacon_hmac_key_id);
 }
 
-/* Sinh key HMAC beacon MỚI (random) + lưu NVS + push cho toàn
- * bộ Scanner đã provision qua mesh (vendor message đã được AppKey mã hóa). */
+/* Generate a NEW random HMAC beacon key, persist to NVS, and push it
+ * to every provisioned Scanner over mesh (the vendor message is
+ * already encrypted by the AppKey). */
 static void beacon_key_rotate_and_push(void)
 {
 	uint8_t new_key[16];
@@ -322,8 +317,8 @@ static uint8_t s_beacon_raw[14] = {
     0xE5, 0x02,       /* CID Espressif (little-endian) */
     'B', 'M', 'T',    /* Magic "BMT" */
     0xFA,             /* Command: OTA trigger */
-    0x01,             /* target_type — fill trước khi gửi */
-    0x00, 0x00,       /* mac16 — HMAC-16 fill trước khi gửi */
+    0x01,             /* target_type — filled in before send */
+    0x00, 0x00,       /* mac16 — HMAC-16 filled in before send */
 };
 
 static int adv_gap_event(struct ble_gap_event* event, void* arg)
@@ -357,7 +352,7 @@ static esp_err_t beacon_send(uint8_t target_type)
 	rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &adv_params, adv_gap_event, NULL);
 	if (rc != 0)
 	{
-		ESP_LOGE(TAG, "[OTA] ble_gap_adv_start FAILED rc=%d — mesh host có thể đang tự advertise, "
+		ESP_LOGE(TAG, "[OTA] ble_gap_adv_start FAILED rc=%d — the mesh host may already be advertising, "
 		              "fallback sang mesh unicast",
 		         rc);
 		return ESP_FAIL;
@@ -417,7 +412,7 @@ static void distribute_task(void* arg)
 			vTaskDelete(NULL);
 			return;
 		}
-		printf("[OTA] Beacon broadcast failed — falling back to mesh unicast (chậm hơn nhưng chắc chắn)\n");
+		printf("[OTA] Beacon broadcast failed — falling back to mesh unicast (slower but reliable)\n");
 	}
 
 	int idx = 0;
@@ -458,7 +453,7 @@ static esp_err_t start_distribute(bool is_scan_filter, uint8_t node_type)
 		ESP_LOGW(TAG, "OTA already running");
 		return ESP_ERR_INVALID_STATE;
 	}
-	static distribute_arg_t s_arg; /* static: sống hết vòng đời task, task đọc 1 lần lúc start */
+	static distribute_arg_t s_arg; /* static: outlives the caller, the task reads it once at start */
 	s_arg.is_scan_filter = is_scan_filter;
 	s_arg.node_type = node_type;
 	if (xTaskCreate(distribute_task, "bmt_ota_dst", 4096, &s_arg, 4, NULL) != pdPASS)
@@ -482,8 +477,9 @@ bool bmt_ota_is_running(void)
 	return atomic_load(&s_running);
 }
 
-/* Gọi 1 lần lúc boot (main.c) — import key HMAC cho OTA-beacon, cần sẵn sàng
- * trước khi UART/RPC có thể trigger OTA bất kỳ lúc nào */
+/* Call once at boot (from main.c). Imports the HMAC key for the
+ * OTA-beacon so it is ready before UART or RPC can trigger an OTA at
+ * any moment. */
 void bmt_ota_beacon_key_init(void)
 {
 	beacon_hmac_key_init();

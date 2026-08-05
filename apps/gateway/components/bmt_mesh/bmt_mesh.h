@@ -6,21 +6,23 @@
 #include "esp_err.h"
 void bmt_mesh_generate_keys_if_needed(void);
 
-/* Khởi tạo mesh: đăng ký callback, add NetKey/AppKey nếu chưa có, bind AppKey
- * vào vendor model local. Gọi sau bluetooth_init(). */
+/* Initialise the mesh: register callbacks, add NetKey/AppKey if not
+ * already present, bind the AppKey to the local vendor model. Call
+ * after bluetooth_init(). */
 esp_err_t bmt_mesh_init(void);
 
 void bmt_mesh_start_node_ping(void);
 
-/* Publish 1 message vendor tới địa chỉ dst (unicast hoặc 0xFFFF broadcast) —
- * dùng chung cho OTA_TRIGGER (bmt_ota.c) và RESET_CMD (bmt_watchdog.c) */
+/* Publish a vendor message to dst (unicast or 0xFFFF broadcast). Shared
+ * by OTA_TRIGGER (bmt_ota.c) and RESET_CMD (bmt_watchdog.c). */
 esp_err_t bmt_mesh_publish(uint16_t dst, uint32_t opcode, const void* data, uint16_t len);
 uint32_t bmt_mesh_get_received_count(void);
 
-/* Xóa toàn bộ node đã provision khỏi mesh stack (provisioner node table) —
- * dùng cho UART '9' FULL RESET và bmt_watchdog.c. Trả về số node đã xóa. */
+/* Wipe every provisioned node from the mesh stack (provisioner node
+ * table). Used by UART '9' FULL RESET and by bmt_watchdog.c. Returns
+ * the number of nodes wiped. */
 int bmt_mesh_wipe_all_provisioned(void);
 
-/* In NetKey/AppKey dạng hex ra UART lúc boot (banner) — giữ key private trong
- * module này, không expose ra ngoài bằng con trỏ/mảng trực tiếp */
+/* Print NetKey / AppKey as hex on UART at boot (banner). The keys stay
+ * private inside this module — not exposed via pointers or arrays. */
 void bmt_mesh_print_keys(void);

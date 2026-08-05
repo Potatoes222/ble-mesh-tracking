@@ -1,29 +1,32 @@
 /*
- * [SECURITY + POWER] MCUboot partition layout + doc pin — Tag ProMicro nRF52840
- * (board nice!nano v2 compatible, vd "Nologo ProMicro nRF52840").
+ * [SECURITY + POWER] MCUboot partition layout + battery-read setup —
+ * Tag ProMicro nRF52840 (nice!nano v2-compatible, e.g. "Nologo
+ * ProMicro nRF52840").
  *
- * ===== KHAC BIET QUAN TRONG SO VOI BAN XIAO =====
+ * ===== KEY DIFFERENCES VS THE XIAO VARIANT =====
  *
- * 1) DIA CHI APP KHAC NHAU (0x26000 vs 0x27000):
- *    ProMicro dung Adafruit UF2 bootloader phien ban SoftDevice s140 *v6*
- *    (zephyr: nrf52840_partition_uf2_sdv6.dtsi) -> bootloader nhay toi
- *    0x26000. XIAO dung s140 *v7* -> nhay toi 0x27000. Dat MCUboot sai dia
- *    chi nay = board khong bao gio boot len app.
+ * 1) DIFFERENT APP BASE ADDRESS (0x26000 vs 0x27000):
+ *    ProMicro uses the Adafruit UF2 bootloader built for SoftDevice
+ *    s140 *v6* (zephyr: nrf52840_partition_uf2_sdv6.dtsi), so the
+ *    bootloader jumps to 0x26000. XIAO uses s140 *v7* -> jumps to
+ *    0x27000. Put MCUboot at the wrong address and the board never
+ *    boots the app.
  *
- * 2) DOC PIN KHONG QUA CHIA AP NGOAI:
- *    XIAO: pin -> BQ25101 -> LDO ngoai; doc pin qua bo chia ap 1M/510k ra
- *    chan P0.31 (AIN7), phai keo P0.14 LOW de dong mach do.
- *    ProMicro/nice!nano v2: pin noi THANG vao chan VDDH, KHONG co chia ap
- *    ngoai — doc dien ap pin bang dau vao noi bo VDDHDIV5 cua SAADC
- *    (= VDDH/5). Khong can chan enable nao, khong co canh bao qua ap kieu
- *    P0.14 cua Seeed.
+ * 2) BATTERY READ WITHOUT AN EXTERNAL DIVIDER:
+ *    XIAO: battery -> BQ25101 -> external LDO; read via a 1M/510k
+ *    divider brought out to P0.31 (AIN7), P0.14 must be driven LOW
+ *    to close the measurement path.
+ *    ProMicro / nice!nano v2: battery wires DIRECTLY into VDDH, no
+ *    external divider — read the voltage via the SAADC's internal
+ *    VDDHDIV5 input (= VDDH / 5). No enable pin required, and none
+ *    of the Seeed over-voltage warnings for P0.14 apply.
  *
- * Layout (tuong tu XIAO nhung dich xuong 0x1000):
- *   0x00000 - 0x26000  reserved        (vung SoftDevice cu, khong dung)
- *   0x26000 - 0x32000  boot_partition  (MCUboot, 48 KB)
- *   0x32000 - 0xEC000  slot0_partition (app, ~744 KB — single-slot)
+ * Layout (similar to XIAO but shifted down by 0x1000):
+ *   0x00000 - 0x26000  reserved         (old SoftDevice region, unused)
+ *   0x26000 - 0x32000  boot_partition   (MCUboot, 48 KB)
+ *   0x32000 - 0xEC000  slot0_partition  (app, ~744 KB — single-slot)
  *   0xEC000 - 0xF4000  storage_partition (32 KB)
- *   0xF4000 - 0x100000 uf2_partition   (Adafruit bootloader — KHONG DUNG TOI)
+ *   0xF4000 - 0x100000 uf2_partition    (Adafruit bootloader — UNTOUCHED)
  */
 
 /delete-node/ &reserved_partition_0;
@@ -36,26 +39,33 @@
 		zephyr,code-partition = &slot0_partition;
 	};
 
-	/* [POWER] Doc pin qua dau vao noi bo VDDHDIV5 (VDDH/5) — xem giai thich
-	 * o dau file. Khong co io-channel ngoai nao can khai bao them.
+	/* [POWER] Battery read via the internal VDDHDIV5 (VDDH / 5) —
+	 * see the top of file. No external io-channel to declare.
 	 *
-	 * [POWER] ext-vcc-gpios = CONG TAC MEM CAT NGUON RA CHAN VCC (P0.13).
-	 * Board nay (chuan nice!nano v2) co 1 MOSFET nam giua bo on ap va chan
-	 * VCC 3.3V dua ra ngoai, dieu khien bang P0.13:
-	 *     P0.13 HIGH -> VCC BAT   |   P0.13 LOW -> VCC TAT
-	 * (nice!nano v1 nguoc cuc tinh — v2 va ban clone nay la active-high.)
+	 * [POWER] ext-vcc-gpios = SOFT SWITCH that gates the external
+	 * VCC pin (P0.13). This board (standard nice!nano v2) has a
+	 * MOSFET between the regulator and the external 3.3 V VCC pin,
+	 * controlled by P0.13:
+	 *     P0.13 HIGH -> VCC ON  |  P0.13 LOW -> VCC OFF
+	 * (nice!nano v1 was inverted — v2 and this clone are
+	 * active-high.)
 	 *
-	 * Dinh nghia board promicro_nrf52840 cua Zephyr KHONG khai bao chan nay,
-	 * nen no bi bo o trang thai reset (input/disconnected) -> cong tac tu
-	 * "bat" -> nhanh VCC ngoai luon co dien du app khong dung gi. Theo tai
-	 * lieu cua chinh board SuperMini: standby mac dinh ~1000uA (1mA), tat
-	 * cong tac nay xuong con ~150uA.
+	 * The Zephyr promicro_nrf52840 board definition does NOT
+	 * declare this pin, so it stays in the reset state
+	 * (input / disconnected) -> the switch defaults to "on" -> the
+	 * external VCC rail is always powered, even when the app uses
+	 * nothing. Per the SuperMini board's own datasheet, default
+	 * standby is ~1000 uA (1 mA); turning this switch off brings
+	 * it down to ~150 uA.
 	 *
-	 * => Rat khop voi hien tuong do duoc 1.8-1.9mA KHONG DOI du da: tat log,
-	 *    sua buffer USB, tat uart0/i2c0/i2c1/spi2 (dong den tu phan cung
-	 *    ngoai MCU nen doi firmware kieu gi cung khong nhuc nhich).
+	 * => Matches what we saw: current measured 1.8-1.9 mA and
+	 *    would NOT budge no matter what we changed (log off, USB
+	 *    buffer resized, uart0 / i2c0 / i2c1 / spi2 disabled) —
+	 *    because the leak was on external hardware, not something
+	 *    firmware could touch.
 	 *
-	 * App beacon khong cap nguon cho thiet bi ngoai nao -> tat han cho tiet kiem.
+	 * The beacon app powers no external device -> shut it off
+	 * completely to save current.
 	 */
 	zephyr,user {
 		io-channels = <&adc 0>;
@@ -97,31 +107,35 @@
 	};
 };
 
-/* [POWER] GHI CHU VE USB — KHONG tat o day, tat bang Kconfig.
+/* [POWER] USB NOTE — do NOT disable here; disable via Kconfig.
  *
- * Board include <boards/common/usb/cdc_acm_serial.dtsi> -> tao node
- * board_cdc_acm_uart duoi &zephyr_udc0 va tro chosen zephyr,console vao do.
- * Tang USB nay ton ~0.8mA lien tuc (gan nua tong dong), can go bo o ban chay
- * that — nhung go bang **CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n** trong
- * prj.conf, KHONG phai bang cach tat node usbd o overlay nay.
+ * The board includes <boards/common/usb/cdc_acm_serial.dtsi>, which
+ * creates board_cdc_acm_uart under &zephyr_udc0 and points chosen
+ * zephyr,console at it. The USB stack draws ~0.8 mA continuously
+ * (nearly half of the total), so it must be dropped in the production
+ * build — but drop it with **CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n**
+ * in prj.conf, NOT by disabling the usbd node here.
  *
- * Ly do: overlay trong boards/ duoc ap dung cho MOI ban build. Neu tat cung
- * node usbd o day thi ban debug.conf (bat lai console de xem log) se hong —
- * CONFIG_CONSOLE=y nhung khong co thiet bi UART nao de xuat -> van khong co
- * COM port. Da dinh dung loi nay mot lan.
- * Dieu khien bang Kconfig thi bat/tat theo tung ban build duoc.
+ * Reason: overlays under boards/ apply to EVERY build. Disabling the
+ * usbd node here would break the debug.conf build (re-enables console
+ * to read logs) — CONFIG_CONSOLE=y with no UART device to output to
+ * leaves you with no COM port. Been caught by this before. Controlling
+ * it through Kconfig lets each build enable / disable independently.
  */
 
-/* [POWER TEST] Tat uart0/i2c0/i2c1/spi2 — board bat san 4 peripheral nay voi
- * chan vat ly that (qua pinctrl), nhung app khong noi gi vao cac chan do ->
- * co the dang THA NOI (floating), nghi ngo la nguon gay dong ro ~1.9mA khong
- * doi du da tat log + tang buffer USB.
- * >> KET QUA DO THUC TE: KHONG doi gi (1.9 -> 1.8mA, nam trong sai so dong ho).
- *    Tuc day KHONG phai thu pham. Van giu lai vi ve nguyen tac tat peripheral
- *    khong dung la dung, va khong gay hai.
- * Console van chay qua USB CDC-ACM rieng
- * (zephyr_udc0), KHONG lien quan uart0 vat ly nay nen tat khong mat log.
- * Giu nguyen pwm0 vi dang duoc "red_pwm_led" (LED bao trang thai) su dung. */
+/* [POWER TEST] Disable uart0 / i2c0 / i2c1 / spi2 — the board enables
+ * these four peripherals with real pinctrl assignments, but the app
+ * never touches them, so they may be FLOATING. Suspected as the
+ * source of the stubborn ~1.9 mA that would not drop even after
+ * disabling logs and resizing the USB buffer.
+ * >> ACTUAL MEASUREMENT: no meaningful change (1.9 -> 1.8 mA, within
+ *    meter noise). So this is NOT the culprit. Kept the change anyway
+ *    because disabling unused peripherals is the right thing to do
+ *    and causes no harm.
+ * The console still runs over its own USB CDC-ACM path
+ * (zephyr_udc0), independent of this physical uart0, so no logs are
+ * lost. pwm0 is left alone because it is used by "red_pwm_led" (a
+ * status LED). */
 &uart0 {
 	status = "disabled";
 };
@@ -143,18 +157,22 @@
 	#size-cells = <0>;
 	status = "okay";
 
-	/* Kenh 0 map toi dau vao NOI BO VDDHDIV5 = VDDH/5 (khong phai chan GPIO
-	 * nao ca — pin LiPo noi thang vao VDDH tren board nay).
+	/* Channel 0 maps to the SAADC's internal VDDHDIV5 = VDDH / 5
+	 * (no GPIO — the LiPo cell wires straight into VDDH on this
+	 * board).
 	 *
-	 * Chon gain 1/2 + ref noi bo 0.6V -> dai do tai ADC = 0.6 * 2 = 1.2V.
-	 * Pin LiPo 3.0-4.2V -> VDDHDIV5 cho ra 0.60-0.84V: nam gon trong dai,
-	 * do phan giai tot (~70% thang do o muc pin day). Khi cam USB, VDDH co
-	 * the len ~5.5V -> 1.1V, VAN duoi 1.2V nen khong bi bao hoa.
-	 * (Gain 1/6 nhu ban XIAO se phi ~3/4 thang do o day.)
+	 * Gain 1/2 + internal 0.6 V reference -> ADC input range =
+	 * 0.6 * 2 = 1.2 V. A LiPo cell at 3.0-4.2 V gives VDDHDIV5
+	 * 0.60-0.84 V: fits comfortably in the range with good
+	 * resolution (~70% of full-scale at a full cell). Under USB,
+	 * VDDH may climb to ~5.5 V -> 1.1 V, still under 1.2 V so no
+	 * saturation. (Gain 1/6, as XIAO uses, would waste ~3/4 of
+	 * the range here.)
 	 *
-	 * Nguon tin hieu la mach chia ap NOI BO tro khang thap -> KHONG can
-	 * acquisition-time 40us dai nhu ban XIAO (von phai bu cho tro khang
-	 * ~342k cua chia ap ngoai). 10us mac dinh la du. */
+	 * The source is a low-impedance internal divider, so it does
+	 * NOT need the 40 us acquisition time the XIAO variant uses
+	 * (which must compensate for the ~342k of the external
+	 * divider). The default 10 us is plenty. */
 	channel@0 {
 		reg = <0>;
 		zephyr,gain = "ADC_GAIN_1_2";

@@ -67,9 +67,9 @@ static void build_adv_data(void)
 	p.minor = BMT_TAG_MINOR;
 	p.tx_power = BMT_TAG_TX_POWER;
 	p.sequence = s_sequence;
-	p.mac16 = 0; /* bắt buộc = 0 trước khi tính HMAC */
+	p.mac16 = 0; /* must be 0 before computing HMAC */
 
-	/* HMAC tính trên tất cả fields trừ 2 bytes mac16 cuối */
+	/* HMAC covers every field except the last 2 mac16 bytes. */
 	p.mac16 = bmt_auth_hmac16((uint8_t*)&p, sizeof(p) - sizeof(p.mac16));
 
 	memcpy(s_adv_raw + ADV_PAYLOAD_OFF, &p, sizeof(p));
@@ -86,7 +86,7 @@ static esp_ble_adv_params_t s_adv_params = {
 
 static void start_adv_random_interval(void)
 {
-	/* Random [450, 550] ms → tránh collision nhiều tag */
+	/* Random [450, 550] ms -> avoid collision with other tags. */
 	uint32_t ms = BMT_ADV_INTERVAL_MIN_MS + (esp_random() % (BMT_ADV_INTERVAL_MAX_MS - BMT_ADV_INTERVAL_MIN_MS + 1));
 
 	/* BLE unit = 0.625ms */
@@ -102,7 +102,7 @@ static void start_adv_random_interval(void)
 static void seq_timer_cb(TimerHandle_t xTimer)
 {
 	(void)xTimer;
-	s_sequence++; /* uint8_t: 255 → 0 tự động */
+	s_sequence++; /* uint8_t: 255 -> 0 automatically */
 
 	esp_ble_gap_stop_advertising();
 	start_adv_random_interval();
@@ -152,7 +152,7 @@ static esp_err_t bluetooth_init(void)
 	ESP_ERROR_CHECK(esp_bluedroid_init_with_cfg(&cfg));
 	ESP_ERROR_CHECK(esp_bluedroid_enable());
 
-	/* Set radio TX power — ảnh hưởng range và pin */
+	/* Set radio TX power — affects range and battery life. */
 	esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, BMT_TAG_RADIO_PWR);
 
 	return ESP_OK;
@@ -167,13 +167,13 @@ esp_err_t bmt_beacon_start(void)
 	if (err != ESP_OK)
 		return err;
 
-	/* Sequence timer: 500ms auto-reload
-	 * Mỗi lần fire: sequence++, restart ADV với interval mới */
+	/* Sequence timer: 500 ms auto-reload.
+	 * Each fire: sequence++, restart ADV with a new interval. */
 	s_seq_timer = xTimerCreate("seq", pdMS_TO_TICKS(500),
 	                           pdTRUE, NULL, seq_timer_cb);
 	xTimerStart(s_seq_timer, 0);
 
-	/* Bắt đầu advertise */
+	/* Start advertising. */
 	start_adv_random_interval();
 
 	return ESP_OK;

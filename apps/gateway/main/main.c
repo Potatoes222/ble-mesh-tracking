@@ -58,12 +58,13 @@ void app_main(void)
 	bmt_node_table_load();
 	bmt_zone_init();
 
-	/* Sinh NetKey/AppKey random nếu NVS mesh chưa có key nào.
-	 * PHẢI gọi trước bmt_mesh_init() vì hàm đó dùng key này để add vào mesh stack. */
+	/* Generate random NetKey / AppKey if the mesh NVS is empty. MUST
+	 * be called before bmt_mesh_init(), which uses these keys to add
+	 * them to the mesh stack. */
 	bmt_mesh_generate_keys_if_needed();
 
-	/* [SECURITY] Import key HMAC cho OTA-beacon — gọi sớm vì OTA có thể được
-	 * trigger bất kỳ lúc nào qua UART ('u') hoặc RPC từ ThingsBoard */
+	/* [SECURITY] Import the OTA-beacon HMAC key early — OTA can be
+	 * triggered at any moment via UART ('u') or RPC from ThingsBoard. */
 	bmt_ota_beacon_key_init();
 	bmt_ota_start_key_rotation();
 
@@ -102,7 +103,6 @@ void app_main(void)
 	printf("===================================================\n");
 
 	bmt_node_table_print();
-	bmt_tb_pub_gateway_online();
 
 	bmt_uart_start();
 

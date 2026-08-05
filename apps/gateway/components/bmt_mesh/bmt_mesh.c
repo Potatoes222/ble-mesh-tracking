@@ -33,15 +33,16 @@
 
 static const char* TAG = "BMT_MESH";
 
-#define BMT_RELAY_PING_INTERVAL_MS 20000
-#define BMT_RELAY_OFFLINE_TIMEOUT_MS 60000
+#define BMT_NODE_PING_INTERVAL_MS 20000
+#define BMT_NODE_OFFLINE_TIMEOUT_MS 60000
 #define BMT_SCAN_STATUS_REFRESH_MS 30000
 
 static uint16_t s_net_key_idx = 0x0000;
 static uint16_t s_app_key_idx = 0x0000;
 
-/* Sinh random lúc first-boot bởi bmt_mesh_generate_keys_if_needed(),
- * sau đó mesh stack tự lưu vào NVS nội bộ — KHÔNG phải "const" vì được ghi runtime. */
+/* Randomised at first boot by bmt_mesh_generate_keys_if_needed(); the
+ * mesh stack then persists them in its own NVS. NOT const because
+ * written at runtime. */
 static uint8_t s_net_key[16];
 static uint8_t s_app_key[16];
 
@@ -54,14 +55,6 @@ static EventGroupHandle_t s_cfg_ack_evgrp = NULL;
 static volatile uint16_t s_cfg_wait_addr = 0;
 static volatile uint32_t s_cfg_wait_opcode = 0;
 
-/* [FIX-provision] Config client (s_cfg_client / s_root_models[1]) la TAI NGUYEN
- * DUNG CHUNG — chi xu ly 1 giao dich tai 1 thoi diem, va bien cho-ACK
- * (s_cfg_wait_addr/opcode + event group) cung dung chung. Khi reset nhieu node
- * cung luc, moi node provision xong lai spawn 1 config task chay ~15s CHONG LEN
- * nhau -> task B ghi de s_cfg_wait_addr=B trong khi task A dang cho ACK cua A
- * -> ACK cua A ve nhung addr khong khop -> A timeout -> abort. Day la ly do
- * "co node duoc config, node khong". Mutex nay serialize: moi luc chi 1 config
- * task chay, dung ban chat single-transaction cua config client. */
 static SemaphoreHandle_t s_cfg_mutex = NULL;
 
 static bool wait_cfg_ack(uint16_t addr, uint32_t opcode)
@@ -106,11 +99,6 @@ static bool cfg_send_retry(const char* step, uint16_t addr, uint32_t opcode,
 	return false;
 }
 
-/* [FIX-provision] Config that bai sau retry -> XOA entry khoi bang + provisioner.
- * Neu de nguyen (config_done=false) se thanh "zombie": nhanh re-provision o
- * mesh_prov_cb co guard "if(!config_done) break" -> node nay khi reset & beacon
- * unprovisioned lai se bi BO QUA vinh vien (deadlock). Xoa han de lan beacon sau
- * duoc provision sach. */
 static void cfg_abort_cleanup(uint16_t addr)
 {
 	ESP_LOGE(TAG, "[CFG] Config 0x%04x THAT BAI sau %d lan — xoa entry (tranh zombie chan re-provision)",
@@ -411,7 +399,7 @@ static void mesh_prov_cb(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_c
 		{
 			n->is_relay = true;
 			n->is_scan = false;
-			n->config_done = false; /* chờ relay_config_task hoàn tất */
+			n->config_done = false; /* wait for relay_config_task to finish */
 			snprintf(n->name, sizeof(n->name), "Relay_0x%04x", addr);
 			ESP_LOGI(TAG, "Node 0x%04x = RELAY, launching config task...", addr);
 			bmt_node_table_save();
@@ -475,10 +463,6 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 		ESP_LOGW(TAG, "[CFG] TIMEOUT opcode=0x%04" PRIx32 " addr=0x%04x", param->params->opcode, addr);
 	if (event == ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT)
 	{
-		/* [FIX-provision] Bao hieu cho node_ping_task (dang giu s_cfg_mutex cho
-		 * DEFAULT_TTL_GET nay) biet round-trip da xong, cung 1 co che voi
-		 * SET_STATE_EVT o tren — de mutex duoc nha ngay khi co ACK thay vi
-		 * phai cho het 10s timeout moi nha. */
 		if (param->error_code == 0 && addr == s_cfg_wait_addr &&
 		    param->params->opcode == s_cfg_wait_opcode && s_cfg_ack_evgrp)
 			xEventGroupSetBits(s_cfg_ack_evgrp, BMT_CFG_ACK_BIT);
@@ -488,15 +472,16 @@ static void cfg_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
 			         addr, param->error_code);
 			return;
 		}
-		if (n && n->is_relay)
+		if (n && n->config_done && (n->is_scan || n->is_relay))
 		{
 			n->last_seen_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
 			s_mesh_received++;
 			if (!n->online)
 			{
 				n->online = true;
-				ESP_LOGI(TAG, "Relay 0x%04x ONLINE (ping)", addr);
-				bmt_tb_pub_node_status(addr, n->mac, BMT_ROLE_RELAY, true);
+				const char* role = n->is_scan ? BMT_ROLE_SCAN : BMT_ROLE_RELAY;
+				ESP_LOGI(TAG, "%s 0x%04x ONLINE (ping)", role, addr);
+				bmt_tb_pub_node_status(addr, n->mac, role, true);
 			}
 		}
 	}
@@ -509,8 +494,9 @@ static void cfg_server_cb(esp_ble_mesh_cfg_server_cb_event_t event,
 	ESP_LOGI(TAG, "Config server event: %d", event);
 }
 
-/* Increment s_mesh_received khi nhận TAG_STATUS từ scanner — counter
- * ở tầng BLE Mesh, watchdog dùng để phân biệt "mesh chết" vs "chỉ MQTT chết" */
+/* Increment s_mesh_received when a TAG_STATUS is received from a
+ * scanner. This counter is at the BLE Mesh layer; the watchdog uses it
+ * to tell "mesh dead" apart from "only MQTT dead". */
 static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
                           esp_ble_mesh_model_cb_param_t* param)
 {
@@ -569,8 +555,9 @@ static void vnd_client_cb(esp_ble_mesh_model_cb_event_t event,
 		return;
 	}
 
-	/* Node tự báo cáo kết quả OTA — thay thế cơ chế "fire-and-wait-fixed-time"
-	 * trước đây không biết được kết quả thật. */
+	/* Node reports its own OTA result — replaces the earlier
+	 * "fire-and-wait-fixed-time" approach that never actually learned
+	 * whether the update succeeded. */
 	if (opcode == BMT_OP_VND_OTA_RESULT)
 	{
 		if (len < sizeof(bmt_ota_result_t))
@@ -600,11 +587,10 @@ static void node_ping_task(void* arg)
 	vTaskDelay(pdMS_TO_TICKS(30000));
 	while (1)
 	{
-		uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 		for (int i = 0; i < bmt_node_table_capacity(); i++)
 		{
 			bmt_node_t* n = bmt_node_table_get(i);
-			if (!n || !n->used || !n->is_relay)
+			if (!n || !n->used || !n->config_done || (!n->is_scan && !n->is_relay))
 				continue;
 			esp_ble_mesh_client_common_param_t common = {0};
 			esp_ble_mesh_cfg_client_get_state_t get = {0};
@@ -615,13 +601,6 @@ static void node_ping_task(void* arg)
 			common.ctx.addr = n->addr;
 			common.ctx.send_ttl = 7;
 			common.msg_timeout = 5000;
-			/* [FIX-provision] Config client la tai nguyen DUNG CHUNG voi
-			 * scan_config_task/relay_config_task — khoa mutex XUYEN SUOT ca
-			 * round-trip (gui + cho ACK/timeout qua wait_cfg_ack), khong phai
-			 * chi luc gui, vi request con "bay" tren mesh sau khi ham gui tra
-			 * ve — nha mutex som se van dam transaction voi task khac dang
-			 * gui. Thieu buoc nay gay "[CFG] TIMEOUT opcode=0x800c" (chinh la
-			 * DEFAULT_TTL_GET nay) va keo dai hang doi provision vo ich. */
 			if (s_cfg_mutex)
 				xSemaphoreTake(s_cfg_mutex, portMAX_DELAY);
 			esp_err_t pe = esp_ble_mesh_config_client_get_state(&common, &get);
@@ -631,18 +610,20 @@ static void node_ping_task(void* arg)
 				wait_cfg_ack(n->addr, ESP_BLE_MESH_MODEL_OP_DEFAULT_TTL_GET); /* cho het round-trip roi moi nha mutex */
 			if (s_cfg_mutex)
 				xSemaphoreGive(s_cfg_mutex);
-			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_RELAY_OFFLINE_TIMEOUT_MS)
+			uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+			if (n->last_seen_ms > 0 && (now - n->last_seen_ms) > BMT_NODE_OFFLINE_TIMEOUT_MS)
 			{
 				if (n->online)
 				{
 					n->online = false;
-					ESP_LOGW(TAG, "Relay 0x%04X OFFLINE", n->addr);
-					bmt_tb_pub_node_status(n->addr, n->mac, BMT_ROLE_RELAY, false);
+					const char* role = n->is_scan ? BMT_ROLE_SCAN : BMT_ROLE_RELAY;
+					ESP_LOGW(TAG, "%s 0x%04X OFFLINE", role, n->addr);
+					bmt_tb_pub_node_status(n->addr, n->mac, role, false);
 				}
 			}
 			vTaskDelay(pdMS_TO_TICKS(500));
 		}
-		vTaskDelay(pdMS_TO_TICKS(BMT_RELAY_PING_INTERVAL_MS));
+		vTaskDelay(pdMS_TO_TICKS(BMT_NODE_PING_INTERVAL_MS));
 	}
 }
 esp_err_t bmt_mesh_init(void)
